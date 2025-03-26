@@ -37,7 +37,7 @@
         "autoprefixer": "^10.4.17",
         "concurrently": "^8.2.2",
         "cross-env": "^7.0.3",
-        "esbuild": "^0.25.0",
+        "esbuild": "^0.25.1",
         "jsdom": "^26.0.0",
         "nodemon": "^3.1.9",
         "postcss": "^8.4.35",
