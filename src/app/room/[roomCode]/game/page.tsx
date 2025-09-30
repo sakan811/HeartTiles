@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { socket } from "@/socket";
+import { useSocket } from "@/socket";
 
 interface Tile {
   id: number;
@@ -24,7 +24,6 @@ interface Deck {
 
 export default function GameRoomPage() {
   const [tiles, setTiles] = useState<Tile[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -32,9 +31,10 @@ export default function GameRoomPage() {
   const [deck, setDeck] = useState<Deck>({ emoji: "💌", cards: 10 });
   const [turnCount, setTurnCount] = useState(0);
   const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
-  const [socketId, setSocketId] = useState<string | null>(null);
+  const { socket, isConnected, socketId } = useSocket();
   const params = useParams();
   const router = useRouter();
+  const effectInitialized = useRef(false);
 
   useEffect(() => {
     const roomCodeParam = params.roomCode as string;
@@ -47,19 +47,7 @@ export default function GameRoomPage() {
       localStorage.removeItem(`tiles_${roomCodeParam}`);
     }
 
-    if (!socket) return;
-
-    const onConnect = () => {
-      setIsConnected(true);
-      if (socket?.id) {
-        setSocketId(socket.id);
-      }
-    };
-
-    const onDisconnect = () => {
-      setIsConnected(false);
-      setSocketId(null);
-    };
+    if (!socket || !socketId || effectInitialized.current) return;
 
     const onTilesUpdated = (data: { tiles: Tile[] }) => {
       setTiles(data.tiles);
@@ -74,7 +62,7 @@ export default function GameRoomPage() {
       turnCount: number;
     }) => {
       console.log("Game start data:", data);
-      console.log("Socket ID:", socket?.id);
+      console.log("Socket ID:", socketId);
       console.log("Players:", data.players);
       console.log("Player hands:", data.playerHands);
       setTiles(data.tiles);
@@ -83,9 +71,6 @@ export default function GameRoomPage() {
       setPlayerHands(data.playerHands);
       setDeck(data.deck);
       setTurnCount(data.turnCount);
-      if (socket?.id) {
-        setSocketId(socket.id);
-      }
     };
 
     const onTurnChanged = (data: { currentPlayer: Player; turnCount: number }) => {
@@ -106,40 +91,30 @@ export default function GameRoomPage() {
       setSelectedHeart(null);
     };
 
-    if (socket.connected) {
-      onConnect();
-    } else {
-      // Initialize socket ID if already connected
-      if (socket?.id) {
-        setSocketId(socket.id);
-      }
-    }
-
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
     socket.on("tiles-updated", onTilesUpdated);
     socket.on("game-start", onGameStart);
     socket.on("turn-changed", onTurnChanged);
     socket.on("heart-drawn", onHeartDrawn);
     socket.on("heart-placed", onHeartPlaced);
 
-    console.log("Socket listeners registered");
+    console.log("Game room socket listeners registered");
+    console.log("Current socket ID:", socketId);
 
     // Listen to all events to see what's happening
     socket.onAny((eventName, ...args) => {
       console.log(`Socket event received: ${eventName}`, args);
     });
 
+    effectInitialized.current = true;
+
     return () => {
-      socket?.off("connect", onConnect);
-      socket?.off("disconnect", onDisconnect);
       socket?.off("tiles-updated", onTilesUpdated);
       socket?.off("game-start", onGameStart);
       socket?.off("turn-changed", onTurnChanged);
       socket?.off("heart-drawn", onHeartDrawn);
       socket?.off("heart-placed", onHeartPlaced);
     };
-  }, [params.roomCode]);
+  }, [params.roomCode, socket, socketId]);
 
   
   const drawHeart = () => {

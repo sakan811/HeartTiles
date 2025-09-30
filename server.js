@@ -99,6 +99,7 @@ app.prepare().then(() => {
 
         console.log(`Room ${roomCode.toUpperCase()} created by ${socket.id}`);
         io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: socket.id });
+        io.to(roomCode.toUpperCase()).emit("player-joined", { players: newRoom.players });
       } else if (room.players.length >= room.maxPlayers) {
         // Room is full
         socket.emit("room-error", "Room is full");
@@ -315,18 +316,18 @@ app.prepare().then(() => {
 
       const roomCode = socket.data.roomCode;
       if (roomCode) {
-        const room = rooms.get(roomCode);
+        const room = rooms.get(roomCode.toUpperCase());
         if (room) {
           // Remove player from room
           room.players = room.players.filter(player => player.id !== socket.id);
 
           // Notify remaining players
-          io.to(roomCode).emit("player-left", { players: room.players });
+          io.to(roomCode.toUpperCase()).emit("player-left", { players: room.players });
 
           // Delete room if empty
           if (room.players.length === 0) {
-            rooms.delete(roomCode);
-            console.log(`Room ${roomCode} deleted (empty)`);
+            rooms.delete(roomCode.toUpperCase());
+            console.log(`Room ${roomCode.toUpperCase()} deleted (empty)`);
           }
         }
       }

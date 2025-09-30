@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { socket } from "@/socket";
+import { useSocket } from "@/socket";
 
 interface Player {
   id: string;
@@ -18,26 +18,19 @@ interface Tile {
 
 export default function RoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState("");
   const [currentPlayerId, setCurrentPlayerId] = useState("");
+  const { socket, isConnected, socketId } = useSocket();
   const params = useParams();
   const router = useRouter();
   const roomCode = params.roomCode as string;
+  const effectInitialized = useRef(false);
 
   useEffect(() => {
-    if (!socket) return;
-
-    const onConnect = () => {
-      setIsConnected(true);
-      socket?.emit("join-room", { roomCode, playerName: "Player" });
-    };
-
-    const onDisconnect = () => {
-      setIsConnected(false);
-    };
+    if (!socket || !socketId || effectInitialized.current) return;
 
     const onRoomJoined = (data: { players: Player[], playerId: string }) => {
+      console.log("Room joined event received:", data);
       setPlayers(data.players);
       setCurrentPlayerId(data.playerId);
       setError("");
@@ -65,12 +58,7 @@ export default function RoomPage() {
       setError(errorMessage);
     };
 
-    if (socket.connected) {
-      onConnect();
-    }
-
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
+    // Attach listeners first
     socket.on("room-joined", onRoomJoined);
     socket.on("player-joined", onPlayerJoined);
     socket.on("player-left", onPlayerLeft);
@@ -78,9 +66,13 @@ export default function RoomPage() {
     socket.on("game-start", onGameStart);
     socket.on("room-error", onRoomError);
 
+    // Then join room when socket is connected and we have socket ID
+    console.log("Joining room:", roomCode, "with socket ID:", socketId);
+    socket.emit("join-room", { roomCode, playerName: "Player" });
+
+    effectInitialized.current = true;
+
     return () => {
-      socket?.off("connect", onConnect);
-      socket?.off("disconnect", onDisconnect);
       socket?.off("room-joined", onRoomJoined);
       socket?.off("player-joined", onPlayerJoined);
       socket?.off("player-left", onPlayerLeft);
@@ -88,7 +80,7 @@ export default function RoomPage() {
       socket?.off("game-start", onGameStart);
       socket?.off("room-error", onRoomError);
     };
-  }, [roomCode, socket]);
+  }, [roomCode, socket, socketId, router]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
