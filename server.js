@@ -40,6 +40,7 @@ app.prepare().then(() => {
         const player = {
           id: socket.id,
           name: playerName || `Player ${newRoom.players.length + 1}`,
+          isReady: false,
         };
         // Ensure no duplicate players
         if (!newRoom.players.find(p => p.id === socket.id)) {
@@ -51,7 +52,7 @@ app.prepare().then(() => {
         socket.data.playerName = player.name;
 
         console.log(`Room ${roomCode.toUpperCase()} created by ${socket.id}`);
-        io.to(socket.id).emit("room-joined", { players: newRoom.players });
+        io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: socket.id });
       } else if (room.players.length >= room.maxPlayers) {
         // Room is full
         socket.emit("room-error", "Room is full");
@@ -60,6 +61,7 @@ app.prepare().then(() => {
         const player = {
           id: socket.id,
           name: playerName || `Player ${room.players.length + 1}`,
+          isReady: false,
         };
         // Ensure no duplicate players
         if (!room.players.find(p => p.id === socket.id)) {
@@ -73,7 +75,7 @@ app.prepare().then(() => {
         console.log(`Player ${socket.id} joined room ${roomCode.toUpperCase()}`);
 
         // Notify all players in the room
-        io.to(roomCode.toUpperCase()).emit("room-joined", { players: room.players });
+        io.to(socket.id).emit("room-joined", { players: room.players, playerId: socket.id });
         io.to(roomCode.toUpperCase()).emit("player-joined", { players: room.players });
       }
     });
@@ -98,6 +100,26 @@ app.prepare().then(() => {
         socket.leave(roomCode.toUpperCase());
         socket.data.roomCode = null;
         socket.data.playerName = null;
+      }
+    });
+
+    socket.on("player-ready", ({ roomCode }) => {
+      const room = rooms.get(roomCode.toUpperCase());
+      if (room) {
+        const player = room.players.find(p => p.id === socket.id);
+        if (player) {
+          player.isReady = !player.isReady;
+          console.log(`Player ${socket.id} ready status: ${player.isReady}`);
+
+          // Notify all players in the room
+          io.to(roomCode.toUpperCase()).emit("player-ready", { players: room.players });
+
+          // Check if all players are ready (minimum 2 players)
+          if (room.players.length >= 2 && room.players.every(p => p.isReady)) {
+            console.log(`All players ready in room ${roomCode.toUpperCase()}, starting game!`);
+            io.to(roomCode.toUpperCase()).emit("game-start");
+          }
+        }
       }
     });
 

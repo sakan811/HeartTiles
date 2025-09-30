@@ -7,12 +7,14 @@ import { socket } from "@/socket";
 interface Player {
   id: string;
   name: string;
+  isReady?: boolean;
 }
 
 export default function RoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState("");
+  const [currentPlayerId, setCurrentPlayerId] = useState("");
   const params = useParams();
   const router = useRouter();
   const roomCode = params.roomCode as string;
@@ -29,8 +31,9 @@ export default function RoomPage() {
       setIsConnected(false);
     };
 
-    const onRoomJoined = (data: { players: Player[] }) => {
+    const onRoomJoined = (data: { players: Player[], playerId: string }) => {
       setPlayers(data.players);
+      setCurrentPlayerId(data.playerId);
       setError("");
     };
 
@@ -40,6 +43,14 @@ export default function RoomPage() {
 
     const onPlayerLeft = (data: { players: Player[] }) => {
       setPlayers(data.players);
+    };
+
+    const onPlayerReady = (data: { players: Player[] }) => {
+      setPlayers(data.players);
+    };
+
+    const onGameStart = () => {
+      router.push(`/room/${roomCode}/game`);
     };
 
     const onRoomError = (errorMessage: string) => {
@@ -55,6 +66,8 @@ export default function RoomPage() {
     socket.on("room-joined", onRoomJoined);
     socket.on("player-joined", onPlayerJoined);
     socket.on("player-left", onPlayerLeft);
+    socket.on("player-ready", onPlayerReady);
+    socket.on("game-start", onGameStart);
     socket.on("room-error", onRoomError);
 
     return () => {
@@ -63,6 +76,8 @@ export default function RoomPage() {
       socket?.off("room-joined", onRoomJoined);
       socket?.off("player-joined", onPlayerJoined);
       socket?.off("player-left", onPlayerLeft);
+      socket?.off("player-ready", onPlayerReady);
+      socket?.off("game-start", onGameStart);
       socket?.off("room-error", onRoomError);
     };
   }, [roomCode, socket]);
@@ -76,6 +91,20 @@ export default function RoomPage() {
       socket.emit("leave-room", { roomCode });
     }
     router.push("/");
+  };
+
+  const toggleReady = () => {
+    if (socket) {
+      socket.emit("player-ready", { roomCode });
+    }
+  };
+
+  const getCurrentPlayer = () => {
+    return players.find(player => player.id === currentPlayerId);
+  };
+
+  const areAllPlayersReady = () => {
+    return players.length >= 2 && players.every(player => player.isReady);
   };
 
   return (
@@ -120,12 +149,15 @@ export default function RoomPage() {
               {players.map((player) => (
                 <div
                   key={player.id}
-                  className="bg-white/10 rounded-lg p-4 text-center"
+                  className={`bg-white/10 rounded-lg p-4 text-center ${player.isReady ? 'ring-2 ring-green-500' : ''}`}
                 >
                   <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">
                     {player.name.charAt(0).toUpperCase()}
                   </div>
                   <p className="text-white font-medium">{player.name}</p>
+                  {player.isReady && (
+                    <span className="text-green-400 text-sm">✓ Ready</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -137,14 +169,27 @@ export default function RoomPage() {
           <div className="text-gray-400 text-sm">
             <p>Share the room code with friends to join the game!</p>
             <p>Players: {players.length}/4</p>
+            {players.length >= 2 && (
+              <p className="text-yellow-400">Waiting for all players to be ready...</p>
+            )}
           </div>
 
-          <button
-            onClick={leaveRoom}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-          >
-            Leave Room
-          </button>
+          <div className="flex gap-4 justify-center">
+            {getCurrentPlayer() && (
+              <button
+                onClick={toggleReady}
+                className={`${getCurrentPlayer()?.isReady ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-3 px-6 rounded-lg transition-colors`}
+              >
+                {getCurrentPlayer()?.isReady ? 'Cancel Ready' : 'Ready'}
+              </button>
+            )}
+            <button
+              onClick={leaveRoom}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+            >
+              Leave Room
+            </button>
+          </div>
         </div>
       </div>
     </div>
