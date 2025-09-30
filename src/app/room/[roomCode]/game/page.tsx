@@ -17,25 +17,16 @@ export default function GameRoomPage() {
   const params = useParams();
   const router = useRouter();
 
-  const colors = ["red", "yellow", "green", "blue", "brown"];
-  const emojis = ["🟥", "🟨", "🟩", "🟦", "🟫"];
-
-  const generateRandomTiles = () => {
-    const newTiles: Tile[] = [];
-    for (let i = 0; i < 8; i++) {
-      const randomIndex = Math.floor(Math.random() * colors.length);
-      newTiles.push({
-        id: i,
-        color: colors[randomIndex],
-        emoji: emojis[randomIndex]
-      });
-    }
-    setTiles(newTiles);
-  };
-
   useEffect(() => {
     const roomCodeParam = params.roomCode as string;
     setRoomCode(roomCodeParam);
+
+    // Load initial tiles from localStorage
+    const savedTiles = localStorage.getItem(`tiles_${roomCodeParam}`);
+    if (savedTiles) {
+      setTiles(JSON.parse(savedTiles));
+      localStorage.removeItem(`tiles_${roomCodeParam}`);
+    }
 
     if (!socket) return;
 
@@ -47,22 +38,30 @@ export default function GameRoomPage() {
       setIsConnected(false);
     };
 
+    const onTilesUpdated = (data: { tiles: Tile[] }) => {
+      setTiles(data.tiles);
+    };
+
     if (socket.connected) {
       onConnect();
     }
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("tiles-updated", onTilesUpdated);
 
     return () => {
       socket?.off("connect", onConnect);
       socket?.off("disconnect", onDisconnect);
+      socket?.off("tiles-updated", onTilesUpdated);
     };
   }, [params.roomCode]);
 
-  useEffect(() => {
-    generateRandomTiles();
-  }, []);
+  const shuffleTiles = () => {
+    if (socket && roomCode) {
+      socket.emit("shuffle-tiles", { roomCode });
+    }
+  };
 
   const leaveGame = () => {
     if (socket) {
@@ -110,7 +109,7 @@ export default function GameRoomPage() {
 
           <div className="flex gap-4 justify-center">
             <button
-              onClick={generateRandomTiles}
+              onClick={shuffleTiles}
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
             >
               Shuffle Tiles

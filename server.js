@@ -21,6 +21,23 @@ app.prepare().then(() => {
 
   const rooms = new Map();
 
+  // Helper function to generate random tiles
+  function generateTiles() {
+    const colors = ["red", "yellow", "green", "blue", "brown"];
+    const emojis = ["🟥", "🟨", "🟩", "🟦", "🟫"];
+    const tiles = [];
+
+    for (let i = 0; i < 8; i++) {
+      const randomIndex = Math.floor(Math.random() * colors.length);
+      tiles.push({
+        id: i,
+        color: colors[randomIndex],
+        emoji: emojis[randomIndex]
+      });
+    }
+    return tiles;
+  }
+
   io.on("connection", (socket) => {
     console.log(`User connected: ${socket.id}`);
 
@@ -32,7 +49,11 @@ app.prepare().then(() => {
         const newRoom = {
           code: roomCode.toUpperCase(),
           players: [],
-          maxPlayers: 4,
+          maxPlayers: 2,
+          gameState: {
+            tiles: [],
+            gameStarted: false
+          }
         };
         rooms.set(roomCode.toUpperCase(), newRoom);
 
@@ -114,12 +135,29 @@ app.prepare().then(() => {
           // Notify all players in the room
           io.to(roomCode.toUpperCase()).emit("player-ready", { players: room.players });
 
-          // Check if all players are ready (minimum 2 players)
-          if (room.players.length >= 2 && room.players.every(p => p.isReady)) {
+          // Check if all players are ready (exactly 2 players required)
+          if (room.players.length === 2 && room.players.every(p => p.isReady)) {
             console.log(`All players ready in room ${roomCode.toUpperCase()}, starting game!`);
-            io.to(roomCode.toUpperCase()).emit("game-start");
+
+            // Generate initial tile state
+            room.gameState.tiles = generateTiles();
+            room.gameState.gameStarted = true;
+
+            io.to(roomCode.toUpperCase()).emit("game-start", { tiles: room.gameState.tiles });
           }
         }
+      }
+    });
+
+    socket.on("shuffle-tiles", ({ roomCode }) => {
+      const room = rooms.get(roomCode.toUpperCase());
+      if (room && room.gameState.gameStarted) {
+        // Generate new tiles for all players
+        room.gameState.tiles = generateTiles();
+        console.log(`Tiles shuffled in room ${roomCode.toUpperCase()}`);
+
+        // Broadcast new tile state to all players
+        io.to(roomCode.toUpperCase()).emit("tiles-updated", { tiles: room.gameState.tiles });
       }
     });
 

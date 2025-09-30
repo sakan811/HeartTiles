@@ -10,6 +10,12 @@ interface Player {
   isReady?: boolean;
 }
 
+interface Tile {
+  id: number;
+  color: string;
+  emoji: string;
+}
+
 export default function RoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -49,7 +55,9 @@ export default function RoomPage() {
       setPlayers(data.players);
     };
 
-    const onGameStart = () => {
+    const onGameStart = (data: { tiles: Tile[] }) => {
+      // Store the initial tile state in localStorage for the game page
+      localStorage.setItem(`tiles_${roomCode}`, JSON.stringify(data.tiles));
       router.push(`/room/${roomCode}/game`);
     };
 
@@ -103,8 +111,12 @@ export default function RoomPage() {
     return players.find(player => player.id === currentPlayerId);
   };
 
+  const canStartGame = () => {
+    return players.length === 2;
+  };
+
   const areAllPlayersReady = () => {
-    return players.length >= 2 && players.every(player => player.isReady);
+    return players.length === 2 && players.every(player => player.isReady);
   };
 
   return (
@@ -167,10 +179,16 @@ export default function RoomPage() {
           </div>
 
           <div className="text-gray-400 text-sm">
-            <p>Share the room code with friends to join the game!</p>
-            <p>Players: {players.length}/4</p>
-            {players.length >= 2 && (
-              <p className="text-yellow-400">Waiting for all players to be ready...</p>
+            <p>Share the room code with a friend to join the game!</p>
+            <p>Players: {players.length}/2</p>
+            {players.length === 0 && (
+              <p className="text-blue-400">Waiting for another player to join...</p>
+            )}
+            {players.length === 1 && (
+              <p className="text-yellow-400">Need 1 more player to start!</p>
+            )}
+            {players.length === 2 && (
+              <p className="text-green-400">Both players joined! Ready when everyone is ready...</p>
             )}
           </div>
 
@@ -178,7 +196,8 @@ export default function RoomPage() {
             {getCurrentPlayer() && (
               <button
                 onClick={toggleReady}
-                className={`${getCurrentPlayer()?.isReady ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-3 px-6 rounded-lg transition-colors`}
+                disabled={!canStartGame()}
+                className={`${getCurrentPlayer()?.isReady ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} ${!canStartGame() ? 'opacity-50 cursor-not-allowed' : ''} text-white font-bold py-3 px-6 rounded-lg transition-colors`}
               >
                 {getCurrentPlayer()?.isReady ? 'Cancel Ready' : 'Ready'}
               </button>
