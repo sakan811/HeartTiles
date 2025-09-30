@@ -41,7 +41,10 @@ app.prepare().then(() => {
           id: socket.id,
           name: playerName || `Player ${newRoom.players.length + 1}`,
         };
-        newRoom.players.push(player);
+        // Ensure no duplicate players
+        if (!newRoom.players.find(p => p.id === socket.id)) {
+          newRoom.players.push(player);
+        }
 
         socket.join(roomCode.toUpperCase());
         socket.data.roomCode = roomCode.toUpperCase();
@@ -58,7 +61,10 @@ app.prepare().then(() => {
           id: socket.id,
           name: playerName || `Player ${room.players.length + 1}`,
         };
-        room.players.push(player);
+        // Ensure no duplicate players
+        if (!room.players.find(p => p.id === socket.id)) {
+          room.players.push(player);
+        }
 
         socket.join(roomCode.toUpperCase());
         socket.data.roomCode = roomCode.toUpperCase();
