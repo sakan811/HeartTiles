@@ -29,6 +29,7 @@ export default function GameRoomPage() {
   const [playerHands, setPlayerHands] = useState<Record<string, Tile[]>>({});
   const [deck, setDeck] = useState<Deck>({ emoji: "💌", cards: 10 });
   const [turnCount, setTurnCount] = useState(0);
+  const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
   const params = useParams();
   const router = useRouter();
 
@@ -81,6 +82,12 @@ export default function GameRoomPage() {
       setDeck(data.deck);
     };
 
+    const onHeartPlaced = (data: { tiles: Tile[]; playerHands: Record<string, Tile[]> }) => {
+      setTiles(data.tiles);
+      setPlayerHands(data.playerHands);
+      setSelectedHeart(null);
+    };
+
     if (socket.connected) {
       onConnect();
     }
@@ -91,6 +98,7 @@ export default function GameRoomPage() {
     socket.on("game-start", onGameStart);
     socket.on("turn-changed", onTurnChanged);
     socket.on("heart-drawn", onHeartDrawn);
+    socket.on("heart-placed", onHeartPlaced);
 
     return () => {
       socket?.off("connect", onConnect);
@@ -99,6 +107,7 @@ export default function GameRoomPage() {
       socket?.off("game-start", onGameStart);
       socket?.off("turn-changed", onTurnChanged);
       socket?.off("heart-drawn", onHeartDrawn);
+      socket?.off("heart-placed", onHeartPlaced);
     };
   }, [params.roomCode]);
 
@@ -109,8 +118,15 @@ export default function GameRoomPage() {
     }
   };
 
+  const placeHeart = (tileId: number) => {
+    if (socket && roomCode && isCurrentPlayer() && selectedHeart) {
+      socket.emit("place-heart", { roomCode, tileId, heartId: selectedHeart.id });
+    }
+  };
+
   const endTurn = () => {
     if (socket && roomCode) {
+      setSelectedHeart(null);
       socket.emit("end-turn", { roomCode });
     }
   };
@@ -173,13 +189,21 @@ export default function GameRoomPage() {
               {playerHands[socket?.id || ""]?.map((heart) => (
                 <div
                   key={heart.id}
-                  className="w-16 h-16 bg-white/20 rounded-lg flex items-center justify-center text-3xl hover:bg-white/30 transition-colors cursor-pointer"
+                  onClick={() => isCurrentPlayer() && setSelectedHeart(heart)}
+                  className={`w-16 h-16 rounded-lg flex items-center justify-center text-3xl transition-colors cursor-pointer ${
+                    selectedHeart?.id === heart.id
+                      ? 'bg-yellow-400/50 ring-2 ring-yellow-400'
+                      : 'bg-white/20 hover:bg-white/30'
+                  }`}
                   title={`${heart.color} heart`}
                 >
                   {heart.emoji}
                 </div>
               ))}
             </div>
+            {selectedHeart && (
+              <p className="text-center text-yellow-400 mt-2">Selected: {selectedHeart.emoji} - Click a tile to place it</p>
+            )}
           </div>
 
           {/* Game Tiles */}
@@ -187,7 +211,10 @@ export default function GameRoomPage() {
             {tiles.map((tile) => (
               <div
                 key={tile.id}
-                className="w-20 h-20 bg-white/20 rounded-lg flex items-center justify-center text-4xl hover:bg-white/30 transition-colors cursor-pointer"
+                onClick={() => selectedHeart && placeHeart(tile.id)}
+                className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors cursor-pointer ${
+                  selectedHeart ? 'hover:bg-white/30 bg-white/20' : 'bg-white/10 cursor-not-allowed'
+                }`}
                 title={`${tile.color} tile`}
               >
                 {tile.emoji}

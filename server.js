@@ -38,23 +38,6 @@ app.prepare().then(() => {
     return tiles;
   }
 
-  // Helper function to generate heart cards for a player
-  function generatePlayerHearts() {
-    const colors = ["red", "yellow", "green", "blue", "brown"];
-    const heartEmojis = ["❤️", "💛", "💚", "💙", "🤎"];
-    const hearts = [];
-
-    for (let i = 0; i < 5; i++) {
-      const randomIndex = Math.floor(Math.random() * colors.length);
-      hearts.push({
-        id: i,
-        color: colors[randomIndex],
-        emoji: heartEmojis[randomIndex]
-      });
-    }
-    return hearts;
-  }
-
   // Helper function to generate a single heart card
   function generateSingleHeart() {
     const colors = ["red", "yellow", "green", "blue", "brown"];
@@ -185,9 +168,9 @@ app.prepare().then(() => {
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
 
-            // Initialize player hands with 5 hearts each
+            // Initialize empty player hands
             room.players.forEach(player => {
-              room.gameState.playerHands[player.id] = generatePlayerHearts();
+              room.gameState.playerHands[player.id] = [];
             });
 
             // Select random starting player
@@ -223,7 +206,7 @@ app.prepare().then(() => {
       if (room && room.gameState.gameStarted && room.gameState.deck.cards > 0) {
         // Check if it's the current player's turn
         if (room.gameState.currentPlayer.id === socket.id) {
-          // Generate a new heart for the player
+          // Generate a new heart and add to player's hand
           const newHeart = generateSingleHeart();
 
           // Add the heart to the current player's hand
@@ -242,6 +225,41 @@ app.prepare().then(() => {
             playerHands: room.gameState.playerHands,
             deck: room.gameState.deck
           });
+        }
+      }
+    });
+
+    socket.on("place-heart", ({ roomCode, tileId, heartId }) => {
+      const room = rooms.get(roomCode.toUpperCase());
+      if (room && room.gameState.gameStarted) {
+        // Check if it's the current player's turn
+        if (room.gameState.currentPlayer.id === socket.id) {
+          // Find the heart in player's hand
+          const playerHand = room.gameState.playerHands[socket.id] || [];
+          const heartIndex = playerHand.findIndex(heart => heart.id === heartId);
+
+          if (heartIndex !== -1) {
+            // Remove heart from player's hand
+            const heart = playerHand.splice(heartIndex, 1)[0];
+
+            // Place heart on the tile
+            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id === tileId);
+            if (tileIndex !== -1) {
+              room.gameState.tiles[tileIndex] = {
+                ...room.gameState.tiles[tileIndex],
+                emoji: heart.emoji,
+                color: heart.color
+              };
+
+              console.log(`Heart placed on tile ${tileId} by ${socket.id} in room ${roomCode.toUpperCase()}`);
+
+              // Broadcast the updated tiles and player hands
+              io.to(roomCode.toUpperCase()).emit("heart-placed", {
+                tiles: room.gameState.tiles,
+                playerHands: room.gameState.playerHands
+              });
+            }
+          }
         }
       }
     });
