@@ -26,15 +26,10 @@ export default function RoomPage() {
   const router = useRouter();
   const roomCode = params.roomCode as string;
 
-  // Get or create persistent player name
+  // Generate a simple player name - server will manage player identity
   const getPlayerName = () => {
-    const savedName = localStorage.getItem(`playerName_${roomCode}`);
-    if (savedName) return savedName;
-
-    // Generate a consistent name based on timestamp if no saved name
-    const name = `Player_${Date.now().toString(36).slice(-4)}`;
-    localStorage.setItem(`playerName_${roomCode}`, name);
-    return name;
+    if (!socketId) return `Player_${Math.random().toString(36).slice(-4)}`;
+    return `Player_${socketId.slice(-6)}`;
   };
 
   useEffect(() => {
@@ -61,9 +56,7 @@ export default function RoomPage() {
     };
 
     const onGameStart = (data: any) => {
-      // Store complete game state for the game page
-      localStorage.setItem(`gameState_${roomCode}`, JSON.stringify(data));
-      localStorage.setItem(`tiles_${roomCode}`, JSON.stringify(data.tiles));
+      // Navigate to game page - server will provide all necessary state
       router.push(`/room/${roomCode}/game`);
     };
 

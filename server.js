@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import next from "next";
 import { Server } from "socket.io";
 
@@ -8,6 +10,63 @@ const port = 3000;
 // when using middleware `hostname` and `port` must be provided below
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
+
+// Storage configuration
+const STORAGE_DIR = join(process.cwd(), '.server-data');
+const ROOMS_FILE = join(STORAGE_DIR, 'rooms.json');
+const SESSIONS_FILE = join(STORAGE_DIR, 'sessions.json');
+
+// Ensure storage directory exists
+try {
+  if (!existsSync(STORAGE_DIR)) {
+    mkdirSync(STORAGE_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.error('Error creating storage directory:', err);
+}
+
+// Storage functions
+function loadRooms() {
+  try {
+    if (existsSync(ROOMS_FILE)) {
+      const data = readFileSync(ROOMS_FILE, 'utf8');
+      return new Map(JSON.parse(data));
+    }
+  } catch (err) {
+    console.error('Error loading rooms:', err);
+  }
+  return new Map();
+}
+
+function saveRooms(roomsMap) {
+  try {
+    const data = JSON.stringify(Array.from(roomsMap.entries()));
+    writeFileSync(ROOMS_FILE, data, 'utf8');
+  } catch (err) {
+    console.error('Error saving rooms:', err);
+  }
+}
+
+function loadPlayerSessions() {
+  try {
+    if (existsSync(SESSIONS_FILE)) {
+      const data = readFileSync(SESSIONS_FILE, 'utf8');
+      return new Map(JSON.parse(data));
+    }
+  } catch (err) {
+    console.error('Error loading sessions:', err);
+  }
+  return new Map();
+}
+
+function savePlayerSessions(sessionsMap) {
+  try {
+    const data = JSON.stringify(Array.from(sessionsMap.entries()));
+    writeFileSync(SESSIONS_FILE, data, 'utf8');
+  } catch (err) {
+    console.error('Error saving sessions:', err);
+  }
+}
 
 app.prepare().then(() => {
   const httpServer = createServer(handler);
@@ -19,11 +78,14 @@ app.prepare().then(() => {
     },
   });
 
-  const rooms = new Map();
-  const turnLocks = new Map(); // Track turn validation locks
-  const connectionPool = new Map(); // Track connections per IP
-  const playerSessions = new Map(); // Track player sessions by name
+  // Load persisted data or initialize empty maps
+  const rooms = loadRooms();
+  const turnLocks = new Map(); // Track turn validation locks (not persisted)
+  const connectionPool = new Map(); // Track connections per IP (not persisted)
+  const playerSessions = loadPlayerSessions();
   const MAX_CONNECTIONS_PER_IP = 5; // Limit connections per IP
+
+  console.log(`Loaded ${rooms.size} rooms and ${playerSessions.size} player sessions from storage`);
 
   // Turn validation helper functions
   function acquireTurnLock(roomCode, playerId) {
@@ -77,6 +139,7 @@ app.prepare().then(() => {
         originalSocketId: null,
         currentSocketId: null
       });
+      savePlayerSessions(playerSessions); // Save new session
     }
     return playerSessions.get(normalizedName);
   }
@@ -88,6 +151,7 @@ app.prepare().then(() => {
     if (!session.originalSocketId) {
       session.originalSocketId = socketId;
     }
+    savePlayerSessions(playerSessions); // Save socket update
     return session;
   }
 
@@ -145,41 +209,41 @@ app.prepare().then(() => {
     return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
   }
 
-  // Helper function to migrate player data to new socket
-  function migratePlayerData(room, oldSocketId, newSocketId, playerName) {
+  // Helper function to migrate player data to new session
+  function migratePlayerData(room, oldPlayerId, newPlayerId, playerName) {
     // Update player reference in room
-    const playerIndex = room.players.findIndex(p => p.id === oldSocketId);
+    const playerIndex = room.players.findIndex(p => p.id === oldPlayerId);
     if (playerIndex !== -1) {
-      room.players[playerIndex].id = newSocketId;
+      room.players[playerIndex].id = newPlayerId;
       room.players[playerIndex].name = playerName;
     } else {
       // Add new player if not found
       room.players.push({
-        id: newSocketId,
+        id: newPlayerId,
         name: playerName,
         isReady: false
       });
     }
 
     // Migrate player hands if they exist
-    if (room.gameState.playerHands[oldSocketId]) {
-      room.gameState.playerHands[newSocketId] = room.gameState.playerHands[oldSocketId];
-      delete room.gameState.playerHands[oldSocketId];
+    if (room.gameState.playerHands[oldPlayerId]) {
+      room.gameState.playerHands[newPlayerId] = room.gameState.playerHands[oldPlayerId];
+      delete room.gameState.playerHands[oldPlayerId];
     }
 
     // Update current player reference if needed
-    if (room.gameState.currentPlayer && room.gameState.currentPlayer.id === oldSocketId) {
+    if (room.gameState.currentPlayer && room.gameState.currentPlayer.id === oldPlayerId) {
       const session = getPlayerSession(playerName);
       room.gameState.currentPlayer = {
-        id: newSocketId,
+        id: newPlayerId,
         name: playerName,
-        isReady: room.players.find(p => p.id === newSocketId)?.isReady || false
+        isReady: room.players.find(p => p.id === newPlayerId)?.isReady || false
       };
     }
 
     // Release any old turn locks
     Object.keys(turnLocks).forEach(lockKey => {
-      if (lockKey.includes(oldSocketId)) {
+      if (lockKey.includes(oldPlayerId)) {
         const parts = lockKey.split('_');
         if (parts.length >= 2) {
           const roomCode = parts[0];
@@ -307,6 +371,7 @@ app.prepare().then(() => {
           }
         };
         rooms.set(roomCode, newRoom);
+        saveRooms(rooms); // Save room creation
 
         // Add player to new room using session ID
         const player = {
@@ -330,23 +395,63 @@ app.prepare().then(() => {
         io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: playerSession.id });
         console.log(`Room ${roomCode} created with ${newRoom.players.length} players`);
       } else {
-        // Check if player is already in the room (by name)
+        // Check if player is already in the room (by name or session ID)
         const existingPlayerByName = findPlayerByName(room, playerName);
+        const existingPlayerBySession = room.players.find(p => p.id === playerSession.id);
         const existingPlayerBySocket = room.players.find(p => p.id === socket.id);
 
         console.log(`Player ${playerName} joining room ${roomCode}:`);
         console.log(`- Existing player by name:`, existingPlayerByName);
+        console.log(`- Existing player by session:`, existingPlayerBySession);
         console.log(`- Existing player by socket:`, existingPlayerBySocket);
+        console.log(`- Room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
 
-        if (!existingPlayerByName && !existingPlayerBySocket && room.players.length >= room.maxPlayers) {
+        if (!existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket && room.players.length >= room.maxPlayers) {
           // Room is full and player is not already in it
-          socket.emit("room-error", "Room is full");
-          return;
+          // Check if any players in the room are actually disconnected
+          const activePlayerSockets = Array.from(io.sockets.adapter.rooms.get(roomCode) || [])
+            .filter(socketId => io.sockets.sockets.has(socketId));
+
+          console.log(`Room ${roomCode} appears full (${room.players.length}/${room.maxPlayers})`);
+          console.log(`Active sockets in room: ${activePlayerSockets.length}`);
+          console.log(`Room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
+
+          // Additional check: Look for players with invalid gameState (null currentPlayer in started game)
+          const hasInvalidGameState = room.gameState.gameStarted && !room.gameState.currentPlayer;
+
+          // Allow joining if:
+          // 1. There are fewer active sockets than players (disconnected players)
+          // 2. OR the game state is corrupted (null currentPlayer when game started)
+          if (activePlayerSockets.length < room.players.length || hasInvalidGameState) {
+            console.log(`Detected disconnected players or invalid game state in room ${roomCode}, allowing reconnection for ${playerName}`);
+
+            // If game state is corrupted, reset it to allow fresh game
+            if (hasInvalidGameState) {
+              console.log(`Resetting invalid game state in room ${roomCode}`);
+              room.gameState.gameStarted = false;
+              room.gameState.currentPlayer = null;
+              room.gameState.tiles = [];
+              room.gameState.playerHands = {};
+              room.gameState.turnCount = 0;
+              room.gameState.deck.cards = 10;
+
+              // Reset all players to not ready
+              room.players.forEach(player => {
+                player.isReady = false;
+              });
+
+              saveRooms(rooms);
+            }
+          } else {
+            socket.emit("room-error", "Room is full");
+            console.log(`Room ${roomCode} is full with active players, rejecting player ${playerName}`);
+            return;
+          }
         }
 
         let isNewJoin = false;
 
-        if (!existingPlayerByName && !existingPlayerBySocket) {
+        if (!existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket) {
           // Add new player to existing room
           const player = {
             id: playerSession.id,
@@ -355,15 +460,20 @@ app.prepare().then(() => {
           };
           room.players.push(player);
           isNewJoin = true;
-          console.log(`New player ${playerName} joined room ${roomCode.toUpperCase()}`);
-        } else if (existingPlayerByName && !existingPlayerBySocket) {
-          // Player is reconnecting with new socket ID
-          console.log(`Player ${playerName} reconnecting from ${existingPlayerByName.id} to ${socket.id}`);
+          console.log(`New player ${playerName} joined room ${roomCode.toUpperCase()} with session ID ${playerSession.id}`);
+        } else if (existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket) {
+          // Player is reconnecting with new socket ID and session ID
+          console.log(`Player ${playerName} reconnecting from ${existingPlayerByName.id} to session ${playerSession.id} (socket ${socket.id})`);
           migratePlayerData(room, existingPlayerByName.id, playerSession.id, playerName);
+        } else if (existingPlayerBySession) {
+          // Player is rejoining with same session ID but possibly different socket
+          existingPlayerBySession.name = playerName;
+          console.log(`Player ${playerName} rejoined room ${roomCode.toUpperCase()} with existing session ${playerSession.id}`);
         } else if (existingPlayerBySocket) {
-          // Player is rejoining with same socket ID (rare case)
+          // Player is rejoining with same socket ID (fallback case)
           existingPlayerBySocket.name = playerName;
-          console.log(`Player ${playerName} rejoined room ${roomCode.toUpperCase()}`);
+          existingPlayerBySocket.id = playerSession.id; // Update to session ID
+          console.log(`Player ${playerName} rejoined room ${roomCode.toUpperCase()} with socket ${socket.id}, updated to session ${playerSession.id}`);
         }
 
         socket.join(roomCode);
@@ -434,6 +544,7 @@ app.prepare().then(() => {
         // Delete room if empty
         if (room.players.length === 0) {
           rooms.delete(roomCode);
+          saveRooms(rooms); // Save room deletion
           console.log(`Room ${roomCode} deleted (empty)`);
         } else {
           console.log(`Player ${socket.id} left room ${roomCode}`);
@@ -454,11 +565,13 @@ app.prepare().then(() => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
+      const playerSessionId = socket.data.playerSessionId || socket.id;
+
       if (room) {
-        const player = room.players.find(p => p.id === socket.id);
+        const player = room.players.find(p => p.id === playerSessionId);
         if (player) {
           player.isReady = !player.isReady;
-          console.log(`Player ${socket.id} ready status: ${player.isReady}`);
+          console.log(`Player ${playerSessionId} (${player.name}) ready status: ${player.isReady}`);
 
           // Notify all players in the room
           io.to(roomCode).emit("player-ready", { players: room.players });
@@ -470,6 +583,7 @@ app.prepare().then(() => {
             // Generate initial tile state
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
+            saveRooms(rooms); // Save game start
 
             // Initialize player hands with starting hearts
             room.players.forEach(player => {
@@ -478,17 +592,31 @@ app.prepare().then(() => {
               for (let i = 0; i < 3; i++) {
                 room.gameState.playerHands[player.id].push(generateSingleHeart());
               }
+              console.log(`Dealt 3 hearts to player ${player.name} (${player.id}):`, room.gameState.playerHands[player.id]);
             });
 
             // Select random starting player
             room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
             room.gameState.turnCount = 1;
 
+            console.log(`Game started in room ${roomCode}:`, {
+              tilesCount: room.gameState.tiles.length,
+              currentPlayer: room.gameState.currentPlayer?.name,
+              playersCount: room.players.length,
+              playerHandsKeys: Object.keys(room.gameState.playerHands),
+              deckCards: room.gameState.deck.cards,
+              turnCount: room.gameState.turnCount
+            });
+
             // Include player hands in the player objects for easier client-side handling
-            const playersWithHands = room.players.map(player => ({
-              ...player,
-              hand: room.gameState.playerHands[player.id] || []
-            }));
+            const playersWithHands = room.players.map(player => {
+              const playerHand = room.gameState.playerHands[player.id] || [];
+              console.log(`Player ${player.name} (${player.id}) hand:`, playerHand);
+              return {
+                ...player,
+                hand: playerHand
+              };
+            });
 
             const gameStartData = {
               tiles: room.gameState.tiles,
@@ -503,12 +631,16 @@ app.prepare().then(() => {
               tilesCount: gameStartData.tiles.length,
               currentPlayer: gameStartData.currentPlayer?.name,
               playersCount: gameStartData.players.length,
+              playerHandsKeys: Object.keys(gameStartData.playerHands),
               deckCards: gameStartData.deck.cards,
               turnCount: gameStartData.turnCount
             });
+            console.log(`Full game-start data:`, JSON.stringify(gameStartData, null, 2));
 
             io.to(roomCode).emit("game-start", gameStartData);
           }
+        } else {
+          console.log(`Player ${playerSessionId} not found in room ${roomCode}. Players in room:`, room.players.map(p => ({ id: p.id, name: p.name })));
         }
       }
     });
@@ -525,6 +657,7 @@ app.prepare().then(() => {
       if (room && room.gameState.gameStarted) {
         // Generate new tiles for all players
         room.gameState.tiles = generateTiles();
+        saveRooms(rooms); // Save tile shuffle
         console.log(`Tiles shuffled in room ${roomCode}`);
 
         // Broadcast new tile state to all players
@@ -541,6 +674,7 @@ app.prepare().then(() => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
+      const playerSessionId = socket.data.playerSessionId || socket.id;
 
       // Comprehensive validation
       const roomValidation = validateRoomState(room);
@@ -549,7 +683,7 @@ app.prepare().then(() => {
         return;
       }
 
-      const playerValidation = validatePlayerInRoom(room, socket.id);
+      const playerValidation = validatePlayerInRoom(room, playerSessionId);
       if (!playerValidation.valid) {
         socket.emit("room-error", playerValidation.error);
         return;
@@ -562,7 +696,7 @@ app.prepare().then(() => {
       }
 
       // Validate turn and acquire lock
-      const turnValidation = validateTurn(room, socket.id);
+      const turnValidation = validateTurn(room, playerSessionId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
         return;
@@ -579,15 +713,16 @@ app.prepare().then(() => {
           const newHeart = generateSingleHeart();
 
           // Add the heart to the current player's hand
-          if (!room.gameState.playerHands[socket.id]) {
-            room.gameState.playerHands[socket.id] = [];
+          if (!room.gameState.playerHands[playerSessionId]) {
+            room.gameState.playerHands[playerSessionId] = [];
           }
-          room.gameState.playerHands[socket.id].push(newHeart);
+          room.gameState.playerHands[playerSessionId].push(newHeart);
 
           // Decrease deck count
           room.gameState.deck.cards--;
+          saveRooms(rooms); // Save heart draw
 
-          console.log(`Heart drawn by ${socket.id} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
+          console.log(`Heart drawn by ${playerSessionId} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
 
           // Include player hands in the player objects for broadcasting
           const playersWithUpdatedHands = room.players.map(player => ({
@@ -617,6 +752,7 @@ app.prepare().then(() => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
+      const playerSessionId = socket.data.playerSessionId || socket.id;
 
       // Comprehensive validation
       const roomValidation = validateRoomState(room);
@@ -625,20 +761,20 @@ app.prepare().then(() => {
         return;
       }
 
-      const playerValidation = validatePlayerInRoom(room, socket.id);
+      const playerValidation = validatePlayerInRoom(room, playerSessionId);
       if (!playerValidation.valid) {
         socket.emit("room-error", playerValidation.error);
         return;
       }
 
-      const heartValidation = validateHeartPlacement(room, socket.id, heartId, tileId);
+      const heartValidation = validateHeartPlacement(room, playerSessionId, heartId, tileId);
       if (!heartValidation.valid) {
         socket.emit("room-error", heartValidation.error);
         return;
       }
 
       // Validate turn and acquire lock
-      const turnValidation = validateTurn(room, socket.id);
+      const turnValidation = validateTurn(room, playerSessionId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
         return;
@@ -652,7 +788,7 @@ app.prepare().then(() => {
       try {
         if (room.gameState.gameStarted) {
           // Find the heart in player's hand
-          const playerHand = room.gameState.playerHands[socket.id] || [];
+          const playerHand = room.gameState.playerHands[playerSessionId] || [];
           const heartIndex = playerHand.findIndex(heart => heart.id === heartId);
 
           if (heartIndex !== -1) {
@@ -667,8 +803,9 @@ app.prepare().then(() => {
                 emoji: heart.emoji,
                 color: heart.color
               };
+              saveRooms(rooms); // Save heart placement
 
-              console.log(`Heart placed on tile ${tileId} by ${socket.id} in room ${roomCode.toUpperCase()}`);
+              console.log(`Heart placed on tile ${tileId} by ${playerSessionId} in room ${roomCode.toUpperCase()}`);
 
               // Include player hands in the player objects for broadcasting
               const playersWithUpdatedHands = room.players.map(player => ({
@@ -700,6 +837,7 @@ app.prepare().then(() => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
+      const playerSessionId = socket.data.playerSessionId || socket.id;
 
       // Comprehensive validation
       const roomValidation = validateRoomState(room);
@@ -708,14 +846,14 @@ app.prepare().then(() => {
         return;
       }
 
-      const playerValidation = validatePlayerInRoom(room, socket.id);
+      const playerValidation = validatePlayerInRoom(room, playerSessionId);
       if (!playerValidation.valid) {
         socket.emit("room-error", playerValidation.error);
         return;
       }
 
       // Validate turn and acquire lock
-      const turnValidation = validateTurn(room, socket.id);
+      const turnValidation = validateTurn(room, playerSessionId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
         return;
@@ -735,13 +873,28 @@ app.prepare().then(() => {
         // Switch to next player
         room.gameState.currentPlayer = room.players[nextPlayerIndex];
         room.gameState.turnCount++;
+        saveRooms(rooms); // Save turn change
 
         console.log(`Turn ended in room ${roomCode.toUpperCase()}, new currentPlayer: ${room.gameState.currentPlayer.id}`);
 
-        // Broadcast turn change to all players
+        // Include player hands in the player objects for broadcasting
+          const playersWithHands = room.players.map(player => ({
+            ...player,
+            hand: room.gameState.playerHands[player.id] || []
+          }));
+
+          // Broadcast turn change to all players
           io.to(roomCode).emit("turn-changed", {
             currentPlayer: room.gameState.currentPlayer,
-            turnCount: room.gameState.turnCount
+            turnCount: room.gameState.turnCount,
+            players: playersWithHands,
+            playerHands: room.gameState.playerHands,
+            deck: room.gameState.deck
+          });
+          console.log(`Turn change broadcasted to room ${roomCode}:`, {
+            currentPlayer: room.gameState.currentPlayer.name,
+            turnCount: room.gameState.turnCount,
+            playersCount: playersWithHands.length
           });
         }
       } finally {
@@ -772,6 +925,7 @@ app.prepare().then(() => {
           // Delete room if empty
           if (room.players.length === 0) {
             rooms.delete(roomCode);
+            saveRooms(rooms); // Save room deletion
             console.log(`Room ${roomCode} deleted (empty)`);
           }
         }
