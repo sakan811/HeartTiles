@@ -22,6 +22,7 @@ app.prepare().then(() => {
   const rooms = new Map();
   const turnLocks = new Map(); // Track turn validation locks
   const connectionPool = new Map(); // Track connections per IP
+  const playerSessions = new Map(); // Track player sessions by name
   const MAX_CONNECTIONS_PER_IP = 5; // Limit connections per IP
 
   // Turn validation helper functions
@@ -64,6 +65,30 @@ app.prepare().then(() => {
       return false;
     }
     return playerName.trim().length > 0 && playerName.length <= 20;
+  }
+
+  // Helper function to generate or get player session
+  function getPlayerSession(playerName) {
+    const normalizedName = playerName.trim().toLowerCase();
+    if (!playerSessions.has(normalizedName)) {
+      playerSessions.set(normalizedName, {
+        id: `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: playerName.trim(),
+        originalSocketId: null,
+        currentSocketId: null
+      });
+    }
+    return playerSessions.get(normalizedName);
+  }
+
+  // Helper function to update player's current socket
+  function updatePlayerSocket(playerName, socketId) {
+    const session = getPlayerSession(playerName);
+    session.currentSocketId = socketId;
+    if (!session.originalSocketId) {
+      session.originalSocketId = socketId;
+    }
+    return session;
   }
 
   function sanitizeInput(input) {
@@ -113,6 +138,55 @@ app.prepare().then(() => {
     }
 
     return { valid: true };
+  }
+
+  // Helper function to find player by name in room
+  function findPlayerByName(room, playerName) {
+    return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+  }
+
+  // Helper function to migrate player data to new socket
+  function migratePlayerData(room, oldSocketId, newSocketId, playerName) {
+    // Update player reference in room
+    const playerIndex = room.players.findIndex(p => p.id === oldSocketId);
+    if (playerIndex !== -1) {
+      room.players[playerIndex].id = newSocketId;
+      room.players[playerIndex].name = playerName;
+    } else {
+      // Add new player if not found
+      room.players.push({
+        id: newSocketId,
+        name: playerName,
+        isReady: false
+      });
+    }
+
+    // Migrate player hands if they exist
+    if (room.gameState.playerHands[oldSocketId]) {
+      room.gameState.playerHands[newSocketId] = room.gameState.playerHands[oldSocketId];
+      delete room.gameState.playerHands[oldSocketId];
+    }
+
+    // Update current player reference if needed
+    if (room.gameState.currentPlayer && room.gameState.currentPlayer.id === oldSocketId) {
+      const session = getPlayerSession(playerName);
+      room.gameState.currentPlayer = {
+        id: newSocketId,
+        name: playerName,
+        isReady: room.players.find(p => p.id === newSocketId)?.isReady || false
+      };
+    }
+
+    // Release any old turn locks
+    Object.keys(turnLocks).forEach(lockKey => {
+      if (lockKey.includes(oldSocketId)) {
+        const parts = lockKey.split('_');
+        if (parts.length >= 2) {
+          const roomCode = parts[0];
+          turnLocks.delete(lockKey);
+        }
+      }
+    });
   }
 
   function validateDeckState(room) {
@@ -208,6 +282,10 @@ app.prepare().then(() => {
       roomCode = sanitizeInput(roomCode.toUpperCase());
       playerName = sanitizeInput(playerName);
 
+      // Get or create player session
+      const playerSession = updatePlayerSocket(playerName, socket.id);
+      console.log(`Player session for ${playerName}:`, playerSession);
+
       const room = rooms.get(roomCode);
 
       if (!room) {
@@ -230,63 +308,91 @@ app.prepare().then(() => {
         };
         rooms.set(roomCode, newRoom);
 
-        // Add player to new room
+        // Add player to new room using session ID
         const player = {
-          id: socket.id,
-          name: playerName || `Player ${socket.id.slice(-4)}`,
+          id: playerSession.id,
+          name: playerName,
           isReady: false,
         };
-        // Ensure no duplicate players
-        if (!newRoom.players.find(p => p.id === socket.id)) {
+        // Ensure no duplicate players by name
+        if (!findPlayerByName(newRoom, playerName)) {
           newRoom.players.push(player);
         }
 
         socket.join(roomCode);
         socket.data.roomCode = roomCode;
-        socket.data.playerName = player.name;
+        socket.data.playerName = playerName;
+        socket.data.playerSessionId = playerSession.id;
 
-        console.log(`Room ${roomCode} created by ${socket.id}`);
+        console.log(`Room ${roomCode} created by ${playerName} (${socket.id})`);
 
         // Send room-joined to the creator only
-        io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: socket.id });
+        io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: playerSession.id });
+        console.log(`Room ${roomCode} created with ${newRoom.players.length} players`);
       } else {
-        // Check if player is already in the room (rejoining)
-        const existingPlayer = room.players.find(p => p.id === socket.id);
+        // Check if player is already in the room (by name)
+        const existingPlayerByName = findPlayerByName(room, playerName);
+        const existingPlayerBySocket = room.players.find(p => p.id === socket.id);
 
-        if (!existingPlayer && room.players.length >= room.maxPlayers) {
+        console.log(`Player ${playerName} joining room ${roomCode}:`);
+        console.log(`- Existing player by name:`, existingPlayerByName);
+        console.log(`- Existing player by socket:`, existingPlayerBySocket);
+
+        if (!existingPlayerByName && !existingPlayerBySocket && room.players.length >= room.maxPlayers) {
           // Room is full and player is not already in it
           socket.emit("room-error", "Room is full");
           return;
         }
 
-        if (!existingPlayer) {
+        let isNewJoin = false;
+
+        if (!existingPlayerByName && !existingPlayerBySocket) {
           // Add new player to existing room
           const player = {
-            id: socket.id,
-            name: playerName || `Player ${socket.id.slice(-4)}`,
+            id: playerSession.id,
+            name: playerName,
             isReady: false,
           };
           room.players.push(player);
-          socket.data.playerName = player.name;
-          console.log(`Player ${socket.id} joined room ${roomCode.toUpperCase()}`);
-        } else {
-          // Player is rejoining, update their socket data
-          socket.data.playerName = existingPlayer.name;
-          console.log(`Player ${socket.id} rejoined room ${roomCode.toUpperCase()}`);
+          isNewJoin = true;
+          console.log(`New player ${playerName} joined room ${roomCode.toUpperCase()}`);
+        } else if (existingPlayerByName && !existingPlayerBySocket) {
+          // Player is reconnecting with new socket ID
+          console.log(`Player ${playerName} reconnecting from ${existingPlayerByName.id} to ${socket.id}`);
+          migratePlayerData(room, existingPlayerByName.id, playerSession.id, playerName);
+        } else if (existingPlayerBySocket) {
+          // Player is rejoining with same socket ID (rare case)
+          existingPlayerBySocket.name = playerName;
+          console.log(`Player ${playerName} rejoined room ${roomCode.toUpperCase()}`);
         }
 
         socket.join(roomCode);
         socket.data.roomCode = roomCode;
+        socket.data.playerName = playerName;
+        socket.data.playerSessionId = playerSession.id;
 
         // Send room-joined to the joining player only
-        io.to(socket.id).emit("room-joined", { players: room.players, playerId: socket.id });
+        io.to(socket.id).emit("room-joined", { players: room.players, playerId: playerSession.id });
+        console.log(`Player ${playerName} joined room ${roomCode}, total players: ${room.players.length}`);
 
-        // Notify other players in the room about the new player
-        socket.to(roomCode).emit("player-joined", { players: room.players });
+        // Notify other players in the room about the player update
+        if (isNewJoin) {
+          socket.to(roomCode).emit("player-joined", { players: room.players });
+        } else {
+          // For reconnections, update all players about the current state
+          io.to(roomCode).emit("player-joined", { players: room.players });
+        }
 
         // If game is already started, send the current game state to the rejoined player
         if (room.gameState.gameStarted) {
-          console.log(`Sending current game state to rejoined player ${socket.id}`);
+          console.log(`Sending current game state to rejoined player ${playerName}`);
+          console.log(`Room state: ${JSON.stringify({
+            tilesCount: room.gameState.tiles.length,
+            currentPlayer: room.gameState.currentPlayer,
+            playersCount: room.players.length,
+            deckCards: room.gameState.deck.cards,
+            turnCount: room.gameState.turnCount
+          })}`);
 
           // Include player hands in the player objects for easier client-side handling
           const playersWithHands = room.players.map(player => ({
@@ -294,14 +400,17 @@ app.prepare().then(() => {
             hand: room.gameState.playerHands[player.id] || []
           }));
 
-          io.to(socket.id).emit("game-start", {
+          const gameStateData = {
             tiles: room.gameState.tiles,
             currentPlayer: room.gameState.currentPlayer,
             players: playersWithHands,
             playerHands: room.gameState.playerHands,
             deck: room.gameState.deck,
             turnCount: room.gameState.turnCount
-          });
+          };
+
+          console.log(`Emitting game-start to rejoined player with data:`, gameStateData);
+          io.to(socket.id).emit("game-start", gameStateData);
         }
       }
     });
@@ -381,14 +490,24 @@ app.prepare().then(() => {
               hand: room.gameState.playerHands[player.id] || []
             }));
 
-            io.to(roomCode).emit("game-start", {
+            const gameStartData = {
               tiles: room.gameState.tiles,
               currentPlayer: room.gameState.currentPlayer,
               players: playersWithHands,
               playerHands: room.gameState.playerHands,
               deck: room.gameState.deck,
               turnCount: room.gameState.turnCount
+            };
+
+            console.log(`Emitting game-start to all players in room ${roomCode}:`, {
+              tilesCount: gameStartData.tiles.length,
+              currentPlayer: gameStartData.currentPlayer?.name,
+              playersCount: gameStartData.players.length,
+              deckCards: gameStartData.deck.cards,
+              turnCount: gameStartData.turnCount
             });
+
+            io.to(roomCode).emit("game-start", gameStartData);
           }
         }
       }

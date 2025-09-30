@@ -26,6 +26,17 @@ export default function RoomPage() {
   const router = useRouter();
   const roomCode = params.roomCode as string;
 
+  // Get or create persistent player name
+  const getPlayerName = () => {
+    const savedName = localStorage.getItem(`playerName_${roomCode}`);
+    if (savedName) return savedName;
+
+    // Generate a consistent name based on timestamp if no saved name
+    const name = `Player_${Date.now().toString(36).slice(-4)}`;
+    localStorage.setItem(`playerName_${roomCode}`, name);
+    return name;
+  };
+
   useEffect(() => {
     if (!socket) return;
 
@@ -49,7 +60,9 @@ export default function RoomPage() {
       setPlayers(data.players);
     };
 
-    const onGameStart = (data: { tiles: Tile[] }) => {
+    const onGameStart = (data: any) => {
+      // Store complete game state for the game page
+      localStorage.setItem(`gameState_${roomCode}`, JSON.stringify(data));
       localStorage.setItem(`tiles_${roomCode}`, JSON.stringify(data.tiles));
       router.push(`/room/${roomCode}/game`);
     };
@@ -79,9 +92,10 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (isConnected && socketId && roomCode && !hasJoined) {
-      const playerName = `Player ${socketId.slice(-4)}`;
+      const playerName = getPlayerName();
       console.log("Joining room:", roomCode, "as:", playerName);
       socket?.emit("join-room", { roomCode, playerName });
+      setHasJoined(true); // Prevent duplicate joins
     }
   }, [isConnected, socketId, roomCode, hasJoined, socket]);
 

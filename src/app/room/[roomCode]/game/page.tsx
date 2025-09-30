@@ -6,7 +6,7 @@ import { useSocket } from "@/socket";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface Tile {
-  id: number;
+  id: number | string;
   color: string;
   emoji: string;
 }
@@ -37,13 +37,42 @@ export default function GameRoomPage() {
   const router = useRouter();
   const effectInitialized = useRef(false);
 
+  // Get persistent player name
+  const getPlayerName = () => {
+    return localStorage.getItem(`playerName_${roomCode}`) || `Player_${socketId?.slice(-4) || 'Unknown'}`;
+  };
+
   useEffect(() => {
     const roomCodeParam = params.roomCode as string;
     setRoomCode(roomCodeParam);
 
-    // Load initial tiles from localStorage
+    // Load saved game state from localStorage
+    const savedGameState = localStorage.getItem(`gameState_${roomCodeParam}`);
+    if (savedGameState) {
+      try {
+        const gameState = JSON.parse(savedGameState);
+        console.log("Loading saved game state:", gameState);
+
+        // Handle both array and object formats
+        const gameData = Array.isArray(gameState) ? gameState[0] : gameState;
+
+        if (gameData && gameData.tiles) {
+          setTiles(gameData.tiles);
+          setCurrentPlayer(gameData.currentPlayer);
+          setPlayers(gameData.players || []);
+          setPlayerHands(gameData.playerHands || {});
+          setDeck(gameData.deck || { emoji: "💌", cards: 10 });
+          setTurnCount(gameData.turnCount || 0);
+        }
+      } catch (error) {
+        console.error("Error parsing saved game state:", error);
+      }
+      localStorage.removeItem(`gameState_${roomCodeParam}`);
+    }
+
+    // Load initial tiles from localStorage (fallback)
     const savedTiles = localStorage.getItem(`tiles_${roomCodeParam}`);
-    if (savedTiles) {
+    if (savedTiles && tiles.length === 0) {
       setTiles(JSON.parse(savedTiles));
       localStorage.removeItem(`tiles_${roomCodeParam}`);
     }
@@ -52,41 +81,70 @@ export default function GameRoomPage() {
 
     const onRoomJoined = (data: { players: Player[], playerId: string }) => {
       console.log("Game page: Room joined event received:", data);
-      setPlayers(data.players);
+      setPlayers(data.players || []);
     };
 
     const onPlayerJoined = (data: { players: Player[] }) => {
       console.log("Game page: Player joined event received:", data);
-      setPlayers(data.players);
+      setPlayers(data.players || []);
     };
 
     const onPlayerLeft = (data: { players: Player[] }) => {
       console.log("Game page: Player left event received:", data);
-      setPlayers(data.players);
+      setPlayers(data.players || []);
     };
 
     const onTilesUpdated = (data: { tiles: Tile[] }) => {
+      console.log("=== TILES UPDATED ===");
+      console.log("New tiles data:", data.tiles);
+      console.log("Number of tiles:", data.tiles.length);
       setTiles(data.tiles);
     };
 
-    const onGameStart = (data: {
-      tiles: Tile[];
-      currentPlayer: Player;
-      players: Player[];
-      playerHands: Record<string, Tile[]>;
-      deck: Deck;
-      turnCount: number;
-    }) => {
-      console.log("Game start data:", data);
+  const onGameStart = (data: any) => {
+      // Handle both cases: data as object or data wrapped in array
+      const gameData = Array.isArray(data) ? data[0] : data;
+
+      console.log("=== GAME START DATA RECEIVED ===");
+      console.log("Raw data:", data);
+      console.log("Processed gameData:", gameData);
       console.log("Socket ID:", socketId);
-      console.log("Players:", data.players);
-      console.log("Player hands:", data.playerHands);
-      setTiles(data.tiles);
-      setCurrentPlayer(data.currentPlayer);
-      setPlayers(data.players);
-      setPlayerHands(data.playerHands);
-      setDeck(data.deck);
-      setTurnCount(data.turnCount);
+
+      // Check if gameData exists and has expected properties
+      if (!gameData) {
+        console.error("Invalid game data received:", gameData);
+        return;
+      }
+
+      // Ensure all required properties have fallback values
+      const safeGameData = {
+        tiles: gameData.tiles || [],
+        currentPlayer: gameData.currentPlayer || null,
+        players: gameData.players || [],
+        playerHands: gameData.playerHands || {},
+        deck: gameData.deck || { emoji: "💌", cards: 10 },
+        turnCount: gameData.turnCount || 0
+      };
+
+      console.log("Current player:", safeGameData.currentPlayer);
+      console.log("All players:", safeGameData.players);
+      console.log("Player hands:", safeGameData.playerHands);
+      console.log("Tiles:", safeGameData.tiles);
+      console.log("Deck:", safeGameData.deck);
+      console.log("Turn count:", safeGameData.turnCount);
+
+      // Log each player's hand details
+      Object.entries(safeGameData.playerHands).forEach(([playerId, hand]) => {
+        console.log(`Player ${playerId} hand:`, hand);
+        console.log(`Player ${playerId} hand length:`, hand.length);
+      });
+
+      setTiles(safeGameData.tiles);
+      setCurrentPlayer(safeGameData.currentPlayer);
+      setPlayers(safeGameData.players);
+      setPlayerHands(safeGameData.playerHands);
+      setDeck(safeGameData.deck);
+      setTurnCount(safeGameData.turnCount);
     };
 
     const onTurnChanged = (data: { currentPlayer: Player; turnCount: number }) => {
@@ -95,12 +153,26 @@ export default function GameRoomPage() {
     };
 
     const onHeartDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]>; deck: Deck }) => {
+      console.log("=== HEART DRAWN ===");
+      console.log("Updated players:", data.players);
+      console.log("Updated player hands:", data.playerHands);
+      console.log("Updated deck:", data.deck);
+      const playerName = getPlayerName();
+      const currentPlayerData = data.players.find(p => p.name === playerName);
+      console.log("Your hand after draw:", currentPlayerData ? data.playerHands[currentPlayerData.id] || [] : "Player not found");
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
       setDeck(data.deck);
     };
 
     const onHeartPlaced = (data: { tiles: Tile[]; players: Player[]; playerHands: Record<string, Tile[]> }) => {
+      console.log("=== HEART PLACED ===");
+      console.log("Updated tiles:", data.tiles);
+      console.log("Updated players:", data.players);
+      console.log("Updated player hands:", data.playerHands);
+      const playerName = getPlayerName();
+      const currentPlayerData = data.players.find(p => p.name === playerName);
+      console.log("Your hand after place:", currentPlayerData ? data.playerHands[currentPlayerData.id] || [] : "Player not found");
       setTiles(data.tiles);
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
@@ -121,8 +193,9 @@ export default function GameRoomPage() {
     console.log("Current socket ID:", socketId);
 
     // Then join the room to get current state
-    console.log("Game page: Joining room:", roomCodeParam, "with socket ID:", socketId);
-    socket.emit("join-room", { roomCode: roomCodeParam, playerName: "Player" });
+    const playerName = getPlayerName();
+    console.log("Game page: Joining room:", roomCodeParam, "as:", playerName, "with socket ID:", socketId);
+    socket.emit("join-room", { roomCode: roomCodeParam, playerName });
 
     // Listen to all events to see what's happening
     socket.onAny((eventName, ...args) => {
@@ -141,9 +214,21 @@ export default function GameRoomPage() {
       socket?.off("heart-drawn", onHeartDrawn);
       socket?.off("heart-placed", onHeartPlaced);
     };
-  }, [params.roomCode, socket, socketId, roomCode]);
+  }, [params.roomCode, socket, socketId, tiles.length]);
 
-  
+  // Add logging for state changes
+  useEffect(() => {
+    console.log("=== STATE UPDATE ===");
+    console.log("Tiles:", tiles);
+    console.log("Players:", players);
+    console.log("Player hands:", playerHands);
+    console.log("Current player:", currentPlayer);
+    console.log("Socket ID:", socketId);
+    console.log("Deck:", deck);
+    console.log("Turn count:", turnCount);
+  }, [tiles, players, playerHands, currentPlayer, socketId, deck, turnCount]);
+
+
   const drawHeart = () => {
     if (socket && roomCode && isCurrentPlayer()) {
       socket.emit("draw-heart", { roomCode });
@@ -171,7 +256,17 @@ export default function GameRoomPage() {
   };
 
   const isCurrentPlayer = () => {
-    return socketId && currentPlayer && socketId === currentPlayer.id;
+    if (!socketId || !currentPlayer) return false;
+
+    // First try to match by session ID (for persistent players)
+    const playerName = getPlayerName();
+    const currentPlayerInList = players.find(p => p.name === playerName);
+    if (currentPlayerInList) {
+      return currentPlayerInList.id === currentPlayer.id;
+    }
+
+    // Fallback to socket ID matching
+    return socketId === currentPlayer.id;
   };
 
   return (
@@ -208,43 +303,77 @@ export default function GameRoomPage() {
           </div>
 
           {/* Opponent Display (Top) */}
-          {socketId && players.length > 0 && (
+          {(() => {
+            console.log("=== OPPONENT DISPLAY RENDER CHECK ===");
+            const playerName = getPlayerName();
+            console.log("Player name:", playerName);
+            console.log("Players array:", players);
+            console.log("Players length:", players.length);
+            console.log("Should show opponent section:", players.length > 0);
+            return players.length > 0;
+          })() && (
             <div className="mb-6">
+              <div className="text-white text-sm mb-2">Opponent Area</div>
               <div className="flex justify-center">
                 {(() => {
+                  const playerName = getPlayerName();
+                  const currentPlayerData = players.find(p => p.name === playerName);
+                  const opponents = players.filter(p => p.name !== playerName);
+                  console.log("=== OPPONENT RENDERING ===");
                   console.log("Current players array:", players);
-                  console.log("Current socket ID:", socketId);
-                  console.log("Each player ID comparison:");
-                  players.forEach(p => console.log(`Player ${p.name} (${p.id}) == socket ID ${socketId}: ${p.id === socketId}`));
-                  console.log("Filtered opponents:", players.filter(p => p.id !== socketId));
-                  return players.filter(p => p.id !== socketId).map(opponent => (
-                  <div key={opponent.id} className="bg-white/20 rounded-lg p-4 flex flex-col items-center mx-2">
-                    <div className="text-4xl mb-2">👤</div>
-                    <div className="text-white text-sm font-semibold">
-                      {opponent.name}
+                  console.log("Current player name:", playerName);
+                  console.log("Current player data:", currentPlayerData);
+                  console.log("Each player name comparison:");
+                  players.forEach(p => console.log(`Player ${p.name} (${p.id}) == current name ${playerName}: ${p.name === playerName}`));
+                  console.log("Filtered opponents:", opponents);
+                  console.log("Player hands object:", playerHands);
+
+                  if (opponents.length === 0) {
+                    console.log("No opponents found - all players match current socket ID");
+                    return <div className="text-gray-400">Waiting for opponent...</div>;
+                  }
+
+                  return opponents.map(opponent => {
+                    console.log("Rendering opponent:", opponent);
+                    console.log("Opponent hand:", playerHands[opponent.id]);
+                    return (
+                    <div key={opponent.id} className="bg-white/20 rounded-lg p-4 flex flex-col items-center mx-2">
+                      <div className="text-4xl mb-2">👤</div>
+                      <div className="text-white text-sm font-semibold">
+                        {opponent.name}
+                      </div>
+                      <div className="text-gray-300 text-xs mt-1">
+                        Cards: {playerHands[opponent.id]?.length || 0}
+                      </div>
+                      <div className="flex gap-1 mt-2">
+                        {playerHands[opponent.id]?.map((heart: Tile, index: number) => (
+                          <div key={index} className="text-2xl">
+                            🂠
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="text-gray-300 text-xs mt-1">
-                      Cards: {playerHands[opponent.id]?.length || 0}
-                    </div>
-                    <div className="flex gap-1 mt-2">
-                      {playerHands[opponent.id]?.map((heart, index) => (
-                        <div key={index} className="text-2xl">
-                          🂠
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ));
-              })()}
+                  )});
+                })()}
+              </div>
             </div>
-          </div>
           )}
 
           {/* Game Tiles (Center) */}
           <div className="mb-6">
-            <div className="text-white text-sm mb-2">Tiles: {tiles.length}</div>
+            <div className="text-white text-sm mb-2">
+              Tiles: {tiles.length}
+              {(() => {
+                console.log("=== TILES RENDERING ===");
+                console.log("Tiles array:", tiles);
+                console.log("Tiles length:", tiles.length);
+                return null;
+              })()}
+            </div>
             <div className="grid grid-cols-4 gap-4 max-w-md mx-auto">
-              {tiles.map((tile) => (
+              {tiles.map((tile) => {
+                console.log("Rendering tile:", tile);
+                return (
                 <div
                   key={tile.id}
                   onClick={() => selectedHeart && placeHeart(tile.id)}
@@ -255,7 +384,7 @@ export default function GameRoomPage() {
                 >
                   {tile.emoji}
                 </div>
-              ))}
+              )})}
             </div>
           </div>
 
@@ -269,22 +398,46 @@ export default function GameRoomPage() {
 
           {/* Player Hands (Bottom) */}
           <div className="mb-6">
-            <h3 className="text-white text-lg font-semibold mb-3">Your Hearts</h3>
+            <h3 className="text-white text-lg font-semibold mb-3">
+              Your Hearts
+              {(() => {
+                const playerName = getPlayerName();
+                const currentPlayerData = players.find(p => p.name === playerName);
+                const currentPlayerId = currentPlayerData?.id || socketId || "";
+                console.log("=== PLAYER HANDS RENDERING ===");
+                console.log("Player name:", playerName);
+                console.log("Current player data:", currentPlayerData);
+                console.log("Player hands object:", playerHands);
+                console.log("Your hand:", playerHands[currentPlayerId]);
+                console.log("Your hand length:", playerHands[currentPlayerId]?.length || 0);
+                return null;
+              })()}
+            </h3>
             <div className="flex flex-wrap gap-2 justify-center">
-              {playerHands[socketId || ""]?.map((heart) => (
-                <div
-                  key={heart.id}
-                  onClick={() => isCurrentPlayer() && setSelectedHeart(heart)}
-                  className={`w-16 h-16 rounded-lg flex items-center justify-center text-3xl transition-colors cursor-pointer ${
-                    selectedHeart?.id === heart.id
-                      ? 'bg-yellow-400/50 ring-2 ring-yellow-400'
-                      : 'bg-white/20 hover:bg-white/30'
-                  }`}
-                  title={`${heart.color} heart`}
-                >
-                  {heart.emoji}
-                </div>
-              ))}
+              {(() => {
+                const playerName = getPlayerName();
+                const currentPlayerData = players.find(p => p.name === playerName);
+                const currentPlayerId = currentPlayerData?.id || socketId || "";
+                const playerHand = playerHands[currentPlayerId] || [];
+
+                return playerHand.map((heart) => {
+                  console.log("Rendering your heart:", heart);
+                  return (
+                  <div
+                    key={heart.id}
+                    onClick={() => isCurrentPlayer() && setSelectedHeart(heart)}
+                    className={`w-16 h-16 rounded-lg flex items-center justify-center text-3xl transition-colors cursor-pointer ${
+                      selectedHeart?.id === heart.id
+                        ? 'bg-yellow-400/50 ring-2 ring-yellow-400'
+                        : 'bg-white/20 hover:bg-white/30'
+                    }`}
+                    title={`${heart.color} heart`}
+                  >
+                    {heart.emoji}
+                  </div>
+                );
+                });
+              })()}
             </div>
             {selectedHeart && (
               <p className="text-center text-yellow-400 mt-2">Selected: {selectedHeart.emoji} - Click a tile to place it</p>
