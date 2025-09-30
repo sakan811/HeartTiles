@@ -34,73 +34,45 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [socketId, setSocketId] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const socketInitialized = React.useRef(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || socketInitialized.current) return;
+    if (typeof window === "undefined") return;
 
-    let socketInstance: Socket;
-    let isMounted = true;
+    const socketInstance = io(undefined, {
+      transports: ["websocket", "polling"],
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000,
+    });
 
-    const initializeSocket = () => {
-      try {
-        console.log("Initializing new socket connection...");
-        socketInstance = io();
+    socketInstance.on("connect", () => {
+      console.log("Socket connected:", socketInstance.id);
+      setIsConnected(true);
+      setSocketId(socketInstance.id || null);
+      setConnectionError(null);
+    });
 
-        const onConnect = () => {
-          if (!isMounted) return;
-          console.log("Socket connected:", socketInstance.id);
-          setIsConnected(true);
-          setSocketId(socketInstance.id || null);
-          setConnectionError(null);
-        };
+    socketInstance.on("disconnect", (reason: string) => {
+      console.log("Socket disconnected, reason:", reason);
+      setIsConnected(false);
+      setSocketId(null);
+    });
 
-        const onDisconnect = () => {
-          if (!isMounted) return;
-          console.log("Socket disconnected");
-          setIsConnected(false);
-          setSocketId(null);
-        };
+    socketInstance.on("connect_error", (error: Error) => {
+      console.error("Socket connection error:", error);
+      setConnectionError(error.message);
+      setIsConnected(false);
+      setSocketId(null);
+    });
 
-        const onConnectError = (error: Error) => {
-          if (!isMounted) return;
-          console.error("Socket connection error:", error);
-          setConnectionError(error.message);
-          setIsConnected(false);
-          setSocketId(null);
-        };
-
-        // Register event listeners
-        socketInstance.on("connect", onConnect);
-        socketInstance.on("disconnect", onDisconnect);
-        socketInstance.on("connect_error", onConnectError);
-
-        // If already connected, set the state
-        if (socketInstance.connected) {
-          onConnect();
-        }
-
-        setSocket(socketInstance);
-        socketInitialized.current = true;
-      } catch (error) {
-        console.error("Failed to initialize socket:", error);
-        setConnectionError(error instanceof Error ? error.message : "Unknown error");
-      }
-    };
-
-    initializeSocket();
+    setSocket(socketInstance);
 
     return () => {
-      isMounted = false;
-      if (socketInstance) {
-        console.log("Cleaning up socket connection...");
-        socketInstance.off("connect");
-        socketInstance.off("disconnect");
-        socketInstance.off("connect_error");
-        socketInstance.disconnect();
-      }
+      socketInstance.disconnect();
     };
-  }, []); // Empty dependency array - run only once
+  }, []);
 
   const value: SocketContextType = {
     socket,

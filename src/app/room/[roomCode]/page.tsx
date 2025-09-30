@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/socket";
 
@@ -20,20 +20,21 @@ export default function RoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [error, setError] = useState("");
   const [currentPlayerId, setCurrentPlayerId] = useState("");
+  const [hasJoined, setHasJoined] = useState(false);
   const { socket, isConnected, socketId } = useSocket();
   const params = useParams();
   const router = useRouter();
   const roomCode = params.roomCode as string;
-  const effectInitialized = useRef(false);
 
   useEffect(() => {
-    if (!socket || !socketId || effectInitialized.current) return;
+    if (!socket) return;
 
     const onRoomJoined = (data: { players: Player[], playerId: string }) => {
-      console.log("Room joined event received:", data);
+      console.log("Room joined:", data);
       setPlayers(data.players);
       setCurrentPlayerId(data.playerId);
       setError("");
+      setHasJoined(true);
     };
 
     const onPlayerJoined = (data: { players: Player[] }) => {
@@ -49,16 +50,16 @@ export default function RoomPage() {
     };
 
     const onGameStart = (data: { tiles: Tile[] }) => {
-      // Store the initial tile state in localStorage for the game page
       localStorage.setItem(`tiles_${roomCode}`, JSON.stringify(data.tiles));
       router.push(`/room/${roomCode}/game`);
     };
 
     const onRoomError = (errorMessage: string) => {
+      console.error("Room error:", errorMessage);
       setError(errorMessage);
+      setHasJoined(false);
     };
 
-    // Attach listeners first
     socket.on("room-joined", onRoomJoined);
     socket.on("player-joined", onPlayerJoined);
     socket.on("player-left", onPlayerLeft);
@@ -66,21 +67,23 @@ export default function RoomPage() {
     socket.on("game-start", onGameStart);
     socket.on("room-error", onRoomError);
 
-    // Then join room when socket is connected and we have socket ID
-    console.log("Joining room:", roomCode, "with socket ID:", socketId);
-    socket.emit("join-room", { roomCode, playerName: "Player" });
-
-    effectInitialized.current = true;
-
     return () => {
-      socket?.off("room-joined", onRoomJoined);
-      socket?.off("player-joined", onPlayerJoined);
-      socket?.off("player-left", onPlayerLeft);
-      socket?.off("player-ready", onPlayerReady);
-      socket?.off("game-start", onGameStart);
-      socket?.off("room-error", onRoomError);
+      socket.off("room-joined", onRoomJoined);
+      socket.off("player-joined", onPlayerJoined);
+      socket.off("player-left", onPlayerLeft);
+      socket.off("player-ready", onPlayerReady);
+      socket.off("game-start", onGameStart);
+      socket.off("room-error", onRoomError);
     };
-  }, [roomCode, socket, socketId, router]);
+  }, [socket, roomCode, router]);
+
+  useEffect(() => {
+    if (isConnected && socketId && roomCode && !hasJoined) {
+      const playerName = `Player ${socketId.slice(-4)}`;
+      console.log("Joining room:", roomCode, "as:", playerName);
+      socket?.emit("join-room", { roomCode, playerName });
+    }
+  }, [isConnected, socketId, roomCode, hasJoined, socket]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
@@ -101,14 +104,6 @@ export default function RoomPage() {
 
   const getCurrentPlayer = () => {
     return players.find(player => player.id === currentPlayerId);
-  };
-
-  const canStartGame = () => {
-    return players.length === 2;
-  };
-
-  const areAllPlayersReady = () => {
-    return players.length === 2 && players.every(player => player.isReady);
   };
 
   return (
@@ -147,6 +142,15 @@ export default function RoomPage() {
             </div>
           )}
 
+          {!hasJoined && !error && (
+            <div className="text-center py-4">
+              <div className="inline-flex items-center gap-2 text-yellow-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-yellow-400 border-t-transparent"></div>
+                <span>Joining room...</span>
+              </div>
+            </div>
+          )}
+
           <div>
             <h2 className="text-2xl font-semibold text-white mb-4">Players in Room</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -159,13 +163,16 @@ export default function RoomPage() {
                     {player.name.charAt(0).toUpperCase()}
                   </div>
                   <p className="text-white font-medium">{player.name}</p>
+                  {player.id === currentPlayerId && (
+                    <span className="text-blue-400 text-xs">You</span>
+                  )}
                   {player.isReady && (
-                    <span className="text-green-400 text-sm">✓ Ready</span>
+                    <span className="text-green-400 text-sm block">✓ Ready</span>
                   )}
                 </div>
               ))}
             </div>
-            {players.length === 0 && (
+            {hasJoined && players.length === 0 && (
               <p className="text-gray-400 italic">No players in room yet</p>
             )}
           </div>
@@ -188,8 +195,8 @@ export default function RoomPage() {
             {getCurrentPlayer() && (
               <button
                 onClick={toggleReady}
-                disabled={!canStartGame()}
-                className={`${getCurrentPlayer()?.isReady ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} ${!canStartGame() ? 'opacity-50 cursor-not-allowed' : ''} text-white font-bold py-3 px-6 rounded-lg transition-colors`}
+                disabled={players.length !== 2}
+                className={`${getCurrentPlayer()?.isReady ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} ${players.length !== 2 ? 'opacity-50 cursor-not-allowed' : ''} text-white font-bold py-3 px-6 rounded-lg transition-colors`}
               >
                 {getCurrentPlayer()?.isReady ? 'Cancel Ready' : 'Ready'}
               </button>
