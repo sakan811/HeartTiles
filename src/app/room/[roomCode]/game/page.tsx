@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/socket";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface Tile {
   id: number;
@@ -49,6 +50,21 @@ export default function GameRoomPage() {
 
     if (!socket || !socketId || effectInitialized.current) return;
 
+    const onRoomJoined = (data: { players: Player[], playerId: string }) => {
+      console.log("Game page: Room joined event received:", data);
+      setPlayers(data.players);
+    };
+
+    const onPlayerJoined = (data: { players: Player[] }) => {
+      console.log("Game page: Player joined event received:", data);
+      setPlayers(data.players);
+    };
+
+    const onPlayerLeft = (data: { players: Player[] }) => {
+      console.log("Game page: Player left event received:", data);
+      setPlayers(data.players);
+    };
+
     const onTilesUpdated = (data: { tiles: Tile[] }) => {
       setTiles(data.tiles);
     };
@@ -91,6 +107,10 @@ export default function GameRoomPage() {
       setSelectedHeart(null);
     };
 
+    // Attach all listeners first
+    socket.on("room-joined", onRoomJoined);
+    socket.on("player-joined", onPlayerJoined);
+    socket.on("player-left", onPlayerLeft);
     socket.on("tiles-updated", onTilesUpdated);
     socket.on("game-start", onGameStart);
     socket.on("turn-changed", onTurnChanged);
@@ -100,21 +120,28 @@ export default function GameRoomPage() {
     console.log("Game room socket listeners registered");
     console.log("Current socket ID:", socketId);
 
+    // Then join the room to get current state
+    console.log("Game page: Joining room:", roomCodeParam, "with socket ID:", socketId);
+    socket.emit("join-room", { roomCode: roomCodeParam, playerName: "Player" });
+
     // Listen to all events to see what's happening
     socket.onAny((eventName, ...args) => {
-      console.log(`Socket event received: ${eventName}`, args);
+      console.log(`Game page socket event received: ${eventName}`, args);
     });
 
     effectInitialized.current = true;
 
     return () => {
+      socket?.off("room-joined", onRoomJoined);
+      socket?.off("player-joined", onPlayerJoined);
+      socket?.off("player-left", onPlayerLeft);
       socket?.off("tiles-updated", onTilesUpdated);
       socket?.off("game-start", onGameStart);
       socket?.off("turn-changed", onTurnChanged);
       socket?.off("heart-drawn", onHeartDrawn);
       socket?.off("heart-placed", onHeartPlaced);
     };
-  }, [params.roomCode, socket, socketId]);
+  }, [params.roomCode, socket, socketId, roomCode]);
 
   
   const drawHeart = () => {
@@ -148,7 +175,8 @@ export default function GameRoomPage() {
   };
 
   return (
-    <div className="font-sans min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+    <ErrorBoundary>
+      <div className="font-sans min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
       <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 max-w-4xl w-full mx-4 shadow-2xl">
         <div className="text-center space-y-6">
           <div className="flex items-center justify-between mb-6">
@@ -180,15 +208,16 @@ export default function GameRoomPage() {
           </div>
 
           {/* Opponent Display (Top) */}
-          <div className="mb-6">
-            <div className="flex justify-center">
-              {(() => {
-                console.log("Current players array:", players);
-                console.log("Current socket ID:", socketId);
-                console.log("Each player ID comparison:");
-                players.forEach(p => console.log(`Player ${p.name} (${p.id}) == socket ID ${socketId}: ${p.id === socketId}`));
-                console.log("Filtered opponents:", players.filter(p => p.id !== socketId));
-                return players.filter(p => p.id !== socketId).map(opponent => (
+          {socketId && players.length > 0 && (
+            <div className="mb-6">
+              <div className="flex justify-center">
+                {(() => {
+                  console.log("Current players array:", players);
+                  console.log("Current socket ID:", socketId);
+                  console.log("Each player ID comparison:");
+                  players.forEach(p => console.log(`Player ${p.name} (${p.id}) == socket ID ${socketId}: ${p.id === socketId}`));
+                  console.log("Filtered opponents:", players.filter(p => p.id !== socketId));
+                  return players.filter(p => p.id !== socketId).map(opponent => (
                   <div key={opponent.id} className="bg-white/20 rounded-lg p-4 flex flex-col items-center mx-2">
                     <div className="text-4xl mb-2">👤</div>
                     <div className="text-white text-sm font-semibold">
@@ -209,6 +238,7 @@ export default function GameRoomPage() {
               })()}
             </div>
           </div>
+          )}
 
           {/* Game Tiles (Center) */}
           <div className="mb-6">
@@ -286,6 +316,7 @@ export default function GameRoomPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
