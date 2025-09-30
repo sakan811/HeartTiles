@@ -1,7 +1,0 @@
-{
-    "watch": ["src/server"],
-    "ext": ".ts,.js",
-    "ignore": [],
-    "exec": "tsx watch ./src/server/server.ts",
-    "esm": true
-} 
