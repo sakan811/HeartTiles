@@ -76,6 +76,11 @@ export default function GameRoomPage() {
       setTurnCount(data.turnCount);
     };
 
+    const onHeartDrawn = (data: { playerHands: Record<string, Tile[]>; deck: Deck }) => {
+      setPlayerHands(data.playerHands);
+      setDeck(data.deck);
+    };
+
     if (socket.connected) {
       onConnect();
     }
@@ -85,6 +90,7 @@ export default function GameRoomPage() {
     socket.on("tiles-updated", onTilesUpdated);
     socket.on("game-start", onGameStart);
     socket.on("turn-changed", onTurnChanged);
+    socket.on("heart-drawn", onHeartDrawn);
 
     return () => {
       socket?.off("connect", onConnect);
@@ -92,12 +98,14 @@ export default function GameRoomPage() {
       socket?.off("tiles-updated", onTilesUpdated);
       socket?.off("game-start", onGameStart);
       socket?.off("turn-changed", onTurnChanged);
+      socket?.off("heart-drawn", onHeartDrawn);
     };
   }, [params.roomCode]);
 
-  const shuffleTiles = () => {
-    if (socket && roomCode) {
-      socket.emit("shuffle-tiles", { roomCode });
+  
+  const drawHeart = () => {
+    if (socket && roomCode && isCurrentPlayer()) {
+      socket.emit("draw-heart", { roomCode });
     }
   };
 
@@ -188,19 +196,26 @@ export default function GameRoomPage() {
           </div>
 
           <div className="flex gap-4 justify-center">
-            <button
-              onClick={shuffleTiles}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-            >
-              Shuffle Tiles
-            </button>
             {isCurrentPlayer() && (
-              <button
-                onClick={endTurn}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-              >
-                End Turn
-              </button>
+              <>
+                <button
+                  onClick={drawHeart}
+                  disabled={deck.cards <= 0}
+                  className={`font-bold py-3 px-6 rounded-lg transition-colors ${
+                    deck.cards <= 0
+                      ? "bg-gray-500 cursor-not-allowed"
+                      : "bg-purple-600 hover:bg-purple-700 text-white"
+                  }`}
+                >
+                  Draw Heart
+                </button>
+                <button
+                  onClick={endTurn}
+                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                >
+                  End Turn
+                </button>
+              </>
             )}
           </div>
         </div>

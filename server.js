@@ -55,6 +55,19 @@ app.prepare().then(() => {
     return hearts;
   }
 
+  // Helper function to generate a single heart card
+  function generateSingleHeart() {
+    const colors = ["red", "yellow", "green", "blue", "brown"];
+    const heartEmojis = ["❤️", "💛", "💚", "💙", "🤎"];
+    const randomIndex = Math.floor(Math.random() * colors.length);
+
+    return {
+      id: Date.now() + Math.random(), // Unique ID based on timestamp
+      color: colors[randomIndex],
+      emoji: heartEmojis[randomIndex]
+    };
+  }
+
   // Helper function to select random starting player
   function selectRandomStartingPlayer(players) {
     return players[Math.floor(Math.random() * players.length)];
@@ -202,6 +215,34 @@ app.prepare().then(() => {
 
         // Broadcast new tile state to all players
         io.to(roomCode.toUpperCase()).emit("tiles-updated", { tiles: room.gameState.tiles });
+      }
+    });
+
+    socket.on("draw-heart", ({ roomCode }) => {
+      const room = rooms.get(roomCode.toUpperCase());
+      if (room && room.gameState.gameStarted && room.gameState.deck.cards > 0) {
+        // Check if it's the current player's turn
+        if (room.gameState.currentPlayer.id === socket.id) {
+          // Generate a new heart for the player
+          const newHeart = generateSingleHeart();
+
+          // Add the heart to the current player's hand
+          if (!room.gameState.playerHands[socket.id]) {
+            room.gameState.playerHands[socket.id] = [];
+          }
+          room.gameState.playerHands[socket.id].push(newHeart);
+
+          // Decrease deck count
+          room.gameState.deck.cards--;
+
+          console.log(`Heart drawn by ${socket.id} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
+
+          // Broadcast the updated player hands and deck to all players
+          io.to(roomCode.toUpperCase()).emit("heart-drawn", {
+            playerHands: room.gameState.playerHands,
+            deck: room.gameState.deck
+          });
+        }
       }
     });
 
