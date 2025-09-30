@@ -33,7 +33,10 @@ export default function GameRoomPage() {
   const params = useParams();
   const router = useRouter();
 
+  const [isClient, setIsClient] = useState(false);
+
   useEffect(() => {
+    setIsClient(true);
     const roomCodeParam = params.roomCode as string;
     setRoomCode(roomCodeParam);
 
@@ -174,6 +177,40 @@ export default function GameRoomPage() {
             <p className="text-sm">Turn: {turnCount}</p>
           </div>
 
+          {/* Opponent Display (Top) */}
+          <div className="mb-6">
+            <div className="flex justify-center">
+              <div className="bg-white/20 rounded-lg p-4 flex flex-col items-center">
+                <div className="text-4xl mb-2">👤</div>
+                <div className="text-white text-sm font-semibold">
+                  {currentPlayer && socket?.id !== currentPlayer.id ? currentPlayer.name : "Opponent"}
+                </div>
+                <div className="text-gray-300 text-xs mt-1">
+                  Cards: {Object.entries(playerHands).filter(([id]) => id !== socket?.id).reduce((acc, [_, hand]) => acc + hand.length, 0)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Game Tiles (Center) */}
+          <div className="mb-6">
+            <div className="text-white text-sm mb-2">Tiles: {tiles.length}</div>
+            <div className="grid grid-cols-4 gap-4 max-w-md mx-auto">
+              {tiles.map((tile) => (
+                <div
+                  key={tile.id}
+                  onClick={() => selectedHeart && placeHeart(tile.id)}
+                  className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors cursor-pointer ${
+                    selectedHeart ? 'hover:bg-white/30 bg-white/20' : 'bg-white/10 cursor-not-allowed'
+                  }`}
+                  title={`${tile.color} tile`}
+                >
+                  {tile.emoji}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Central Deck */}
           <div className="flex justify-center mb-6">
             <div className="bg-white/20 rounded-lg p-4 flex flex-col items-center">
@@ -182,9 +219,14 @@ export default function GameRoomPage() {
             </div>
           </div>
 
-          {/* Player Hands */}
+          {/* Player Hands (Bottom) */}
           <div className="mb-6">
             <h3 className="text-white text-lg font-semibold mb-3">Your Hearts</h3>
+            {isClient && (
+              <div className="text-white text-sm mb-2">Socket ID: {socket?.id || "No socket"}</div>
+            )}
+            <div className="text-white text-sm mb-2">Hands count: {Object.keys(playerHands).length}</div>
+            <div className="text-white text-sm mb-2">Your hands: {playerHands[socket?.id || ""]?.length || 0}</div>
             <div className="flex flex-wrap gap-2 justify-center">
               {playerHands[socket?.id || ""]?.map((heart) => (
                 <div
@@ -204,22 +246,6 @@ export default function GameRoomPage() {
             {selectedHeart && (
               <p className="text-center text-yellow-400 mt-2">Selected: {selectedHeart.emoji} - Click a tile to place it</p>
             )}
-          </div>
-
-          {/* Game Tiles */}
-          <div className="grid grid-cols-4 gap-4 max-w-md mx-auto mb-6">
-            {tiles.map((tile) => (
-              <div
-                key={tile.id}
-                onClick={() => selectedHeart && placeHeart(tile.id)}
-                className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors cursor-pointer ${
-                  selectedHeart ? 'hover:bg-white/30 bg-white/20' : 'bg-white/10 cursor-not-allowed'
-                }`}
-                title={`${tile.color} tile`}
-              >
-                {tile.emoji}
-              </div>
-            ))}
           </div>
 
           <div className="flex gap-4 justify-center">
