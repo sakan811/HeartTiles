@@ -22,7 +22,7 @@ export default function RoomPage() {
 
     const onConnect = () => {
       setIsConnected(true);
-      socket.emit("join-room", { roomCode, playerName: "Player" });
+      socket?.emit("join-room", { roomCode, playerName: "Player" });
     };
 
     const onDisconnect = () => {
@@ -58,12 +58,12 @@ export default function RoomPage() {
     socket.on("room-error", onRoomError);
 
     return () => {
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-      socket.off("room-joined", onRoomJoined);
-      socket.off("player-joined", onPlayerJoined);
-      socket.off("player-left", onPlayerLeft);
-      socket.off("room-error", onRoomError);
+      socket?.off("connect", onConnect);
+      socket?.off("disconnect", onDisconnect);
+      socket?.off("room-joined", onRoomJoined);
+      socket?.off("player-joined", onPlayerJoined);
+      socket?.off("player-left", onPlayerLeft);
+      socket?.off("room-error", onRoomError);
     };
   }, [roomCode, socket]);
 
