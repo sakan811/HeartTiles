@@ -38,6 +38,28 @@ app.prepare().then(() => {
     return tiles;
   }
 
+  // Helper function to generate heart cards for a player
+  function generatePlayerHearts() {
+    const colors = ["red", "yellow", "green", "blue", "brown"];
+    const heartEmojis = ["❤️", "💛", "💚", "💙", "🤎"];
+    const hearts = [];
+
+    for (let i = 0; i < 5; i++) {
+      const randomIndex = Math.floor(Math.random() * colors.length);
+      hearts.push({
+        id: i,
+        color: colors[randomIndex],
+        emoji: heartEmojis[randomIndex]
+      });
+    }
+    return hearts;
+  }
+
+  // Helper function to select random starting player
+  function selectRandomStartingPlayer(players) {
+    return players[Math.floor(Math.random() * players.length)];
+  }
+
   io.on("connection", (socket) => {
     console.log(`User connected: ${socket.id}`);
 
@@ -52,7 +74,14 @@ app.prepare().then(() => {
           maxPlayers: 2,
           gameState: {
             tiles: [],
-            gameStarted: false
+            gameStarted: false,
+            currentPlayer: null,
+            deck: {
+              emoji: "💌",
+              cards: 10 // Initial deck size
+            },
+            playerHands: {},
+            turnCount: 0
           }
         };
         rooms.set(roomCode.toUpperCase(), newRoom);
@@ -143,7 +172,22 @@ app.prepare().then(() => {
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
 
-            io.to(roomCode.toUpperCase()).emit("game-start", { tiles: room.gameState.tiles });
+            // Initialize player hands with 5 hearts each
+            room.players.forEach(player => {
+              room.gameState.playerHands[player.id] = generatePlayerHearts();
+            });
+
+            // Select random starting player
+            room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
+            room.gameState.turnCount = 1;
+
+            io.to(roomCode.toUpperCase()).emit("game-start", {
+              tiles: room.gameState.tiles,
+              currentPlayer: room.gameState.currentPlayer,
+              playerHands: room.gameState.playerHands,
+              deck: room.gameState.deck,
+              turnCount: room.gameState.turnCount
+            });
           }
         }
       }
@@ -158,6 +202,27 @@ app.prepare().then(() => {
 
         // Broadcast new tile state to all players
         io.to(roomCode.toUpperCase()).emit("tiles-updated", { tiles: room.gameState.tiles });
+      }
+    });
+
+    socket.on("end-turn", ({ roomCode }) => {
+      const room = rooms.get(roomCode.toUpperCase());
+      if (room && room.gameState.gameStarted) {
+        // Find the current player index
+        const currentPlayerIndex = room.players.findIndex(p => p.id === room.gameState.currentPlayer.id);
+        const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length;
+
+        // Switch to next player
+        room.gameState.currentPlayer = room.players[nextPlayerIndex];
+        room.gameState.turnCount++;
+
+        console.log(`Turn ended in room ${roomCode.toUpperCase()}, new currentPlayer: ${room.gameState.currentPlayer.id}`);
+
+        // Broadcast turn change to all players
+        io.to(roomCode.toUpperCase()).emit("turn-changed", {
+          currentPlayer: room.gameState.currentPlayer,
+          turnCount: room.gameState.turnCount
+        });
       }
     });
 
