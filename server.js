@@ -168,18 +168,29 @@ app.prepare().then(() => {
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
 
-            // Initialize empty player hands
+            // Initialize player hands with starting hearts
             room.players.forEach(player => {
               room.gameState.playerHands[player.id] = [];
+              // Deal 3 starting hearts to each player
+              for (let i = 0; i < 3; i++) {
+                room.gameState.playerHands[player.id].push(generateSingleHeart());
+              }
             });
 
             // Select random starting player
             room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
             room.gameState.turnCount = 1;
 
+            // Include player hands in the player objects for easier client-side handling
+            const playersWithHands = room.players.map(player => ({
+              ...player,
+              hand: room.gameState.playerHands[player.id] || []
+            }));
+
             io.to(roomCode.toUpperCase()).emit("game-start", {
               tiles: room.gameState.tiles,
               currentPlayer: room.gameState.currentPlayer,
+              players: playersWithHands,
               playerHands: room.gameState.playerHands,
               deck: room.gameState.deck,
               turnCount: room.gameState.turnCount
@@ -220,8 +231,15 @@ app.prepare().then(() => {
 
           console.log(`Heart drawn by ${socket.id} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
 
+          // Include player hands in the player objects for broadcasting
+          const playersWithUpdatedHands = room.players.map(player => ({
+            ...player,
+            hand: room.gameState.playerHands[player.id] || []
+          }));
+
           // Broadcast the updated player hands and deck to all players
           io.to(roomCode.toUpperCase()).emit("heart-drawn", {
+            players: playersWithUpdatedHands,
             playerHands: room.gameState.playerHands,
             deck: room.gameState.deck
           });
@@ -253,9 +271,16 @@ app.prepare().then(() => {
 
               console.log(`Heart placed on tile ${tileId} by ${socket.id} in room ${roomCode.toUpperCase()}`);
 
+              // Include player hands in the player objects for broadcasting
+              const playersWithUpdatedHands = room.players.map(player => ({
+                ...player,
+                hand: room.gameState.playerHands[player.id] || []
+              }));
+
               // Broadcast the updated tiles and player hands
               io.to(roomCode.toUpperCase()).emit("heart-placed", {
                 tiles: room.gameState.tiles,
+                players: playersWithUpdatedHands,
                 playerHands: room.gameState.playerHands
               });
             }

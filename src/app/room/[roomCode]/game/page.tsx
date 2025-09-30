@@ -14,6 +14,7 @@ interface Player {
   id: string;
   name: string;
   isReady: boolean;
+  hand?: Tile[];
 }
 
 interface Deck {
@@ -26,17 +27,16 @@ export default function GameRoomPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [playerHands, setPlayerHands] = useState<Record<string, Tile[]>>({});
   const [deck, setDeck] = useState<Deck>({ emoji: "💌", cards: 10 });
   const [turnCount, setTurnCount] = useState(0);
   const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
+  const [socketId, setSocketId] = useState<string | null>(null);
   const params = useParams();
   const router = useRouter();
 
-  const [isClient, setIsClient] = useState(false);
-
   useEffect(() => {
-    setIsClient(true);
     const roomCodeParam = params.roomCode as string;
     setRoomCode(roomCodeParam);
 
@@ -51,10 +51,14 @@ export default function GameRoomPage() {
 
     const onConnect = () => {
       setIsConnected(true);
+      if (socket?.id) {
+        setSocketId(socket.id);
+      }
     };
 
     const onDisconnect = () => {
       setIsConnected(false);
+      setSocketId(null);
     };
 
     const onTilesUpdated = (data: { tiles: Tile[] }) => {
@@ -64,15 +68,24 @@ export default function GameRoomPage() {
     const onGameStart = (data: {
       tiles: Tile[];
       currentPlayer: Player;
+      players: Player[];
       playerHands: Record<string, Tile[]>;
       deck: Deck;
       turnCount: number;
     }) => {
+      console.log("Game start data:", data);
+      console.log("Socket ID:", socket?.id);
+      console.log("Players:", data.players);
+      console.log("Player hands:", data.playerHands);
       setTiles(data.tiles);
       setCurrentPlayer(data.currentPlayer);
+      setPlayers(data.players);
       setPlayerHands(data.playerHands);
       setDeck(data.deck);
       setTurnCount(data.turnCount);
+      if (socket?.id) {
+        setSocketId(socket.id);
+      }
     };
 
     const onTurnChanged = (data: { currentPlayer: Player; turnCount: number }) => {
@@ -80,19 +93,26 @@ export default function GameRoomPage() {
       setTurnCount(data.turnCount);
     };
 
-    const onHeartDrawn = (data: { playerHands: Record<string, Tile[]>; deck: Deck }) => {
+    const onHeartDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]>; deck: Deck }) => {
+      setPlayers(data.players);
       setPlayerHands(data.playerHands);
       setDeck(data.deck);
     };
 
-    const onHeartPlaced = (data: { tiles: Tile[]; playerHands: Record<string, Tile[]> }) => {
+    const onHeartPlaced = (data: { tiles: Tile[]; players: Player[]; playerHands: Record<string, Tile[]> }) => {
       setTiles(data.tiles);
+      setPlayers(data.players);
       setPlayerHands(data.playerHands);
       setSelectedHeart(null);
     };
 
     if (socket.connected) {
       onConnect();
+    } else {
+      // Initialize socket ID if already connected
+      if (socket?.id) {
+        setSocketId(socket.id);
+      }
     }
 
     socket.on("connect", onConnect);
@@ -102,6 +122,13 @@ export default function GameRoomPage() {
     socket.on("turn-changed", onTurnChanged);
     socket.on("heart-drawn", onHeartDrawn);
     socket.on("heart-placed", onHeartPlaced);
+
+    console.log("Socket listeners registered");
+
+    // Listen to all events to see what's happening
+    socket.onAny((eventName, ...args) => {
+      console.log(`Socket event received: ${eventName}`, args);
+    });
 
     return () => {
       socket?.off("connect", onConnect);
@@ -142,7 +169,7 @@ export default function GameRoomPage() {
   };
 
   const isCurrentPlayer = () => {
-    return socket && currentPlayer && socket.id === currentPlayer.id;
+    return socketId && currentPlayer && socketId === currentPlayer.id;
   };
 
   return (
@@ -180,15 +207,31 @@ export default function GameRoomPage() {
           {/* Opponent Display (Top) */}
           <div className="mb-6">
             <div className="flex justify-center">
-              <div className="bg-white/20 rounded-lg p-4 flex flex-col items-center">
-                <div className="text-4xl mb-2">👤</div>
-                <div className="text-white text-sm font-semibold">
-                  {currentPlayer && socket?.id !== currentPlayer.id ? currentPlayer.name : "Opponent"}
-                </div>
-                <div className="text-gray-300 text-xs mt-1">
-                  Cards: {Object.entries(playerHands).filter(([id]) => id !== socket?.id).reduce((acc, [_, hand]) => acc + hand.length, 0)}
-                </div>
-              </div>
+              {(() => {
+                console.log("Current players array:", players);
+                console.log("Current socket ID:", socketId);
+                console.log("Each player ID comparison:");
+                players.forEach(p => console.log(`Player ${p.name} (${p.id}) == socket ID ${socketId}: ${p.id === socketId}`));
+                console.log("Filtered opponents:", players.filter(p => p.id !== socketId));
+                return players.filter(p => p.id !== socketId).map(opponent => (
+                  <div key={opponent.id} className="bg-white/20 rounded-lg p-4 flex flex-col items-center mx-2">
+                    <div className="text-4xl mb-2">👤</div>
+                    <div className="text-white text-sm font-semibold">
+                      {opponent.name}
+                    </div>
+                    <div className="text-gray-300 text-xs mt-1">
+                      Cards: {playerHands[opponent.id]?.length || 0}
+                    </div>
+                    <div className="flex gap-1 mt-2">
+                      {playerHands[opponent.id]?.map((heart, index) => (
+                        <div key={index} className="text-2xl">
+                          🂠
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 
@@ -222,13 +265,8 @@ export default function GameRoomPage() {
           {/* Player Hands (Bottom) */}
           <div className="mb-6">
             <h3 className="text-white text-lg font-semibold mb-3">Your Hearts</h3>
-            {isClient && (
-              <div className="text-white text-sm mb-2">Socket ID: {socket?.id || "No socket"}</div>
-            )}
-            <div className="text-white text-sm mb-2">Hands count: {Object.keys(playerHands).length}</div>
-            <div className="text-white text-sm mb-2">Your hands: {playerHands[socket?.id || ""]?.length || 0}</div>
             <div className="flex flex-wrap gap-2 justify-center">
-              {playerHands[socket?.id || ""]?.map((heart) => (
+              {playerHands[socketId || ""]?.map((heart) => (
                 <div
                   key={heart.id}
                   onClick={() => isCurrentPlayer() && setSelectedHeart(heart)}
