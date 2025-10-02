@@ -12,7 +12,7 @@ const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
 // MongoDB configuration
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/no-kitty-cards';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/no-kitty-cards?authSource=admin';
 
 // Database functions
 async function connectToDatabase() {
