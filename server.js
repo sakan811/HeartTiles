@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 import next from "next";
 import { Server } from "socket.io";
+import mongoose from 'mongoose';
+import { PlayerSession, Room } from './models.js';
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
@@ -11,64 +11,85 @@ const port = 3000;
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
-// Storage configuration
-const STORAGE_DIR = join(process.cwd(), '.server-data');
-const ROOMS_FILE = join(STORAGE_DIR, 'rooms.json');
-const SESSIONS_FILE = join(STORAGE_DIR, 'sessions.json');
+// MongoDB configuration
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/no-kitty-cards';
 
-// Ensure storage directory exists
-try {
-  if (!existsSync(STORAGE_DIR)) {
-    mkdirSync(STORAGE_DIR, { recursive: true });
+// Database functions
+async function connectToDatabase() {
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log('Connected to MongoDB');
+  } catch (err) {
+    console.error('Error connecting to MongoDB:', err);
+    process.exit(1);
   }
-} catch (err) {
-  console.error('Error creating storage directory:', err);
 }
 
-// Storage functions
-function loadRooms() {
+async function loadRooms() {
   try {
-    if (existsSync(ROOMS_FILE)) {
-      const data = readFileSync(ROOMS_FILE, 'utf8');
-      return new Map(JSON.parse(data));
-    }
+    const rooms = await Room.find({});
+    const roomsMap = new Map();
+    rooms.forEach(room => {
+      roomsMap.set(room.code, room.toObject());
+    });
+    return roomsMap;
   } catch (err) {
     console.error('Error loading rooms:', err);
+    return new Map();
   }
-  return new Map();
 }
 
-function saveRooms(roomsMap) {
+async function saveRoom(roomData) {
   try {
-    const data = JSON.stringify(Array.from(roomsMap.entries()));
-    writeFileSync(ROOMS_FILE, data, 'utf8');
+    await Room.findOneAndUpdate(
+      { code: roomData.code },
+      roomData,
+      { upsert: true, new: true }
+    );
   } catch (err) {
-    console.error('Error saving rooms:', err);
+    console.error('Error saving room:', err);
   }
 }
 
-function loadPlayerSessions() {
+async function deleteRoom(roomCode) {
   try {
-    if (existsSync(SESSIONS_FILE)) {
-      const data = readFileSync(SESSIONS_FILE, 'utf8');
-      return new Map(JSON.parse(data));
-    }
+    await Room.deleteOne({ code: roomCode });
+  } catch (err) {
+    console.error('Error deleting room:', err);
+  }
+}
+
+async function loadPlayerSessions() {
+  try {
+    const sessions = await PlayerSession.find({});
+    const sessionsMap = new Map();
+    sessions.forEach(session => {
+      const sessionObj = session.toObject();
+      sessionsMap.set(sessionObj.normalizedName, sessionObj);
+    });
+    return sessionsMap;
   } catch (err) {
     console.error('Error loading sessions:', err);
+    return new Map();
   }
-  return new Map();
 }
 
-function savePlayerSessions(sessionsMap) {
+async function savePlayerSession(sessionData) {
   try {
-    const data = JSON.stringify(Array.from(sessionsMap.entries()));
-    writeFileSync(SESSIONS_FILE, data, 'utf8');
+    await PlayerSession.findOneAndUpdate(
+      { normalizedName: sessionData.normalizedName },
+      sessionData,
+      { upsert: true, new: true }
+    );
   } catch (err) {
-    console.error('Error saving sessions:', err);
+    console.error('Error saving player session:', err);
   }
 }
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
+  // Connect to MongoDB first
+  await connectToDatabase();
+
   const httpServer = createServer(handler);
 
   const io = new Server(httpServer, {
@@ -79,13 +100,13 @@ app.prepare().then(() => {
   });
 
   // Load persisted data or initialize empty maps
-  const rooms = loadRooms();
+  const rooms = await loadRooms();
   const turnLocks = new Map(); // Track turn validation locks (not persisted)
   const connectionPool = new Map(); // Track connections per IP (not persisted)
-  const playerSessions = loadPlayerSessions();
+  const playerSessions = await loadPlayerSessions();
   const MAX_CONNECTIONS_PER_IP = 5; // Limit connections per IP
 
-  console.log(`Loaded ${rooms.size} rooms and ${playerSessions.size} player sessions from storage`);
+  console.log(`Loaded ${rooms.size} rooms and ${playerSessions.size} player sessions from MongoDB`);
 
   // Turn validation helper functions
   function acquireTurnLock(roomCode, playerId) {
@@ -130,28 +151,30 @@ app.prepare().then(() => {
   }
 
   // Helper function to generate or get player session
-  function getPlayerSession(playerName) {
+  async function getPlayerSession(playerName) {
     const normalizedName = playerName.trim().toLowerCase();
     if (!playerSessions.has(normalizedName)) {
-      playerSessions.set(normalizedName, {
+      const newSession = {
+        normalizedName,
         id: `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: playerName.trim(),
         originalSocketId: null,
         currentSocketId: null
-      });
-      savePlayerSessions(playerSessions); // Save new session
+      };
+      playerSessions.set(normalizedName, newSession);
+      await savePlayerSession(newSession); // Save new session
     }
     return playerSessions.get(normalizedName);
   }
 
   // Helper function to update player's current socket
-  function updatePlayerSocket(playerName, socketId) {
-    const session = getPlayerSession(playerName);
+  async function updatePlayerSocket(playerName, socketId) {
+    const session = await getPlayerSession(playerName);
     session.currentSocketId = socketId;
     if (!session.originalSocketId) {
       session.originalSocketId = socketId;
     }
-    savePlayerSessions(playerSessions); // Save socket update
+    await savePlayerSession(session); // Save socket update
     return session;
   }
 
@@ -336,7 +359,7 @@ app.prepare().then(() => {
     incrementConnectionCount(clientIP);
     console.log(`User connected: ${socket.id} from IP: ${clientIP}`);
 
-    socket.on("join-room", ({ roomCode, playerName }) => {
+    socket.on("join-room", async ({ roomCode, playerName }) => {
       // Input validation
       if (!validateRoomCode(roomCode) || !validatePlayerName(playerName)) {
         socket.emit("room-error", "Invalid room code or player name");
@@ -347,7 +370,7 @@ app.prepare().then(() => {
       playerName = sanitizeInput(playerName);
 
       // Get or create player session
-      const playerSession = updatePlayerSocket(playerName, socket.id);
+      const playerSession = await updatePlayerSocket(playerName, socket.id);
       console.log(`Player session for ${playerName}:`, playerSession);
 
       const room = rooms.get(roomCode);
@@ -371,7 +394,7 @@ app.prepare().then(() => {
           }
         };
         rooms.set(roomCode, newRoom);
-        saveRooms(rooms); // Save room creation
+        await saveRoom(newRoom); // Save room creation
 
         // Add player to new room using session ID
         const player = {
@@ -440,7 +463,7 @@ app.prepare().then(() => {
                 player.isReady = false;
               });
 
-              saveRooms(rooms);
+              await saveRoom(room);
             }
           } else {
             socket.emit("room-error", "Room is full");
@@ -525,7 +548,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("leave-room", ({ roomCode }) => {
+    socket.on("leave-room", async ({ roomCode }) => {
       // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
@@ -544,7 +567,8 @@ app.prepare().then(() => {
         // Delete room if empty
         if (room.players.length === 0) {
           rooms.delete(roomCode);
-          saveRooms(rooms); // Save room deletion
+          await deleteRoom(roomCode);
+          await saveRoom(room); // Save room deletion
           console.log(`Room ${roomCode} deleted (empty)`);
         } else {
           console.log(`Player ${socket.id} left room ${roomCode}`);
@@ -556,7 +580,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("player-ready", ({ roomCode }) => {
+    socket.on("player-ready", async ({ roomCode }) => {
       // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
@@ -583,7 +607,7 @@ app.prepare().then(() => {
             // Generate initial tile state
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
-            saveRooms(rooms); // Save game start
+            await saveRoom(room); // Save game start
 
             // Initialize player hands with starting hearts
             room.players.forEach(player => {
@@ -645,7 +669,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("shuffle-tiles", ({ roomCode }) => {
+    socket.on("shuffle-tiles", async ({ roomCode }) => {
       // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
@@ -657,7 +681,7 @@ app.prepare().then(() => {
       if (room && room.gameState.gameStarted) {
         // Generate new tiles for all players
         room.gameState.tiles = generateTiles();
-        saveRooms(rooms); // Save tile shuffle
+        await saveRoom(room); // Save tile shuffle
         console.log(`Tiles shuffled in room ${roomCode}`);
 
         // Broadcast new tile state to all players
@@ -665,7 +689,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("draw-heart", ({ roomCode }) => {
+    socket.on("draw-heart", async ({ roomCode }) => {
       // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
@@ -720,7 +744,7 @@ app.prepare().then(() => {
 
           // Decrease deck count
           room.gameState.deck.cards--;
-          saveRooms(rooms); // Save heart draw
+          await saveRoom(room); // Save heart draw
 
           console.log(`Heart drawn by ${playerSessionId} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
 
@@ -743,7 +767,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("place-heart", ({ roomCode, tileId, heartId }) => {
+    socket.on("place-heart", async ({ roomCode, tileId, heartId }) => {
       // Input validation
       if (!validateRoomCode(roomCode) || typeof tileId !== 'number' || typeof heartId !== 'string') {
         socket.emit("room-error", "Invalid input data");
@@ -803,7 +827,7 @@ app.prepare().then(() => {
                 emoji: heart.emoji,
                 color: heart.color
               };
-              saveRooms(rooms); // Save heart placement
+              await saveRoom(room); // Save heart placement
 
               console.log(`Heart placed on tile ${tileId} by ${playerSessionId} in room ${roomCode.toUpperCase()}`);
 
@@ -828,7 +852,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("end-turn", ({ roomCode }) => {
+    socket.on("end-turn", async ({ roomCode }) => {
       // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
@@ -873,7 +897,7 @@ app.prepare().then(() => {
         // Switch to next player
         room.gameState.currentPlayer = room.players[nextPlayerIndex];
         room.gameState.turnCount++;
-        saveRooms(rooms); // Save turn change
+        await saveRoom(room); // Save turn change
 
         console.log(`Turn ended in room ${roomCode.toUpperCase()}, new currentPlayer: ${room.gameState.currentPlayer.id}`);
 
@@ -903,7 +927,7 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       console.log(`User disconnected: ${socket.id} from IP: ${clientIP}`);
 
       // Decrement connection count
@@ -925,7 +949,8 @@ app.prepare().then(() => {
           // Delete room if empty
           if (room.players.length === 0) {
             rooms.delete(roomCode);
-            saveRooms(rooms); // Save room deletion
+          await deleteRoom(roomCode);
+            await saveRoom(room); // Save room deletion
             console.log(`Room ${roomCode} deleted (empty)`);
           }
         }
