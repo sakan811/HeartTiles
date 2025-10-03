@@ -219,7 +219,7 @@ app.prepare().then(async () => {
       return { valid: false, error: "Heart not in player's hand" };
     }
 
-    const tileExists = room.gameState.tiles.some(tile => tile.id === tileId);
+    const tileExists = room.gameState.tiles.some(tile => tile.id == tileId); // Use == to handle both number and string
     if (!tileExists) {
       return { valid: false, error: "Tile not found" };
     }
@@ -769,7 +769,7 @@ app.prepare().then(async () => {
 
     socket.on("place-heart", async ({ roomCode, tileId, heartId }) => {
       // Input validation
-      if (!validateRoomCode(roomCode) || typeof tileId !== 'number' || typeof heartId !== 'string') {
+      if (!validateRoomCode(roomCode) || (typeof tileId !== 'number' && typeof tileId !== 'string') || (typeof heartId !== 'string' && typeof heartId !== 'number')) {
         socket.emit("room-error", "Invalid input data");
         return;
       }
@@ -820,7 +820,7 @@ app.prepare().then(async () => {
             const heart = playerHand.splice(heartIndex, 1)[0];
 
             // Place heart on the tile
-            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id === tileId);
+            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == tileId); // Use == to handle both number and string
             if (tileIndex !== -1) {
               room.gameState.tiles[tileIndex] = {
                 ...room.gameState.tiles[tileIndex],
