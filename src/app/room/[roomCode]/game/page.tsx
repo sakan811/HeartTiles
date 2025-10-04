@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/socket";
+import { useSession } from "next-auth/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface Tile {
@@ -24,6 +25,7 @@ interface Deck {
 }
 
 export default function GameRoomPage() {
+  const { data: session, status } = useSession();
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [roomCode, setRoomCode] = useState("");
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
@@ -44,6 +46,13 @@ export default function GameRoomPage() {
   };
 
   useEffect(() => {
+    // Redirect unauthenticated users to sign in
+    if (status === "loading") return;
+    if (!session) {
+      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
+
     const roomCodeParam = params.roomCode as string;
     setRoomCode(roomCodeParam);
 
@@ -247,7 +256,7 @@ export default function GameRoomPage() {
       socket?.off("heart-placed", onHeartPlaced);
       socket?.off("room-error", onRoomError);
     };
-  }, [params.roomCode, socket, socketId, myPlayerId]);
+  }, [params.roomCode, socket, socketId, myPlayerId, session, status, router]);
 
   // Add logging for state changes
   useEffect(() => {

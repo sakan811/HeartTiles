@@ -2,7 +2,8 @@ import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
 import mongoose from 'mongoose';
-import { PlayerSession, Room } from './models.js';
+import { PlayerSession, Room, User } from './models.ts';
+import { getToken } from 'next-auth/jwt';
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";

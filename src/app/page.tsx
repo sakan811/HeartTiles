@@ -3,18 +3,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSession, signIn, signOut } from "next-auth/react";
 
 export default function Home() {
+  const { data: session, status } = useSession();
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const router = useRouter();
 
   const handleCreateRoom = () => {
+    if (!session) {
+      signIn();
+      return;
+    }
     const generatedRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     router.push(`/room/${generatedRoomCode}`);
   };
 
   const handleJoinRoom = () => {
+    if (!session) {
+      signIn();
+      return;
+    }
     if (roomCode.trim()) {
       router.push(`/room/${roomCode.trim().toUpperCase()}`);
     }
@@ -23,6 +33,41 @@ export default function Home() {
   return (
     <div className="font-sans min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
       <div className="text-center space-y-8">
+        {/* Authentication Section */}
+        <div className="absolute top-4 right-4">
+          {status === "loading" ? (
+            <div className="text-white">Loading...</div>
+          ) : session ? (
+            <div className="flex items-center gap-4 bg-white/10 backdrop-blur-sm rounded-lg p-3">
+              <div className="text-white">
+                <div className="text-sm opacity-75">Welcome back,</div>
+                <div className="font-semibold">{session.user?.name}</div>
+              </div>
+              <button
+                onClick={() => signOut()}
+                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded text-sm transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Link
+                href="/auth/signin"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded text-sm transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/auth/signup"
+                className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded text-sm transition-colors"
+              >
+                Sign Up
+              </Link>
+            </div>
+          )}
+        </div>
+
         <div>
           <h1 className="text-6xl font-bold text-white mb-4">
             No Kitty Cards

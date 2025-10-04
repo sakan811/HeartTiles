@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/socket";
+import { useSession } from "next-auth/react";
 
 interface Player {
   id: string;
@@ -17,6 +18,7 @@ interface Tile {
 }
 
 export default function RoomPage() {
+  const { data: session, status } = useSession();
   const [players, setPlayers] = useState<Player[]>([]);
   const [error, setError] = useState("");
   const [currentPlayerId, setCurrentPlayerId] = useState("");
@@ -26,8 +28,13 @@ export default function RoomPage() {
   const router = useRouter();
   const roomCode = params.roomCode as string;
 
-  // Get or create a persistent player name for this browser session
+  // Get player name from authenticated session or fallback
   const getPlayerName = () => {
+    if (session?.user?.name) {
+      return session.user.name;
+    }
+
+    // Fallback to browser session for unauthenticated users
     const sessionKey = 'no-kitty-player-name';
     let playerName = sessionStorage.getItem(sessionKey);
 
@@ -46,6 +53,12 @@ export default function RoomPage() {
   };
 
   useEffect(() => {
+    // Redirect unauthenticated users to sign in
+    if (status === "loading") return;
+    if (!session) {
+      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
     if (!socket) return;
 
     const onRoomJoined = (data: { players: Player[], playerId: string }) => {
@@ -94,7 +107,7 @@ export default function RoomPage() {
       socket.off("game-start", onGameStart);
       socket.off("room-error", onRoomError);
     };
-  }, [socket, roomCode, router]);
+  }, [socket, roomCode, router, session, status]);
 
   useEffect(() => {
     if (isConnected && socketId && roomCode && !hasJoined) {
@@ -103,7 +116,7 @@ export default function RoomPage() {
       socket?.emit("join-room", { roomCode, playerName });
       setHasJoined(true); // Prevent duplicate joins
     }
-  }, [isConnected, socketId, roomCode, hasJoined, socket]);
+  }, [isConnected, socketId, roomCode, hasJoined, socket, session]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
