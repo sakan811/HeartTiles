@@ -117,9 +117,7 @@ const roomSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create indexes for better performance
-roomSchema.index({ code: 1 });
-playerSessionSchema.index({ normalizedName: 1 });
+// Note: Indexes are automatically created by unique: true in schema definitions
 
 // Export models
 export const PlayerSession = mongoose.model('PlayerSession', playerSessionSchema);

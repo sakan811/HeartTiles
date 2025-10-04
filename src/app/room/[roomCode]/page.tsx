@@ -26,10 +26,23 @@ export default function RoomPage() {
   const router = useRouter();
   const roomCode = params.roomCode as string;
 
-  // Generate a simple player name - server will manage player identity
+  // Get or create a persistent player name for this browser session
   const getPlayerName = () => {
-    if (!socketId) return `Player_${Math.random().toString(36).slice(-4)}`;
-    return `Player_${socketId.slice(-6)}`;
+    const sessionKey = 'no-kitty-player-name';
+    let playerName = sessionStorage.getItem(sessionKey);
+
+    if (!playerName) {
+      // Generate a new player name if none exists
+      if (!socketId) {
+        playerName = `Player_${Math.random().toString(36).slice(-4)}`;
+      } else {
+        playerName = `Player_${socketId.slice(-6)}`;
+      }
+      // Store in sessionStorage for persistence across refreshes
+      sessionStorage.setItem(sessionKey, playerName);
+    }
+
+    return playerName;
   };
 
   useEffect(() => {

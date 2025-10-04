@@ -233,12 +233,15 @@ app.prepare().then(async () => {
   }
 
   // Helper function to migrate player data to new session
-  function migratePlayerData(room, oldPlayerId, newPlayerId, playerName) {
+  async function migratePlayerData(room, oldPlayerId, newPlayerId, playerName) {
+    console.log(`Migrating player data from ${oldPlayerId} to ${newPlayerId} for ${playerName}`);
+
     // Update player reference in room
     const playerIndex = room.players.findIndex(p => p.id === oldPlayerId);
     if (playerIndex !== -1) {
       room.players[playerIndex].id = newPlayerId;
       room.players[playerIndex].name = playerName;
+      console.log(`Updated existing player at index ${playerIndex}`);
     } else {
       // Add new player if not found
       room.players.push({
@@ -246,34 +249,39 @@ app.prepare().then(async () => {
         name: playerName,
         isReady: false
       });
+      console.log(`Added new player as existing player not found`);
     }
 
     // Migrate player hands if they exist
     if (room.gameState.playerHands[oldPlayerId]) {
       room.gameState.playerHands[newPlayerId] = room.gameState.playerHands[oldPlayerId];
       delete room.gameState.playerHands[oldPlayerId];
+      console.log(`Migrated player hands from ${oldPlayerId} to ${newPlayerId}`);
     }
 
     // Update current player reference if needed
     if (room.gameState.currentPlayer && room.gameState.currentPlayer.id === oldPlayerId) {
-      const session = getPlayerSession(playerName);
+      const session = await getPlayerSession(playerName);
       room.gameState.currentPlayer = {
         id: newPlayerId,
         name: playerName,
         isReady: room.players.find(p => p.id === newPlayerId)?.isReady || false
       };
+      console.log(`Updated current player reference to ${newPlayerId}`);
     }
 
     // Release any old turn locks
-    Object.keys(turnLocks).forEach(lockKey => {
+    const locksToDelete = [];
+    for (const lockKey of turnLocks.keys()) {
       if (lockKey.includes(oldPlayerId)) {
-        const parts = lockKey.split('_');
-        if (parts.length >= 2) {
-          const roomCode = parts[0];
-          turnLocks.delete(lockKey);
-        }
+        locksToDelete.push(lockKey);
       }
-    });
+    }
+    locksToDelete.forEach(lockKey => turnLocks.delete(lockKey));
+
+    if (locksToDelete.length > 0) {
+      console.log(`Released ${locksToDelete.length} turn locks for old player ID ${oldPlayerId}`);
+    }
   }
 
   function validateDeckState(room) {
@@ -429,7 +437,11 @@ app.prepare().then(async () => {
         console.log(`- Existing player by socket:`, existingPlayerBySocket);
         console.log(`- Room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
 
-        if (!existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket && room.players.length >= room.maxPlayers) {
+        // Count unique players by name to avoid duplicates during reconnection
+        const uniquePlayerNames = new Set(room.players.map(p => p.name.toLowerCase()));
+        const actualPlayerCount = uniquePlayerNames.size;
+
+        if (!existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket && actualPlayerCount >= room.maxPlayers) {
           // Room is full and player is not already in it
           // Check if any players in the room are actually disconnected
           const activePlayerSockets = Array.from(io.sockets.adapter.rooms.get(roomCode) || [])
@@ -487,7 +499,7 @@ app.prepare().then(async () => {
         } else if (existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket) {
           // Player is reconnecting with new socket ID and session ID
           console.log(`Player ${playerName} reconnecting from ${existingPlayerByName.id} to session ${playerSession.id} (socket ${socket.id})`);
-          migratePlayerData(room, existingPlayerByName.id, playerSession.id, playerName);
+          await migratePlayerData(room, existingPlayerByName.id, playerSession.id, playerName);
         } else if (existingPlayerBySession) {
           // Player is rejoining with same session ID but possibly different socket
           existingPlayerBySession.name = playerName;
@@ -498,6 +510,9 @@ app.prepare().then(async () => {
           existingPlayerBySocket.id = playerSession.id; // Update to session ID
           console.log(`Player ${playerName} rejoined room ${roomCode.toUpperCase()} with socket ${socket.id}, updated to session ${playerSession.id}`);
         }
+
+        // After handling player join/reconnection, save the updated room state
+        await saveRoom(room);
 
         socket.join(roomCode);
         socket.data.roomCode = roomCode;
@@ -940,8 +955,29 @@ app.prepare().then(async () => {
 
         const room = rooms.get(roomCode);
         if (room) {
-          // Remove player from room
+          // Remove player from room by socket ID or session ID
+          const playerName = socket.data.playerName;
+          let playerRemoved = false;
+
+          // First try to remove by socket ID
+          const initialLength = room.players.length;
           room.players = room.players.filter(player => player.id !== socket.id);
+
+          // If no player was removed by socket ID, try to remove by session ID
+          if (room.players.length === initialLength && socket.data.playerSessionId) {
+            room.players = room.players.filter(player => player.id !== socket.data.playerSessionId);
+          }
+
+          // If still no player removed, try to remove by player name (for legacy compatibility)
+          if (room.players.length === initialLength && playerName) {
+            room.players = room.players.filter(player => player.name.toLowerCase() !== playerName.toLowerCase());
+            playerRemoved = true;
+          }
+
+          // Clean up player hands for disconnected players
+          if (socket.data.playerSessionId && room.gameState.playerHands[socket.data.playerSessionId]) {
+            delete room.gameState.playerHands[socket.data.playerSessionId];
+          }
 
           // Notify remaining players
           io.to(roomCode).emit("player-left", { players: room.players });
@@ -949,9 +985,12 @@ app.prepare().then(async () => {
           // Delete room if empty
           if (room.players.length === 0) {
             rooms.delete(roomCode);
-          await deleteRoom(roomCode);
-            await saveRoom(room); // Save room deletion
+            await deleteRoom(roomCode);
             console.log(`Room ${roomCode} deleted (empty)`);
+          } else {
+            // Save room state after player removal
+            await saveRoom(room);
+            console.log(`Player removed from room ${roomCode}, ${room.players.length} players remaining`);
           }
         }
       }
