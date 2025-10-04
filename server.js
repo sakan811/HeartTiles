@@ -62,11 +62,11 @@ async function deleteRoom(roomCode) {
 
 async function loadPlayerSessions() {
   try {
-    const sessions = await PlayerSession.find({});
+    const sessions = await PlayerSession.find({ isActive: true });
     const sessionsMap = new Map();
     sessions.forEach(session => {
       const sessionObj = session.toObject();
-      sessionsMap.set(sessionObj.normalizedName, sessionObj);
+      sessionsMap.set(sessionObj.userId, sessionObj);
     });
     return sessionsMap;
   } catch (err) {
@@ -78,7 +78,7 @@ async function loadPlayerSessions() {
 async function savePlayerSession(sessionData) {
   try {
     await PlayerSession.findOneAndUpdate(
-      { normalizedName: sessionData.normalizedName },
+      { userId: sessionData.userId },
       sessionData,
       { upsert: true, new: true }
     );
@@ -110,8 +110,8 @@ app.prepare().then(async () => {
   console.log(`Loaded ${rooms.size} rooms and ${playerSessions.size} player sessions from MongoDB`);
 
   // Turn validation helper functions
-  function acquireTurnLock(roomCode, playerId) {
-    const lockKey = `${roomCode}_${playerId}`;
+  function acquireTurnLock(roomCode, userId) {
+    const lockKey = `${roomCode}_${userId}`;
     if (turnLocks.has(lockKey)) {
       return false; // Lock already acquired
     }
@@ -119,17 +119,17 @@ app.prepare().then(async () => {
     return true;
   }
 
-  function releaseTurnLock(roomCode, playerId) {
-    const lockKey = `${roomCode}_${playerId}`;
+  function releaseTurnLock(roomCode, userId) {
+    const lockKey = `${roomCode}_${userId}`;
     turnLocks.delete(lockKey);
   }
 
-  function validateTurn(room, playerId) {
+  function validateTurn(room, userId) {
     if (!room || !room.gameState.gameStarted) {
       return { valid: false, error: "Game not started" };
     }
 
-    if (!room.gameState.currentPlayer || room.gameState.currentPlayer.id !== playerId) {
+    if (!room.gameState.currentPlayer || room.gameState.currentPlayer.userId !== userId) {
       return { valid: false, error: "Not your turn" };
     }
 
@@ -151,32 +151,79 @@ app.prepare().then(async () => {
     return playerName.trim().length > 0 && playerName.length <= 20;
   }
 
-  // Helper function to generate or get player session
-  async function getPlayerSession(playerName) {
-    const normalizedName = playerName.trim().toLowerCase();
-    if (!playerSessions.has(normalizedName)) {
-      const newSession = {
-        normalizedName,
-        id: `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: playerName.trim(),
-        originalSocketId: null,
-        currentSocketId: null
-      };
-      playerSessions.set(normalizedName, newSession);
-      await savePlayerSession(newSession); // Save new session
+  // Authentication middleware for Socket.IO
+  async function authenticateSocket(socket, next) {
+    try {
+      const token = await getToken({
+        req: socket.handshake,
+        secret: process.env.NEXTAUTH_SECRET
+      });
+
+      if (!token || !token.id) {
+        return next(new Error('Authentication required'));
+      }
+
+      // Find the user in database to ensure they exist
+      const user = await User.findById(token.id);
+      if (!user) {
+        return next(new Error('User not found'));
+      }
+
+      socket.data.userId = token.id;
+      socket.data.userEmail = user.email;
+      socket.data.userName = user.name;
+      socket.data.userSessionId = token.jti; // JWT ID for session tracking
+
+      next();
+    } catch (error) {
+      console.error('Socket authentication error:', error);
+      next(new Error('Authentication failed'));
     }
-    return playerSessions.get(normalizedName);
   }
 
-  // Helper function to update player's current socket
-  async function updatePlayerSocket(playerName, socketId) {
-    const session = await getPlayerSession(playerName);
-    session.currentSocketId = socketId;
-    if (!session.originalSocketId) {
-      session.originalSocketId = socketId;
+  // Helper function to get or create player session for authenticated user
+  async function getPlayerSession(userId, userSessionId, userName, userEmail) {
+    let session = playerSessions.get(userId);
+
+    if (!session) {
+      // Create new session for authenticated user
+      const newSession = {
+        userId,
+        userSessionId,
+        name: userName,
+        email: userEmail,
+        currentSocketId: null,
+        lastSeen: new Date(),
+        isActive: true
+      };
+
+      playerSessions.set(userId, newSession);
+      await savePlayerSession(newSession);
+      session = newSession;
+      console.log(`Created new player session for user ${userName} (${userId})`);
+    } else {
+      // Update existing session
+      session.lastSeen = new Date();
+      session.isActive = true;
+      await savePlayerSession(session);
     }
-    await savePlayerSession(session); // Save socket update
+
     return session;
+  }
+
+  // Helper function to update player's socket connection
+  async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail) {
+    const session = await getPlayerSession(userId, userSessionId, userName, userEmail);
+    session.currentSocketId = socketId;
+    session.lastSeen = new Date();
+    session.isActive = true;
+    await savePlayerSession(session);
+    return session;
+  }
+
+  // Helper function to find player by user ID in room
+  function findPlayerByUserId(room, userId) {
+    return room.players.find(p => p.userId === userId);
   }
 
   function sanitizeInput(input) {
@@ -205,15 +252,15 @@ app.prepare().then(async () => {
     return { valid: true };
   }
 
-  function validatePlayerInRoom(room, playerId) {
-    if (!room.players.find(p => p.id === playerId)) {
+  function validatePlayerInRoom(room, userId) {
+    if (!room.players.find(p => p.userId === userId)) {
       return { valid: false, error: "Player not in room" };
     }
     return { valid: true };
   }
 
-  function validateHeartPlacement(room, playerId, heartId, tileId) {
-    const playerHand = room.gameState.playerHands[playerId] || [];
+  function validateHeartPlacement(room, userId, heartId, tileId) {
+    const playerHand = room.gameState.playerHands[userId] || [];
     const heartExists = playerHand.some(heart => heart.id === heartId);
 
     if (!heartExists) {
@@ -233,55 +280,58 @@ app.prepare().then(async () => {
     return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
   }
 
-  // Helper function to migrate player data to new session
-  async function migratePlayerData(room, oldPlayerId, newPlayerId, playerName) {
-    console.log(`Migrating player data from ${oldPlayerId} to ${newPlayerId} for ${playerName}`);
+  // Helper function to migrate player data when user rejoins with different session
+  async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail) {
+    console.log(`Migrating player data from ${oldUserId} to ${newUserId} for ${userName}`);
 
     // Update player reference in room
-    const playerIndex = room.players.findIndex(p => p.id === oldPlayerId);
+    const playerIndex = room.players.findIndex(p => p.userId === oldUserId);
     if (playerIndex !== -1) {
-      room.players[playerIndex].id = newPlayerId;
-      room.players[playerIndex].name = playerName;
+      room.players[playerIndex].userId = newUserId;
+      room.players[playerIndex].name = userName;
+      room.players[playerIndex].email = userEmail;
       console.log(`Updated existing player at index ${playerIndex}`);
     } else {
       // Add new player if not found
       room.players.push({
-        id: newPlayerId,
-        name: playerName,
-        isReady: false
+        userId: newUserId,
+        name: userName,
+        email: userEmail,
+        isReady: false,
+        joinedAt: new Date()
       });
       console.log(`Added new player as existing player not found`);
     }
 
     // Migrate player hands if they exist
-    if (room.gameState.playerHands[oldPlayerId]) {
-      room.gameState.playerHands[newPlayerId] = room.gameState.playerHands[oldPlayerId];
-      delete room.gameState.playerHands[oldPlayerId];
-      console.log(`Migrated player hands from ${oldPlayerId} to ${newPlayerId}`);
+    if (room.gameState.playerHands[oldUserId]) {
+      room.gameState.playerHands[newUserId] = room.gameState.playerHands[oldUserId];
+      delete room.gameState.playerHands[oldUserId];
+      console.log(`Migrated player hands from ${oldUserId} to ${newUserId}`);
     }
 
     // Update current player reference if needed
-    if (room.gameState.currentPlayer && room.gameState.currentPlayer.id === oldPlayerId) {
-      const session = await getPlayerSession(playerName);
+    if (room.gameState.currentPlayer && room.gameState.currentPlayer.userId === oldUserId) {
       room.gameState.currentPlayer = {
-        id: newPlayerId,
-        name: playerName,
-        isReady: room.players.find(p => p.id === newPlayerId)?.isReady || false
+        userId: newUserId,
+        name: userName,
+        email: userEmail,
+        isReady: room.players.find(p => p.userId === newUserId)?.isReady || false
       };
-      console.log(`Updated current player reference to ${newPlayerId}`);
+      console.log(`Updated current player reference to ${newUserId}`);
     }
 
     // Release any old turn locks
     const locksToDelete = [];
     for (const lockKey of turnLocks.keys()) {
-      if (lockKey.includes(oldPlayerId)) {
+      if (lockKey.includes(oldUserId)) {
         locksToDelete.push(lockKey);
       }
     }
     locksToDelete.forEach(lockKey => turnLocks.delete(lockKey));
 
     if (locksToDelete.length > 0) {
-      console.log(`Released ${locksToDelete.length} turn locks for old player ID ${oldPlayerId}`);
+      console.log(`Released ${locksToDelete.length} turn locks for old user ID ${oldUserId}`);
     }
   }
 
@@ -354,8 +404,15 @@ app.prepare().then(async () => {
     return players[Math.floor(Math.random() * players.length)];
   }
 
+  // Use authentication middleware
+  io.use(authenticateSocket);
+
   io.on("connection", (socket) => {
     const clientIP = getClientIP(socket);
+    const userId = socket.data.userId;
+    const userEmail = socket.data.userEmail;
+    const userName = socket.data.userName;
+    const userSessionId = socket.data.userSessionId;
 
     // Check connection limits
     if (!canAcceptConnection(clientIP)) {
@@ -366,21 +423,20 @@ app.prepare().then(async () => {
     }
 
     incrementConnectionCount(clientIP);
-    console.log(`User connected: ${socket.id} from IP: ${clientIP}`);
+    console.log(`Authenticated user connected: ${userName} (${userId}) from IP: ${clientIP} with socket: ${socket.id}`);
 
-    socket.on("join-room", async ({ roomCode, playerName }) => {
+    socket.on("join-room", async ({ roomCode }) => {
       // Input validation
-      if (!validateRoomCode(roomCode) || !validatePlayerName(playerName)) {
-        socket.emit("room-error", "Invalid room code or player name");
+      if (!validateRoomCode(roomCode)) {
+        socket.emit("room-error", "Invalid room code");
         return;
       }
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
-      playerName = sanitizeInput(playerName);
 
-      // Get or create player session
-      const playerSession = await updatePlayerSocket(playerName, socket.id);
-      console.log(`Player session for ${playerName}:`, playerSession);
+      // Get or create player session for authenticated user
+      const playerSession = await updatePlayerSocket(userId, socket.id, userSessionId, userName, userEmail);
+      console.log(`Player session for ${userName}:`, playerSession);
 
       const room = rooms.get(roomCode);
 
@@ -405,52 +461,49 @@ app.prepare().then(async () => {
         rooms.set(roomCode, newRoom);
         await saveRoom(newRoom); // Save room creation
 
-        // Add player to new room using session ID
+        // Add authenticated user to new room
         const player = {
-          id: playerSession.id,
-          name: playerName,
+          userId: userId,
+          name: userName,
+          email: userEmail,
           isReady: false,
+          joinedAt: new Date()
         };
-        // Ensure no duplicate players by name
-        if (!findPlayerByName(newRoom, playerName)) {
+
+        // Ensure no duplicate players by userId
+        if (!findPlayerByUserId(newRoom, userId)) {
           newRoom.players.push(player);
         }
 
         socket.join(roomCode);
         socket.data.roomCode = roomCode;
-        socket.data.playerName = playerName;
-        socket.data.playerSessionId = playerSession.id;
+        socket.data.userId = userId;
 
-        console.log(`Room ${roomCode} created by ${playerName} (${socket.id})`);
+        console.log(`Room ${roomCode} created by ${userName} (${userId}) with socket ${socket.id}`);
 
         // Send room-joined to the creator only
-        io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: playerSession.id });
+        io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: userId });
         console.log(`Room ${roomCode} created with ${newRoom.players.length} players`);
       } else {
-        // Check if player is already in the room (by name or session ID)
-        const existingPlayerByName = findPlayerByName(room, playerName);
-        const existingPlayerBySession = room.players.find(p => p.id === playerSession.id);
-        const existingPlayerBySocket = room.players.find(p => p.id === socket.id);
+        // Check if authenticated user is already in the room (by userId)
+        const existingPlayerByUserId = findPlayerByUserId(room, userId);
 
-        console.log(`Player ${playerName} joining room ${roomCode}:`);
-        console.log(`- Existing player by name:`, existingPlayerByName);
-        console.log(`- Existing player by session:`, existingPlayerBySession);
-        console.log(`- Existing player by socket:`, existingPlayerBySocket);
-        console.log(`- Room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
+        console.log(`User ${userName} (${userId}) joining room ${roomCode}:`);
+        console.log(`- Existing player by userId:`, existingPlayerByUserId);
+        console.log(`- Room players:`, room.players.map(p => ({ userId: p.userId, name: p.name })));
 
-        // Count unique players by name to avoid duplicates during reconnection
-        const uniquePlayerNames = new Set(room.players.map(p => p.name.toLowerCase()));
-        const actualPlayerCount = uniquePlayerNames.size;
+        // Count unique players by userId to avoid duplicates
+        const actualPlayerCount = room.players.length;
 
-        if (!existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket && actualPlayerCount >= room.maxPlayers) {
-          // Room is full and player is not already in it
+        if (!existingPlayerByUserId && actualPlayerCount >= room.maxPlayers) {
+          // Room is full and user is not already in it
           // Check if any players in the room are actually disconnected
           const activePlayerSockets = Array.from(io.sockets.adapter.rooms.get(roomCode) || [])
             .filter(socketId => io.sockets.sockets.has(socketId));
 
           console.log(`Room ${roomCode} appears full (${room.players.length}/${room.maxPlayers})`);
           console.log(`Active sockets in room: ${activePlayerSockets.length}`);
-          console.log(`Room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
+          console.log(`Room players:`, room.players.map(p => ({ userId: p.userId, name: p.name })));
 
           // Additional check: Look for players with invalid gameState (null currentPlayer in started game)
           const hasInvalidGameState = room.gameState.gameStarted && !room.gameState.currentPlayer;
@@ -459,7 +512,7 @@ app.prepare().then(async () => {
           // 1. There are fewer active sockets than players (disconnected players)
           // 2. OR the game state is corrupted (null currentPlayer when game started)
           if (activePlayerSockets.length < room.players.length || hasInvalidGameState) {
-            console.log(`Detected disconnected players or invalid game state in room ${roomCode}, allowing reconnection for ${playerName}`);
+            console.log(`Detected disconnected players or invalid game state in room ${roomCode}, allowing reconnection for ${userName}`);
 
             // If game state is corrupted, reset it to allow fresh game
             if (hasInvalidGameState) {
@@ -480,49 +533,42 @@ app.prepare().then(async () => {
             }
           } else {
             socket.emit("room-error", "Room is full");
-            console.log(`Room ${roomCode} is full with active players, rejecting player ${playerName}`);
+            console.log(`Room ${roomCode} is full with active players, rejecting user ${userName}`);
             return;
           }
         }
 
         let isNewJoin = false;
 
-        if (!existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket) {
-          // Add new player to existing room
+        if (!existingPlayerByUserId) {
+          // Add new user to existing room
           const player = {
-            id: playerSession.id,
-            name: playerName,
+            userId: userId,
+            name: userName,
+            email: userEmail,
             isReady: false,
+            joinedAt: new Date()
           };
           room.players.push(player);
           isNewJoin = true;
-          console.log(`New player ${playerName} joined room ${roomCode.toUpperCase()} with session ID ${playerSession.id}`);
-        } else if (existingPlayerByName && !existingPlayerBySession && !existingPlayerBySocket) {
-          // Player is reconnecting with new socket ID and session ID
-          console.log(`Player ${playerName} reconnecting from ${existingPlayerByName.id} to session ${playerSession.id} (socket ${socket.id})`);
-          await migratePlayerData(room, existingPlayerByName.id, playerSession.id, playerName);
-        } else if (existingPlayerBySession) {
-          // Player is rejoining with same session ID but possibly different socket
-          existingPlayerBySession.name = playerName;
-          console.log(`Player ${playerName} rejoined room ${roomCode.toUpperCase()} with existing session ${playerSession.id}`);
-        } else if (existingPlayerBySocket) {
-          // Player is rejoining with same socket ID (fallback case)
-          existingPlayerBySocket.name = playerName;
-          existingPlayerBySocket.id = playerSession.id; // Update to session ID
-          console.log(`Player ${playerName} rejoined room ${roomCode.toUpperCase()} with socket ${socket.id}, updated to session ${playerSession.id}`);
+          console.log(`New user ${userName} (${userId}) joined room ${roomCode.toUpperCase()}`);
+        } else {
+          // User is reconnecting - update their info
+          existingPlayerByUserId.name = userName;
+          existingPlayerByUserId.email = userEmail;
+          console.log(`User ${userName} (${userId}) rejoined room ${roomCode.toUpperCase()}`);
         }
 
-        // After handling player join/reconnection, save the updated room state
+        // After handling user join/reconnection, save the updated room state
         await saveRoom(room);
 
         socket.join(roomCode);
         socket.data.roomCode = roomCode;
-        socket.data.playerName = playerName;
-        socket.data.playerSessionId = playerSession.id;
+        socket.data.userId = userId;
 
-        // Send room-joined to the joining player only
-        io.to(socket.id).emit("room-joined", { players: room.players, playerId: playerSession.id });
-        console.log(`Player ${playerName} joined room ${roomCode}, total players: ${room.players.length}`);
+        // Send room-joined to the joining user only
+        io.to(socket.id).emit("room-joined", { players: room.players, playerId: userId });
+        console.log(`User ${userName} joined room ${roomCode}, total players: ${room.players.length}`);
 
         // Notify other players in the room about the player update
         if (isNewJoin) {
@@ -532,9 +578,9 @@ app.prepare().then(async () => {
           io.to(roomCode).emit("player-joined", { players: room.players });
         }
 
-        // If game is already started, send the current game state to the rejoined player
+        // If game is already started, send the current game state to the rejoined user
         if (room.gameState.gameStarted) {
-          console.log(`Sending current game state to rejoined player ${playerName}`);
+          console.log(`Sending current game state to rejoined user ${userName}`);
           console.log(`Room state: ${JSON.stringify({
             tilesCount: room.gameState.tiles.length,
             currentPlayer: room.gameState.currentPlayer,
@@ -546,7 +592,7 @@ app.prepare().then(async () => {
           // Include player hands in the player objects for easier client-side handling
           const playersWithHands = room.players.map(player => ({
             ...player,
-            hand: room.gameState.playerHands[player.id] || []
+            hand: room.gameState.playerHands[player.userId] || []
           }));
 
           const gameStateData = {
@@ -558,7 +604,8 @@ app.prepare().then(async () => {
             turnCount: room.gameState.turnCount
           };
 
-          console.log(`Emitting game-start to rejoined player with data:`, gameStateData);
+          console.log(`Emitting game-start to rejoined user with data:`, gameStateData);
+          gameStateData.playerId = userId; // Add current user's player ID
           io.to(socket.id).emit("game-start", gameStateData);
         }
       }
@@ -574,8 +621,8 @@ app.prepare().then(async () => {
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
       if (room) {
-        // Remove player from room
-        room.players = room.players.filter(player => player.id !== socket.id);
+        // Remove authenticated user from room
+        room.players = room.players.filter(player => player.userId !== userId);
 
         // Notify remaining players
         io.to(roomCode).emit("player-left", { players: room.players });
@@ -587,12 +634,12 @@ app.prepare().then(async () => {
           await saveRoom(room); // Save room deletion
           console.log(`Room ${roomCode} deleted (empty)`);
         } else {
-          console.log(`Player ${socket.id} left room ${roomCode}`);
+          console.log(`User ${userName} (${userId}) left room ${roomCode}`);
         }
 
         socket.leave(roomCode);
         socket.data.roomCode = null;
-        socket.data.playerName = null;
+        socket.data.userId = null;
       }
     });
 
@@ -605,13 +652,12 @@ app.prepare().then(async () => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
-      const playerSessionId = socket.data.playerSessionId || socket.id;
 
       if (room) {
-        const player = room.players.find(p => p.id === playerSessionId);
+        const player = room.players.find(p => p.userId === userId);
         if (player) {
           player.isReady = !player.isReady;
-          console.log(`Player ${playerSessionId} (${player.name}) ready status: ${player.isReady}`);
+          console.log(`User ${userId} (${player.name}) ready status: ${player.isReady}`);
 
           // Notify all players in the room
           io.to(roomCode).emit("player-ready", { players: room.players });
@@ -627,12 +673,12 @@ app.prepare().then(async () => {
 
             // Initialize player hands with starting hearts
             room.players.forEach(player => {
-              room.gameState.playerHands[player.id] = [];
+              room.gameState.playerHands[player.userId] = [];
               // Deal 3 starting hearts to each player
               for (let i = 0; i < 3; i++) {
-                room.gameState.playerHands[player.id].push(generateSingleHeart());
+                room.gameState.playerHands[player.userId].push(generateSingleHeart());
               }
-              console.log(`Dealt 3 hearts to player ${player.name} (${player.id}):`, room.gameState.playerHands[player.id]);
+              console.log(`Dealt 3 hearts to player ${player.name} (${player.userId}):`, room.gameState.playerHands[player.userId]);
             });
 
             // Select random starting player
@@ -650,8 +696,8 @@ app.prepare().then(async () => {
 
             // Include player hands in the player objects for easier client-side handling
             const playersWithHands = room.players.map(player => {
-              const playerHand = room.gameState.playerHands[player.id] || [];
-              console.log(`Player ${player.name} (${player.id}) hand:`, playerHand);
+              const playerHand = room.gameState.playerHands[player.userId] || [];
+              console.log(`Player ${player.name} (${player.userId}) hand:`, playerHand);
               return {
                 ...player,
                 hand: playerHand
@@ -677,10 +723,18 @@ app.prepare().then(async () => {
             });
             console.log(`Full game-start data:`, JSON.stringify(gameStartData, null, 2));
 
-            io.to(roomCode).emit("game-start", gameStartData);
+            // Send personalized game-start data to each player
+            room.players.forEach(player => {
+              const personalizedData = { ...gameStartData, playerId: player.userId };
+              // Find the socket for this player and emit to them
+              const playerSocket = Array.from(io.sockets.sockets.values()).find(s => s.data.userId === player.userId);
+              if (playerSocket) {
+                playerSocket.emit("game-start", personalizedData);
+              }
+            });
           }
         } else {
-          console.log(`Player ${playerSessionId} not found in room ${roomCode}. Players in room:`, room.players.map(p => ({ id: p.id, name: p.name })));
+          console.log(`User ${userId} not found in room ${roomCode}. Players in room:`, room.players.map(p => ({ userId: p.userId, name: p.name })));
         }
       }
     });
@@ -714,7 +768,7 @@ app.prepare().then(async () => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
-      const playerSessionId = socket.data.playerSessionId || socket.id;
+      // Authenticated user - no need for fallback session logic
 
       // Comprehensive validation
       const roomValidation = validateRoomState(room);
@@ -723,7 +777,7 @@ app.prepare().then(async () => {
         return;
       }
 
-      const playerValidation = validatePlayerInRoom(room, playerSessionId);
+      const playerValidation = validatePlayerInRoom(room, userId);
       if (!playerValidation.valid) {
         socket.emit("room-error", playerValidation.error);
         return;
@@ -736,7 +790,7 @@ app.prepare().then(async () => {
       }
 
       // Validate turn and acquire lock
-      const turnValidation = validateTurn(room, playerSessionId);
+      const turnValidation = validateTurn(room, userId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
         return;
@@ -753,21 +807,21 @@ app.prepare().then(async () => {
           const newHeart = generateSingleHeart();
 
           // Add the heart to the current player's hand
-          if (!room.gameState.playerHands[playerSessionId]) {
-            room.gameState.playerHands[playerSessionId] = [];
+          if (!room.gameState.playerHands[userId]) {
+            room.gameState.playerHands[userId] = [];
           }
-          room.gameState.playerHands[playerSessionId].push(newHeart);
+          room.gameState.playerHands[userId].push(newHeart);
 
           // Decrease deck count
           room.gameState.deck.cards--;
           await saveRoom(room); // Save heart draw
 
-          console.log(`Heart drawn by ${playerSessionId} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
+          console.log(`Heart drawn by ${userId} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
 
           // Include player hands in the player objects for broadcasting
           const playersWithUpdatedHands = room.players.map(player => ({
             ...player,
-            hand: room.gameState.playerHands[player.id] || []
+            hand: room.gameState.playerHands[player.userId] || []
           }));
 
           // Broadcast the updated player hands and deck to all players
@@ -792,7 +846,7 @@ app.prepare().then(async () => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
-      const playerSessionId = socket.data.playerSessionId || socket.id;
+      // Authenticated user - no need for fallback session logic
 
       // Comprehensive validation
       const roomValidation = validateRoomState(room);
@@ -801,20 +855,20 @@ app.prepare().then(async () => {
         return;
       }
 
-      const playerValidation = validatePlayerInRoom(room, playerSessionId);
+      const playerValidation = validatePlayerInRoom(room, userId);
       if (!playerValidation.valid) {
         socket.emit("room-error", playerValidation.error);
         return;
       }
 
-      const heartValidation = validateHeartPlacement(room, playerSessionId, heartId, tileId);
+      const heartValidation = validateHeartPlacement(room, userId, heartId, tileId);
       if (!heartValidation.valid) {
         socket.emit("room-error", heartValidation.error);
         return;
       }
 
       // Validate turn and acquire lock
-      const turnValidation = validateTurn(room, playerSessionId);
+      const turnValidation = validateTurn(room, userId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
         return;
@@ -828,7 +882,7 @@ app.prepare().then(async () => {
       try {
         if (room.gameState.gameStarted) {
           // Find the heart in player's hand
-          const playerHand = room.gameState.playerHands[playerSessionId] || [];
+          const playerHand = room.gameState.playerHands[userId] || [];
           const heartIndex = playerHand.findIndex(heart => heart.id === heartId);
 
           if (heartIndex !== -1) {
@@ -845,12 +899,12 @@ app.prepare().then(async () => {
               };
               await saveRoom(room); // Save heart placement
 
-              console.log(`Heart placed on tile ${tileId} by ${playerSessionId} in room ${roomCode.toUpperCase()}`);
+              console.log(`Heart placed on tile ${tileId} by ${userId} in room ${roomCode.toUpperCase()}`);
 
               // Include player hands in the player objects for broadcasting
               const playersWithUpdatedHands = room.players.map(player => ({
                 ...player,
-                hand: room.gameState.playerHands[player.id] || []
+                hand: room.gameState.playerHands[player.userId] || []
               }));
 
               // Broadcast the updated tiles and player hands
@@ -877,7 +931,7 @@ app.prepare().then(async () => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
-      const playerSessionId = socket.data.playerSessionId || socket.id;
+      // Authenticated user - no need for fallback session logic
 
       // Comprehensive validation
       const roomValidation = validateRoomState(room);
@@ -886,14 +940,14 @@ app.prepare().then(async () => {
         return;
       }
 
-      const playerValidation = validatePlayerInRoom(room, playerSessionId);
+      const playerValidation = validatePlayerInRoom(room, userId);
       if (!playerValidation.valid) {
         socket.emit("room-error", playerValidation.error);
         return;
       }
 
       // Validate turn and acquire lock
-      const turnValidation = validateTurn(room, playerSessionId);
+      const turnValidation = validateTurn(room, userId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
         return;
@@ -907,7 +961,7 @@ app.prepare().then(async () => {
       try {
         if (room.gameState.gameStarted) {
         // Find the current player index
-        const currentPlayerIndex = room.players.findIndex(p => p.id === room.gameState.currentPlayer.id);
+        const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId);
         const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length;
 
         // Switch to next player
@@ -920,7 +974,7 @@ app.prepare().then(async () => {
         // Include player hands in the player objects for broadcasting
           const playersWithHands = room.players.map(player => ({
             ...player,
-            hand: room.gameState.playerHands[player.id] || []
+            hand: room.gameState.playerHands[player.userId] || []
           }));
 
           // Broadcast turn change to all players
@@ -957,16 +1011,17 @@ app.prepare().then(async () => {
         const room = rooms.get(roomCode);
         if (room) {
           // Remove player from room by socket ID or session ID
-          const playerName = socket.data.playerName;
+          const playerName = socket.data.userName;
           let playerRemoved = false;
 
           // First try to remove by socket ID
           const initialLength = room.players.length;
-          room.players = room.players.filter(player => player.id !== socket.id);
+          room.players = room.players.filter(player => player.userId !== userId);
 
-          // If no player was removed by socket ID, try to remove by session ID
-          if (room.players.length === initialLength && socket.data.playerSessionId) {
-            room.players = room.players.filter(player => player.id !== socket.data.playerSessionId);
+          // Legacy session handling - this should not be needed with auth
+          // But keeping for backwards compatibility during transition
+          if (room.players.length === initialLength && socket.data.userSessionId) {
+            room.players = room.players.filter(player => player.userId === socket.data.userSessionId);
           }
 
           // If still no player removed, try to remove by player name (for legacy compatibility)
@@ -976,8 +1031,8 @@ app.prepare().then(async () => {
           }
 
           // Clean up player hands for disconnected players
-          if (socket.data.playerSessionId && room.gameState.playerHands[socket.data.playerSessionId]) {
-            delete room.gameState.playerHands[socket.data.playerSessionId];
+          if (socket.data.userId && room.gameState.playerHands[socket.data.userId]) {
+            delete room.gameState.playerHands[socket.data.userId];
           }
 
           // Notify remaining players

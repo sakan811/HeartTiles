@@ -13,7 +13,7 @@ interface Tile {
 }
 
 interface Player {
-  id: string;
+  userId: string;
   name: string;
   isReady: boolean;
   hand?: Tile[];
@@ -42,7 +42,7 @@ export default function GameRoomPage() {
   // Get current player data from server state
   const getCurrentPlayer = () => {
     if (!myPlayerId || !players.length) return null;
-    return players.find(p => p.id === myPlayerId) || null;
+    return players.find(p => p.userId === myPlayerId) || null;
   };
 
   useEffect(() => {
@@ -103,7 +103,8 @@ export default function GameRoomPage() {
         players: gameData.players || [],
         playerHands: gameData.playerHands || {},
         deck: gameData.deck || { emoji: "💌", cards: 10 },
-        turnCount: gameData.turnCount || 0
+        turnCount: gameData.turnCount || 0,
+        playerId: gameData.playerId || null
       };
 
       console.log("Current player:", safeGameData.currentPlayer);
@@ -112,12 +113,14 @@ export default function GameRoomPage() {
       console.log("Tiles:", safeGameData.tiles);
       console.log("Deck:", safeGameData.deck);
       console.log("Turn count:", safeGameData.turnCount);
+      console.log("My player ID from server:", safeGameData.playerId);
 
-      // Update my player ID based on the players list if not already set
-      if (!myPlayerId && safeGameData.players.length > 0) {
-        // For now, we'll need to rely on the server to tell us which player we are
-        // This should be improved by having the server include our player ID in the game-start event
-        console.log("Warning: myPlayerId not set, this may cause issues");
+      // Update my player ID from server response
+      if (safeGameData.playerId) {
+        setMyPlayerId(safeGameData.playerId);
+        console.log("Set my player ID from server:", safeGameData.playerId);
+      } else if (!myPlayerId && safeGameData.players.length > 0) {
+        console.log("Warning: playerId not provided by server, this may cause issues");
       }
 
       setTiles(safeGameData.tiles);
@@ -132,7 +135,7 @@ export default function GameRoomPage() {
       console.log("Players set:", safeGameData.players.length);
       console.log("Player hands keys:", Object.keys(safeGameData.playerHands));
       console.log("Current player set:", safeGameData.currentPlayer?.name);
-      console.log("My player ID:", myPlayerId);
+      console.log("My player ID:", safeGameData.playerId || myPlayerId);
     };
 
     const onTurnChanged = (data: {
@@ -169,16 +172,16 @@ export default function GameRoomPage() {
       setDeck(data.deck);
 
       // Find and update current player based on current state
-      const currentPlayerId = currentPlayer?.id;
+      const currentPlayerId = currentPlayer?.userId;
       if (currentPlayerId) {
-        const updatedCurrentPlayer = data.players.find(p => p.id === currentPlayerId);
+        const updatedCurrentPlayer = data.players.find(p => p.userId === currentPlayerId);
         if (updatedCurrentPlayer) {
           setCurrentPlayer(updatedCurrentPlayer);
         }
       }
 
       const myPlayerData = getCurrentPlayer();
-      console.log("Your hand after draw:", myPlayerData ? data.playerHands[myPlayerData.id] || [] : "Player not found");
+      console.log("Your hand after draw:", myPlayerData ? data.playerHands[myPlayerData.userId] || [] : "Player not found");
     };
 
     const onHeartPlaced = (data: { tiles: Tile[]; players: Player[]; playerHands: Record<string, Tile[]> }) => {
@@ -187,7 +190,7 @@ export default function GameRoomPage() {
       console.log("Updated players:", data.players);
       console.log("Updated player hands:", data.playerHands);
       const myPlayerData = getCurrentPlayer();
-      console.log("Your hand after place:", myPlayerData ? data.playerHands[myPlayerData.id] || [] : "Player not found");
+      console.log("Your hand after place:", myPlayerData ? data.playerHands[myPlayerData.userId] || [] : "Player not found");
       setTiles(data.tiles);
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
@@ -301,14 +304,14 @@ export default function GameRoomPage() {
     if (!myPlayerId || !currentPlayer) return false;
 
     // Check if the current player from server state matches this client's player ID
-    const isCurrentTurn = currentPlayer.id === myPlayerId;
+    const isCurrentTurn = currentPlayer.userId === myPlayerId;
     const myPlayerData = getCurrentPlayer();
 
     console.log(`=== IS CURRENT PLAYER CHECK ===`);
     console.log(`My player ID: ${myPlayerId}`);
     console.log(`My player data:`, myPlayerData);
     console.log(`Current player from server:`, currentPlayer);
-    console.log(`IDs match: ${currentPlayer.id} === ${myPlayerId} = ${isCurrentTurn}`);
+    console.log(`IDs match: ${currentPlayer.userId} === ${myPlayerId} = ${isCurrentTurn}`);
 
     return isCurrentTurn;
   };
@@ -361,13 +364,13 @@ export default function GameRoomPage() {
               <div className="flex justify-center">
                 {(() => {
                   const myPlayerData = getCurrentPlayer();
-                  const opponents = players.filter(p => p.id !== myPlayerId);
+                  const opponents = players.filter(p => p.userId !== myPlayerId);
                   console.log("=== OPPONENT RENDERING ===");
                   console.log("Current players array:", players);
                   console.log("My player data:", myPlayerData);
                   console.log("My player ID:", myPlayerId);
                   console.log("Each player ID comparison:");
-                  players.forEach(p => console.log(`Player ${p.name} (${p.id}) == my ID ${myPlayerId}: ${p.id === myPlayerId}`));
+                  players.forEach(p => console.log(`Player ${p.name} (${p.userId}) == my ID ${myPlayerId}: ${p.userId === myPlayerId}`));
                   console.log("Filtered opponents:", opponents);
                   console.log("Player hands object:", playerHands);
 
@@ -378,18 +381,18 @@ export default function GameRoomPage() {
 
                   return opponents.map(opponent => {
                     console.log("Rendering opponent:", opponent);
-                    console.log("Opponent hand:", playerHands[opponent.id]);
+                    console.log("Opponent hand:", playerHands[opponent.userId]);
                     return (
-                    <div key={opponent.id} className="bg-white/20 rounded-lg p-4 flex flex-col items-center mx-2">
+                    <div key={opponent.userId} className="bg-white/20 rounded-lg p-4 flex flex-col items-center mx-2">
                       <div className="text-4xl mb-2">👤</div>
                       <div className="text-white text-sm font-semibold">
                         {opponent.name}
                       </div>
                       <div className="text-gray-300 text-xs mt-1">
-                        Cards: {playerHands[opponent.id]?.length || 0}
+                        Cards: {playerHands[opponent.userId]?.length || 0}
                       </div>
                       <div className="flex gap-1 mt-2">
-                        {playerHands[opponent.id]?.map((_heart: Tile, index: number) => (
+                        {playerHands[opponent.userId]?.map((_heart: Tile, index: number) => (
                           <div key={index} className="text-2xl">
                             🂠
                           </div>
@@ -448,15 +451,15 @@ export default function GameRoomPage() {
                 console.log("=== PLAYER HANDS RENDERING ===");
                 console.log("My player data:", myPlayerData);
                 console.log("Player hands object:", playerHands);
-                console.log("Your hand:", myPlayerData ? playerHands[myPlayerData.id] : "Not found");
-                console.log("Your hand length:", myPlayerData ? (playerHands[myPlayerData.id] || []).length : 0);
+                console.log("Your hand:", myPlayerData ? playerHands[myPlayerData.userId] : "Not found");
+                console.log("Your hand length:", myPlayerData ? (playerHands[myPlayerData.userId] || []).length : 0);
                 return null;
               })()}
             </h3>
             <div className="flex flex-wrap gap-2 justify-center">
               {(() => {
                 const myPlayerData = getCurrentPlayer();
-                const playerHand = myPlayerData ? (playerHands[myPlayerData.id] || []) : [];
+                const playerHand = myPlayerData ? (playerHands[myPlayerData.userId] || []) : [];
 
                 console.log("=== PLAYER HAND RENDER LOGIC ===");
                 console.log("My player data:", myPlayerData);

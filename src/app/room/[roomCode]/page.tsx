@@ -6,7 +6,7 @@ import { useSocket } from "@/socket";
 import { useSession } from "next-auth/react";
 
 interface Player {
-  id: string;
+  userId: string;
   name: string;
   isReady?: boolean;
 }
@@ -136,7 +136,7 @@ export default function RoomPage() {
   };
 
   const getCurrentPlayer = () => {
-    return players.find(player => player.id === currentPlayerId);
+    return players.find(player => player.userId === currentPlayerId);
   };
 
   return (
@@ -187,16 +187,16 @@ export default function RoomPage() {
           <div>
             <h2 className="text-2xl font-semibold text-white mb-4">Players in Room</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {players.map((player) => (
+              {players.map((player, index) => (
                 <div
-                  key={player.id}
+                  key={player.userId || `player-${index}`}
                   className={`bg-white/10 rounded-lg p-4 text-center ${player.isReady ? 'ring-2 ring-green-500' : ''}`}
                 >
                   <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">
                     {player.name.charAt(0).toUpperCase()}
                   </div>
                   <p className="text-white font-medium">{player.name}</p>
-                  {player.id === currentPlayerId && (
+                  {player.userId === currentPlayerId && (
                     <span className="text-blue-400 text-xs">You</span>
                   )}
                   {player.isReady && (

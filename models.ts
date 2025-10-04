@@ -44,28 +44,38 @@ userSchema.methods.comparePassword = async function(candidatePassword: string) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Player Session Schema
+// Player Session Schema - Updated to use authenticated user ID
 const playerSessionSchema = new mongoose.Schema({
-  normalizedName: {
+  userId: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true
+  },
+  userSessionId: {
     type: String,
     required: true,
     unique: true
-  },
-  id: {
-    type: String,
-    required: true
   },
   name: {
     type: String,
     required: true
   },
-  originalSocketId: {
+  email: {
     type: String,
-    default: null
+    required: true
   },
   currentSocketId: {
     type: String,
     default: null
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true
@@ -81,17 +91,26 @@ const roomSchema = new mongoose.Schema({
     match: /^[A-Z0-9]{6}$/
   },
   players: [{
-    id: {
+    userId: {
+      type: String,
+      required: true,
+      index: true
+    },
+    name: {
       type: String,
       required: true
     },
-    name: {
+    email: {
       type: String,
       required: true
     },
     isReady: {
       type: Boolean,
       default: false
+    },
+    joinedAt: {
+      type: Date,
+      default: Date.now
     }
   }],
   maxPlayers: {
@@ -119,8 +138,9 @@ const roomSchema = new mongoose.Schema({
       default: false
     },
     currentPlayer: {
-      id: String,
+      userId: String,
       name: String,
+      email: String,
       isReady: Boolean
     },
     deck: {
