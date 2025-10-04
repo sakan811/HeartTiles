@@ -11,11 +11,6 @@ interface Player {
   isReady?: boolean;
 }
 
-interface Tile {
-  id: number;
-  color: string;
-  emoji: string;
-}
 
 export default function RoomPage() {
   const { data: session, status } = useSession();
@@ -81,7 +76,10 @@ export default function RoomPage() {
       setPlayers(data.players);
     };
 
-    const onGameStart = (data: any) => {
+    const onGameStart = (data: {
+    success?: boolean;
+    message?: string;
+  }) => {
       // Navigate to game page - server will provide all necessary state
       router.push(`/room/${roomCode}/game`);
     };
@@ -116,7 +114,7 @@ export default function RoomPage() {
       socket?.emit("join-room", { roomCode, playerName });
       setHasJoined(true); // Prevent duplicate joins
     }
-  }, [isConnected, socketId, roomCode, hasJoined, socket, session]);
+  }, [isConnected, socketId, roomCode, hasJoined, socket, session, getPlayerName]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);

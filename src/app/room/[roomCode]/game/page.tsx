@@ -19,6 +19,8 @@ interface Tile {
     score: number;
   };
   type?: 'heart' | 'magic';
+  name?: string;
+  description?: string;
 }
 
 interface Player {
@@ -85,44 +87,43 @@ export default function GameRoomPage() {
     if (!socket || !socketId) return;
 
     const onRoomJoined = (data: { players: Player[], playerId: string }) => {
-      console.log("Game page: Room joined event received:", data);
+      console.log(`Room joined: ${data.players?.length || 0} players`);
       setPlayers(data.players || []);
       setMyPlayerId(data.playerId);
     };
 
     const onPlayerJoined = (data: { players: Player[] }) => {
-      console.log("Game page: Player joined event received:", data);
+      console.log("Player joined");
       setPlayers(data.players || []);
     };
 
     const onPlayerLeft = (data: { players: Player[] }) => {
-      console.log("Game page: Player left event received:", data);
+      console.log("Player left");
       setPlayers(data.players || []);
     };
 
     const onTilesUpdated = (data: { tiles: Tile[] }) => {
-      console.log("=== TILES UPDATED ===");
-      console.log("New tiles data:", data.tiles);
-      console.log("Number of tiles:", data.tiles.length);
+      console.log(`Tiles updated: ${data.tiles.length} tiles`);
       setTiles(data.tiles);
     };
 
-  const onGameStart = (data: any) => {
-      // Handle both cases: data as object or data wrapped in array
+  const onGameStart = (data: {
+      tiles?: Tile[];
+      currentPlayer?: Player | null;
+      players?: Player[];
+      playerHands?: Record<string, Tile[]>;
+      deck?: Deck;
+      magicDeck?: MagicDeck;
+      turnCount?: number;
+      playerId?: string;
+    }) => {
       const gameData = Array.isArray(data) ? data[0] : data;
 
-      console.log("=== GAME START DATA RECEIVED ===");
-      console.log("Raw data:", data);
-      console.log("Processed gameData:", gameData);
-      console.log("Socket ID:", socketId);
-
-      // Check if gameData exists and has expected properties
       if (!gameData) {
-        console.error("Invalid game data received:", gameData);
+        console.error("Invalid game data received");
         return;
       }
 
-      // Ensure all required properties have fallback values
       const safeGameData = {
         tiles: gameData.tiles || [],
         currentPlayer: gameData.currentPlayer || null,
@@ -134,21 +135,12 @@ export default function GameRoomPage() {
         playerId: gameData.playerId || null
       };
 
-      console.log("Current player:", safeGameData.currentPlayer);
-      console.log("All players:", safeGameData.players);
-      console.log("Player hands:", safeGameData.playerHands);
-      console.log("Tiles:", safeGameData.tiles);
-      console.log("Deck:", safeGameData.deck);
-      console.log("Magic Deck:", safeGameData.magicDeck);
-      console.log("Turn count:", safeGameData.turnCount);
-      console.log("My player ID from server:", safeGameData.playerId);
+      console.log(`Game started: ${safeGameData.players.length} players, current: ${safeGameData.currentPlayer?.name}`);
 
-      // Update my player ID from server response
       if (safeGameData.playerId) {
         setMyPlayerId(safeGameData.playerId);
-        console.log("Set my player ID from server:", safeGameData.playerId);
       } else if (!myPlayerId && safeGameData.players.length > 0) {
-        console.log("Warning: playerId not provided by server, this may cause issues");
+        console.warn("PlayerId not provided by server");
       }
 
       setTiles(safeGameData.tiles);
@@ -158,13 +150,6 @@ export default function GameRoomPage() {
       setDeck(safeGameData.deck);
       setMagicDeck(safeGameData.magicDeck);
       setTurnCount(safeGameData.turnCount);
-
-      console.log("=== GAME START STATE SET ===");
-      console.log("Tiles set:", safeGameData.tiles.length);
-      console.log("Players set:", safeGameData.players.length);
-      console.log("Player hands keys:", Object.keys(safeGameData.playerHands));
-      console.log("Current player set:", safeGameData.currentPlayer?.name);
-      console.log("My player ID:", safeGameData.playerId || myPlayerId);
     };
 
     const onTurnChanged = (data: {
@@ -174,14 +159,8 @@ export default function GameRoomPage() {
       playerHands?: Record<string, Tile[]>;
       deck?: Deck
     }) => {
-      console.log("=== TURN CHANGED ===");
-      console.log("New current player:", data.currentPlayer);
-      console.log("New turn count:", data.turnCount);
-      console.log("Received players:", data.players);
-      console.log("Received player hands:", data.playerHands);
-      console.log("Received deck:", data.deck);
+      console.log(`Turn changed: ${data.currentPlayer.name} (turn ${data.turnCount})`);
 
-      // Always update all states - they should always be provided by server
       setCurrentPlayer(data.currentPlayer);
       setTurnCount(data.turnCount);
       if (data.players) setPlayers(data.players);
@@ -190,17 +169,12 @@ export default function GameRoomPage() {
     };
 
     const onHeartDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]>; deck: Deck }) => {
-      console.log("=== HEART DRAWN ===");
-      console.log("Updated players:", data.players);
-      console.log("Updated player hands:", data.playerHands);
-      console.log("Updated deck:", data.deck);
+      console.log("Heart drawn");
 
-      // Always update all states
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
       setDeck(data.deck);
 
-      // Find and update current player based on current state
       const currentPlayerId = currentPlayer?.userId;
       if (currentPlayerId) {
         const updatedCurrentPlayer = data.players.find(p => p.userId === currentPlayerId);
@@ -208,18 +182,11 @@ export default function GameRoomPage() {
           setCurrentPlayer(updatedCurrentPlayer);
         }
       }
-
-      const myPlayerData = getCurrentPlayer();
-      console.log("Your hand after draw:", myPlayerData ? data.playerHands[myPlayerData.userId] || [] : "Player not found");
     };
 
     const onHeartPlaced = (data: { tiles: Tile[]; players: Player[]; playerHands: Record<string, Tile[]> }) => {
-      console.log("=== HEART PLACED ===");
-      console.log("Updated tiles:", data.tiles);
-      console.log("Updated players:", data.players);
-      console.log("Updated player hands:", data.playerHands);
-      const myPlayerData = getCurrentPlayer();
-      console.log("Your hand after place:", myPlayerData ? data.playerHands[myPlayerData.userId] || [] : "Player not found");
+      console.log("Heart placed");
+
       setTiles(data.tiles);
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
@@ -227,15 +194,11 @@ export default function GameRoomPage() {
     };
 
     const onMagicCardDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]> }) => {
-      console.log("=== MAGIC CARD DRAWN ===");
-      console.log("Updated players:", data.players);
-      console.log("Updated player hands:", data.playerHands);
+      console.log("Magic card drawn");
 
-      // Always update all states
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
 
-      // Find and update current player based on current state
       const currentPlayerId = currentPlayer?.userId;
       if (currentPlayerId) {
         const updatedCurrentPlayer = data.players.find(p => p.userId === currentPlayerId);
@@ -243,25 +206,23 @@ export default function GameRoomPage() {
           setCurrentPlayer(updatedCurrentPlayer);
         }
       }
-
-      const myPlayerData = getCurrentPlayer();
-      console.log("Your hand after magic card draw:", myPlayerData ? data.playerHands[myPlayerData.userId] || [] : "Player not found");
     };
 
     const onMagicCardUsed = (data: {
       card: MagicCard;
-      actionResult: any;
+      actionResult: {
+        type: string;
+        description: string;
+        affectedTiles?: number[];
+        newValues?: Record<number, number>;
+      };
       tiles: Tile[];
       players: Player[];
       playerHands: Record<string, Tile[]>;
       usedBy: string
     }) => {
-      console.log("=== MAGIC CARD USED ===");
-      console.log("Card used:", data.card);
-      console.log("Action result:", data.actionResult);
-      console.log("Updated tiles:", data.tiles);
-      console.log("Updated players:", data.players);
-      console.log("Updated player hands:", data.playerHands);
+      console.log(`Magic card used: ${data.card.name} (${data.card.type})`);
+
       setTiles(data.tiles);
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
@@ -290,36 +251,22 @@ export default function GameRoomPage() {
     socket.on("magic-card-used", onMagicCardUsed);
     socket.on("room-error", onRoomError);
 
-    console.log("Game room socket listeners registered");
-    console.log("Current socket ID:", socketId);
-
     // Only join if we haven't already joined this room with this socket
     if (!socket.data?.currentRoom || socket.data.currentRoom !== roomCodeParam) {
-      // Generate a simple player name - server will assign final identity
       const tempPlayerName = `Player_${socketId?.slice(-6) || 'unknown'}`;
-      console.log("Game page: Joining room:", roomCodeParam, "as:", tempPlayerName, "with socket ID:", socketId);
+      console.log(`Joining room ${roomCodeParam} as ${tempPlayerName}`);
 
-      // Clear any existing room data to ensure clean join
       if (socket.data?.currentRoom && socket.data.currentRoom !== roomCodeParam) {
-        console.log("Game page: Leaving previous room:", socket.data.currentRoom);
         socket.emit("leave-room", { roomCode: socket.data.currentRoom });
       }
 
       socket.emit("join-room", { roomCode: roomCodeParam, playerName: tempPlayerName });
 
-      // Initialize socket.data if it doesn't exist
       if (!socket.data) {
         socket.data = {};
       }
       socket.data.currentRoom = roomCodeParam;
-    } else {
-      console.log("Game page: Already joined room:", roomCodeParam, "skipping join");
     }
-
-    // Listen to all events to see what's happening
-    socket.onAny((eventName, ...args) => {
-      console.log(`Game page socket event received: ${eventName}`, args);
-    });
 
     return () => {
       socket?.off("room-joined", onRoomJoined);
@@ -334,21 +281,9 @@ export default function GameRoomPage() {
       socket?.off("magic-card-used", onMagicCardUsed);
       socket?.off("room-error", onRoomError);
     };
-  }, [params.roomCode, socket, socketId, myPlayerId, session, status, router]);
+  }, [params.roomCode, socket, socketId, myPlayerId, currentPlayer?.userId, session, status, router]);
 
-  // Add logging for state changes
-  useEffect(() => {
-    console.log("=== STATE UPDATE ===");
-    console.log("Tiles:", tiles);
-    console.log("Players:", players);
-    console.log("Player hands:", playerHands);
-    console.log("Current player:", currentPlayer);
-    console.log("Socket ID:", socketId);
-    console.log("Deck:", deck);
-    console.log("Magic Deck:", magicDeck);
-    console.log("Turn count:", turnCount);
-  }, [tiles, players, playerHands, currentPlayer, socketId, deck, magicDeck, turnCount]);
-
+  
 
   const drawHeart = () => {
     if (socket && roomCode && isCurrentPlayer()) {
@@ -390,65 +325,33 @@ export default function GameRoomPage() {
 
   const isCurrentPlayer = () => {
     if (!myPlayerId || !currentPlayer) return false;
-
-    // Check if the current player from server state matches this client's player ID
-    const isCurrentTurn = currentPlayer.userId === myPlayerId;
-    const myPlayerData = getCurrentPlayer();
-
-    console.log(`=== IS CURRENT PLAYER CHECK ===`);
-    console.log(`My player ID: ${myPlayerId}`);
-    console.log(`My player data:`, myPlayerData);
-    console.log(`Current player from server:`, currentPlayer);
-    console.log(`IDs match: ${currentPlayer.userId} === ${myPlayerId} = ${isCurrentTurn}`);
-
-    return isCurrentTurn;
+    return currentPlayer.userId === myPlayerId;
   };
 
-  const selectMagicCard = (card: MagicCard) => {
-    if (isCurrentPlayer()) {
-      setSelectedMagicCard(card);
-      setSelectedHeart(null); // Clear heart selection when selecting magic card
-    }
-  };
-
+  
   const selectCardFromHand = (card: Tile) => {
     if (!isCurrentPlayer()) return;
 
-    console.log(`=== CARD SELECTED ===`);
-    console.log(`Card selected:`, card);
-
-    // Check if card has magic card properties (type field that's not 'heart' or color field is missing)
-    const isMagicCard = (card as any).type === 'recycle' || (card as any).type === 'wind';
+    const isMagicCard = card.type === 'recycle' || card.type === 'wind';
 
     if (isMagicCard) {
-      // Convert Tile to MagicCard interface for compatibility
       const magicCard: MagicCard = {
         id: card.id,
-        type: (card as any).type === 'wind' ? 'wind' : 'recycle',
+        type: card.type === 'wind' ? 'wind' : 'recycle',
         emoji: card.emoji,
-        name: (card as any).name || 'Magic Card',
-        description: (card as any).description || 'A magic card'
+        name: card.name || 'Magic Card',
+        description: card.description || 'A magic card'
       };
-      console.log(`Magic card selected:`, magicCard);
       setSelectedMagicCard(magicCard);
       setSelectedHeart(null);
     } else {
-      // Regular heart card
-      console.log(`Heart card selected:`, card);
       setSelectedHeart(card);
       setSelectedMagicCard(null);
     }
   };
 
-  const useMagicCard = (tileId: number | string) => {
+  const executeMagicCard = (tileId: number | string) => {
     if (socket && selectedMagicCard && roomCode && isCurrentPlayer()) {
-      console.log(`=== EMITTING MAGIC CARD USAGE ===`);
-      console.log(`Emitting use-magic-card with:`, {
-        roomCode,
-        cardId: selectedMagicCard.id,
-        targetTileId: tileId,
-        cardType: selectedMagicCard.type
-      });
       socket.emit("use-magic-card", {
         roomCode,
         cardId: selectedMagicCard.id,
@@ -460,18 +363,9 @@ export default function GameRoomPage() {
   const handleTileClick = (tile: Tile) => {
     if (!isCurrentPlayer()) return;
 
-    console.log(`=== TILE CLICK ===`);
-    console.log(`Tile clicked:`, tile);
-    console.log(`Selected magic card:`, selectedMagicCard);
-    console.log(`Selected heart:`, selectedHeart);
-
     if (selectedMagicCard) {
-      // Use magic card on tile
-      console.log(`Using magic card ${selectedMagicCard.type} on tile ${tile.id}`);
-      useMagicCard(Number(tile.id));
+      executeMagicCard(Number(tile.id));
     } else if (selectedHeart) {
-      // Place heart on tile (existing functionality)
-      console.log(`Placing heart on tile ${tile.id}`);
       placeHeart(tile.id);
     }
   };
@@ -523,39 +417,18 @@ export default function GameRoomPage() {
           </div>
 
           {/* Opponent Display (Top) */}
-          {(() => {
-            console.log("=== OPPONENT DISPLAY RENDER CHECK ===");
-            const myPlayerData = getCurrentPlayer();
-            console.log("My player data:", myPlayerData);
-            console.log("Players array:", players);
-            console.log("Players length:", players.length);
-            console.log("Should show opponent section:", players.length > 0);
-            return players.length > 0;
-          })() && (
+          {players.length > 0 && (
             <div className="mb-6">
               <div className="text-white text-sm mb-2">Opponent Area</div>
               <div className="flex justify-center">
                 {(() => {
-                  const myPlayerData = getCurrentPlayer();
                   const opponents = players.filter(p => p.userId !== myPlayerId);
-                  console.log("=== OPPONENT RENDERING ===");
-                  console.log("Current players array:", players);
-                  console.log("My player data:", myPlayerData);
-                  console.log("My player ID:", myPlayerId);
-                  console.log("Each player ID comparison:");
-                  players.forEach(p => console.log(`Player ${p.name} (${p.userId}) == my ID ${myPlayerId}: ${p.userId === myPlayerId}`));
-                  console.log("Filtered opponents:", opponents);
-                  console.log("Player hands object:", playerHands);
 
                   if (opponents.length === 0) {
-                    console.log("No opponents found - all players match current player ID");
                     return <div className="text-gray-400">Waiting for opponent...</div>;
                   }
 
-                  return opponents.map(opponent => {
-                    console.log("Rendering opponent:", opponent);
-                    console.log("Opponent hand:", playerHands[opponent.userId]);
-                    return (
+                  return opponents.map(opponent => (
                     <div key={opponent.userId} className="bg-white/20 rounded-lg p-4 flex flex-col items-center mx-2">
                       <div className="text-4xl mb-2">👤</div>
                       <div className="text-white text-sm font-semibold">
@@ -575,7 +448,7 @@ export default function GameRoomPage() {
                         ))}
                       </div>
                     </div>
-                  )});
+                  ));
                 })()}
               </div>
             </div>
@@ -585,16 +458,9 @@ export default function GameRoomPage() {
           <div className="mb-6">
             <div className="text-white text-sm mb-2">
               Tiles: {tiles.length}
-              {(() => {
-                console.log("=== TILES RENDERING ===");
-                console.log("Tiles array:", tiles);
-                console.log("Tiles length:", tiles.length);
-                return null;
-              })()}
             </div>
             <div className="grid grid-cols-4 gap-4 max-w-md mx-auto">
               {tiles.map((tile) => {
-                console.log("Rendering tile:", tile);
                 const hasHeart = tile.placedHeart;
                 const isOccupiedByMe = hasHeart && tile.placedHeart!.placedBy === myPlayerId;
                 const isOccupiedByOpponent = hasHeart && tile.placedHeart!.placedBy !== myPlayerId;
@@ -676,27 +542,9 @@ export default function GameRoomPage() {
             <div className="flex flex-wrap gap-2 justify-center">
               {(() => {
                 const myPlayerData = getCurrentPlayer();
-                console.log("=== PLAYER HANDS RENDERING ===");
-                console.log("My player data:", myPlayerData);
-                console.log("Player hands object:", playerHands);
-                console.log("Your hand:", myPlayerData ? playerHands[myPlayerData.userId] : "Not found");
-                console.log("Your hand length:", myPlayerData ? (playerHands[myPlayerData.userId] || []).length : 0);
-                return null;
-              })()}
-            </div>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {(() => {
-                const myPlayerData = getCurrentPlayer();
                 const playerHand = myPlayerData ? (playerHands[myPlayerData.userId] || []) : [];
 
-                console.log("=== PLAYER HAND RENDER LOGIC ===");
-                console.log("My player data:", myPlayerData);
-                console.log("Using player ID for hand lookup:", myPlayerId);
-                console.log("Available player hands keys:", Object.keys(playerHands));
-                console.log("Your hand:", playerHand);
-
                 return playerHand.map((card) => {
-                  console.log("Rendering your card:", card);
                   const isHeart = card.type !== 'magic';
                   const isSelected = isHeart ? selectedHeart?.id === card.id : selectedMagicCard?.id === card.id;
 
@@ -714,7 +562,7 @@ export default function GameRoomPage() {
                     title={
                       isHeart
                         ? `${card.color} heart (value: ${card.value || 1})`
-                        : `${(card as any).name}: ${(card as any).description}`
+                        : `${card.name}: ${card.description}`
                     }
                   >
                     <div className="relative">

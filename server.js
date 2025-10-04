@@ -8,20 +8,17 @@ import { getToken } from 'next-auth/jwt';
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
 const port = 3000;
-// when using middleware `hostname` and `port` must be provided below
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
-// MongoDB configuration
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/no-kitty-cards?authSource=admin';
 
-// Database functions
 async function connectToDatabase() {
   try {
     await mongoose.connect(MONGODB_URI);
     console.log('Connected to MongoDB');
   } catch (err) {
-    console.error('Error connecting to MongoDB:', err);
+    console.error('MongoDB connection failed:', err);
     process.exit(1);
   }
 }
@@ -30,12 +27,10 @@ async function loadRooms() {
   try {
     const rooms = await Room.find({});
     const roomsMap = new Map();
-    rooms.forEach(room => {
-      roomsMap.set(room.code, room.toObject());
-    });
+    rooms.forEach(room => roomsMap.set(room.code, room.toObject()));
     return roomsMap;
   } catch (err) {
-    console.error('Error loading rooms:', err);
+    console.error('Failed to load rooms:', err);
     return new Map();
   }
 }
@@ -48,7 +43,7 @@ async function saveRoom(roomData) {
       { upsert: true, new: true }
     );
   } catch (err) {
-    console.error('Error saving room:', err);
+    console.error('Failed to save room:', err);
   }
 }
 
@@ -56,7 +51,7 @@ async function deleteRoom(roomCode) {
   try {
     await Room.deleteOne({ code: roomCode });
   } catch (err) {
-    console.error('Error deleting room:', err);
+    console.error('Failed to delete room:', err);
   }
 }
 
@@ -70,7 +65,7 @@ async function loadPlayerSessions() {
     });
     return sessionsMap;
   } catch (err) {
-    console.error('Error loading sessions:', err);
+    console.error('Failed to load sessions:', err);
     return new Map();
   }
 }
@@ -83,16 +78,14 @@ async function savePlayerSession(sessionData) {
       { upsert: true, new: true }
     );
   } catch (err) {
-    console.error('Error saving player session:', err);
+    console.error('Failed to save player session:', err);
   }
 }
 
 app.prepare().then(async () => {
-  // Connect to MongoDB first
   await connectToDatabase();
 
   const httpServer = createServer(handler);
-
   const io = new Server(httpServer, {
     cors: {
       origin: process.env.NODE_ENV === "production" ? false : ["http://localhost:3000"],
@@ -100,58 +93,42 @@ app.prepare().then(async () => {
     },
   });
 
-  // Load persisted data or initialize empty maps
   const rooms = await loadRooms();
-  const turnLocks = new Map(); // Track turn validation locks (not persisted)
-  const connectionPool = new Map(); // Track connections per IP (not persisted)
+  const turnLocks = new Map();
+  const connectionPool = new Map();
   const playerSessions = await loadPlayerSessions();
-  const MAX_CONNECTIONS_PER_IP = 5; // Limit connections per IP
+  const MAX_CONNECTIONS_PER_IP = 5;
 
-  console.log(`Loaded ${rooms.size} rooms and ${playerSessions.size} player sessions from MongoDB`);
+  console.log(`Loaded ${rooms.size} rooms, ${playerSessions.size} sessions`);
 
-  // Turn validation helper functions
   function acquireTurnLock(roomCode, userId) {
     const lockKey = `${roomCode}_${userId}`;
-    if (turnLocks.has(lockKey)) {
-      return false; // Lock already acquired
-    }
+    if (turnLocks.has(lockKey)) return false;
     turnLocks.set(lockKey, Date.now());
     return true;
   }
 
   function releaseTurnLock(roomCode, userId) {
-    const lockKey = `${roomCode}_${userId}`;
-    turnLocks.delete(lockKey);
+    turnLocks.delete(`${roomCode}_${userId}`);
   }
 
   function validateTurn(room, userId) {
-    if (!room || !room.gameState.gameStarted) {
-      return { valid: false, error: "Game not started" };
-    }
-
+    if (!room?.gameState.gameStarted) return { valid: false, error: "Game not started" };
     if (!room.gameState.currentPlayer || room.gameState.currentPlayer.userId !== userId) {
       return { valid: false, error: "Not your turn" };
     }
-
     return { valid: true };
   }
 
-  // Input validation helpers
   function validateRoomCode(roomCode) {
-    if (!roomCode || typeof roomCode !== 'string') {
-      return false;
-    }
-    return /^[A-Z0-9]{6}$/i.test(roomCode);
+    return roomCode && typeof roomCode === 'string' && /^[A-Z0-9]{6}$/i.test(roomCode);
   }
 
   function validatePlayerName(playerName) {
-    if (!playerName || typeof playerName !== 'string') {
-      return false;
-    }
-    return playerName.trim().length > 0 && playerName.length <= 20;
+    return playerName && typeof playerName === 'string' &&
+           playerName.trim().length > 0 && playerName.length <= 20;
   }
 
-  // Authentication middleware for Socket.IO
   async function authenticateSocket(socket, next) {
     try {
       const token = await getToken({
@@ -159,20 +136,15 @@ app.prepare().then(async () => {
         secret: process.env.NEXTAUTH_SECRET
       });
 
-      if (!token || !token.id) {
-        return next(new Error('Authentication required'));
-      }
+      if (!token?.id) return next(new Error('Authentication required'));
 
-      // Find the user in database to ensure they exist
       const user = await User.findById(token.id);
-      if (!user) {
-        return next(new Error('User not found'));
-      }
+      if (!user) return next(new Error('User not found'));
 
       socket.data.userId = token.id;
       socket.data.userEmail = user.email;
       socket.data.userName = user.name;
-      socket.data.userSessionId = token.jti; // JWT ID for session tracking
+      socket.data.userSessionId = token.jti;
 
       next();
     } catch (error) {
@@ -181,28 +153,18 @@ app.prepare().then(async () => {
     }
   }
 
-  // Helper function to get or create player session for authenticated user
   async function getPlayerSession(userId, userSessionId, userName, userEmail) {
     let session = playerSessions.get(userId);
 
     if (!session) {
-      // Create new session for authenticated user
       const newSession = {
-        userId,
-        userSessionId,
-        name: userName,
-        email: userEmail,
-        currentSocketId: null,
-        lastSeen: new Date(),
-        isActive: true
+        userId, userSessionId, name: userName, email: userEmail,
+        currentSocketId: null, lastSeen: new Date(), isActive: true
       };
-
       playerSessions.set(userId, newSession);
       await savePlayerSession(newSession);
       session = newSession;
-      console.log(`Created new player session for user ${userName} (${userId})`);
     } else {
-      // Update existing session
       session.lastSeen = new Date();
       session.isActive = true;
       await savePlayerSession(session);
@@ -211,7 +173,6 @@ app.prepare().then(async () => {
     return session;
   }
 
-  // Helper function to update player's socket connection
   async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail) {
     const session = await getPlayerSession(userId, userSessionId, userName, userEmail);
     session.currentSocketId = socketId;
@@ -221,173 +182,112 @@ app.prepare().then(async () => {
     return session;
   }
 
-  // Helper function to find player by user ID in room
   function findPlayerByUserId(room, userId) {
     return room.players.find(p => p.userId === userId);
   }
 
   function sanitizeInput(input) {
-    if (typeof input !== 'string') return input;
-    return input.trim().replace(/[<>]/g, '');
+    return typeof input === 'string' ? input.trim().replace(/[<>]/g, '') : input;
   }
 
-  // Game state validation helpers
   function validateRoomState(room) {
-    if (!room) {
-      return { valid: false, error: "Room not found" };
-    }
-
-    if (!room.players || !Array.isArray(room.players)) {
-      return { valid: false, error: "Invalid players state" };
-    }
-
-    if (!room.gameState) {
-      return { valid: false, error: "Invalid game state" };
-    }
-
+    if (!room) return { valid: false, error: "Room not found" };
+    if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
+    if (!room.gameState) return { valid: false, error: "Invalid game state" };
     if (room.gameState.gameStarted && !room.gameState.currentPlayer) {
       return { valid: false, error: "Game started but no current player" };
     }
-
     return { valid: true };
   }
 
   function validatePlayerInRoom(room, userId) {
-    if (!room.players.find(p => p.userId === userId)) {
-      return { valid: false, error: "Player not in room" };
-    }
-    return { valid: true };
+    const playerInRoom = room.players.find(p => p.userId === userId);
+    return playerInRoom ? { valid: true } : { valid: false, error: "Player not in room" };
   }
 
   function validateHeartPlacement(room, userId, heartId, tileId) {
     const playerHand = room.gameState.playerHands[userId] || [];
     const heartExists = playerHand.some(heart => heart.id === heartId);
+    if (!heartExists) return { valid: false, error: "Heart not in player's hand" };
 
-    if (!heartExists) {
-      return { valid: false, error: "Heart not in player's hand" };
-    }
+    const tile = room.gameState.tiles.find(tile => tile.id == tileId);
+    if (!tile) return { valid: false, error: "Tile not found" };
 
-    const tileExists = room.gameState.tiles.some(tile => tile.id == tileId); // Use == to handle both number and string
-    if (!tileExists) {
-      return { valid: false, error: "Tile not found" };
-    }
+    // Check if tile is already occupied by a heart
+    if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" };
 
     return { valid: true };
   }
 
-  // Helper function to find player by name in room
   function findPlayerByName(room, playerName) {
     return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
   }
 
-  // Helper function to migrate player data when user rejoins with different session
   async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail) {
-    console.log(`Migrating player data from ${oldUserId} to ${newUserId} for ${userName}`);
-
-    // Update player reference in room
     const playerIndex = room.players.findIndex(p => p.userId === oldUserId);
     if (playerIndex !== -1) {
-      room.players[playerIndex].userId = newUserId;
-      room.players[playerIndex].name = userName;
-      room.players[playerIndex].email = userEmail;
-      // Initialize score if it doesn't exist
-      if (room.players[playerIndex].score === undefined) {
-        room.players[playerIndex].score = 0;
-      }
-      console.log(`Updated existing player at index ${playerIndex}`);
+      room.players[playerIndex] = {
+        ...room.players[playerIndex],
+        userId: newUserId, name: userName, email: userEmail,
+        score: room.players[playerIndex].score || 0
+      };
     } else {
-      // Add new player if not found
       room.players.push({
-        userId: newUserId,
-        name: userName,
-        email: userEmail,
-        isReady: false,
-        score: 0,
-        joinedAt: new Date()
+        userId: newUserId, name: userName, email: userEmail,
+        isReady: false, score: 0, joinedAt: new Date()
       });
-      console.log(`Added new player as existing player not found`);
     }
 
-    // Migrate player hands if they exist
     if (room.gameState.playerHands[oldUserId]) {
       room.gameState.playerHands[newUserId] = room.gameState.playerHands[oldUserId];
       delete room.gameState.playerHands[oldUserId];
-      console.log(`Migrated player hands from ${oldUserId} to ${newUserId}`);
     }
 
-    // Update current player reference if needed
-    if (room.gameState.currentPlayer && room.gameState.currentPlayer.userId === oldUserId) {
+    if (room.gameState.currentPlayer?.userId === oldUserId) {
       room.gameState.currentPlayer = {
-        userId: newUserId,
-        name: userName,
-        email: userEmail,
+        userId: newUserId, name: userName, email: userEmail,
         isReady: room.players.find(p => p.userId === newUserId)?.isReady || false
       };
-      console.log(`Updated current player reference to ${newUserId}`);
     }
 
-    // Release any old turn locks
-    const locksToDelete = [];
     for (const lockKey of turnLocks.keys()) {
-      if (lockKey.includes(oldUserId)) {
-        locksToDelete.push(lockKey);
-      }
-    }
-    locksToDelete.forEach(lockKey => turnLocks.delete(lockKey));
-
-    if (locksToDelete.length > 0) {
-      console.log(`Released ${locksToDelete.length} turn locks for old user ID ${oldUserId}`);
+      if (lockKey.includes(oldUserId)) turnLocks.delete(lockKey);
     }
   }
 
   function validateDeckState(room) {
-    if (!room.gameState.deck) {
-      return { valid: false, error: "Invalid deck state" };
-    }
-
+    if (!room.gameState.deck) return { valid: false, error: "Invalid deck state" };
     if (typeof room.gameState.deck.cards !== 'number' || room.gameState.deck.cards < 0) {
       return { valid: false, error: "Invalid deck count" };
     }
-
     return { valid: true };
   }
 
-  // Connection management functions
   function getClientIP(socket) {
     return socket.handshake.address || socket.conn.remoteAddress || 'unknown';
   }
 
   function canAcceptConnection(ip) {
-    const currentConnections = connectionPool.get(ip) || 0;
-    return currentConnections < MAX_CONNECTIONS_PER_IP;
+    return (connectionPool.get(ip) || 0) < MAX_CONNECTIONS_PER_IP;
   }
 
   function incrementConnectionCount(ip) {
-    const currentConnections = connectionPool.get(ip) || 0;
-    connectionPool.set(ip, currentConnections + 1);
+    connectionPool.set(ip, (connectionPool.get(ip) || 0) + 1);
   }
 
   function decrementConnectionCount(ip) {
-    const currentConnections = connectionPool.get(ip) || 0;
-    if (currentConnections > 0) {
-      connectionPool.set(ip, currentConnections - 1);
-    }
+    const current = connectionPool.get(ip) || 0;
+    if (current > 0) connectionPool.set(ip, current - 1);
   }
 
-  // Helper function to generate random tiles
   function generateTiles() {
     const colors = ["red", "yellow", "green", "blue", "brown"];
     const emojis = ["🟥", "🟨", "🟩", "🟦", "🟫"];
     const tiles = [];
 
     for (let i = 0; i < 8; i++) {
-      // 30% chance for white tile, 70% for colored tile
       if (Math.random() < 0.3) {
-        tiles.push({
-          id: i,
-          color: "white",
-          emoji: "⬜"
-        });
+        tiles.push({ id: i, color: "white", emoji: "⬜" });
       } else {
         const randomIndex = Math.floor(Math.random() * colors.length);
         tiles.push({
@@ -400,82 +300,49 @@ app.prepare().then(async () => {
     return tiles;
   }
 
-  // Helper function to calculate score based on heart and tile colors
   function calculateScore(heart, tile) {
-    if (tile.color === "white") {
-      return heart.value; // Return value as-is for white tiles
-    } else if (heart.color === tile.color) {
-      return heart.value * 2; // Double score for matching colors
-    } else {
-      return 0; // No score for different colors
-    }
+    if (tile.color === "white") return heart.value;
+    return heart.color === tile.color ? heart.value * 2 : 0;
   }
 
-  // Helper function to generate a single heart card
   function generateSingleHeart() {
     const colors = ["red", "yellow", "green", "blue", "brown"];
     const heartEmojis = ["❤️", "💛", "💚", "💙", "🤎"];
     const randomIndex = Math.floor(Math.random() * colors.length);
-    const randomValue = Math.floor(Math.random() * 3) + 1; // Random value 1-3
+    const randomValue = Math.floor(Math.random() * 3) + 1;
 
     return {
-      id: Date.now() + Math.random(), // Unique ID based on timestamp
+      id: Date.now() + Math.random(),
       color: colors[randomIndex],
       emoji: heartEmojis[randomIndex],
       value: randomValue
     };
   }
 
-  // Helper function to generate magic cards for the deck
   function generateMagicDeck() {
-    return [
-      {
-        id: Date.now() + Math.random() + 1,
-        type: 'wind',
-        emoji: '💨',
-        name: 'Wind Card',
-        description: 'Remove opponent heart from a tile'
-      },
-      {
-        id: Date.now() + Math.random() + 2,
-        type: 'recycle',
-        emoji: '♻️',
-        name: 'Recycle Card',
-        description: 'Change tile color to white'
-      },
-      {
-        id: Date.now() + Math.random() + 3,
-        type: 'wind',
-        emoji: '💨',
-        name: 'Wind Card',
-        description: 'Remove opponent heart from a tile'
-      },
-      {
-        id: Date.now() + Math.random() + 4,
-        type: 'recycle',
-        emoji: '♻️',
-        name: 'Recycle Card',
-        description: 'Change tile color to white'
-      }
+    const cards = [];
+    const baseTime = Date.now();
+    const cardTypes = [
+      { type: 'wind', emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
+      { type: 'recycle', emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' }
     ];
+
+    for (let i = 0; i < 4; i++) {
+      const cardType = cardTypes[i % 2];
+      cards.push({
+        id: baseTime + Math.random() + i + 1,
+        ...cardType
+      });
+    }
+    return cards;
   }
 
-  // Helper function to generate a single magic card
   function generateSingleMagicCard() {
     const cardTypes = ['wind', 'recycle'];
     const randomType = cardTypes[Math.floor(Math.random() * cardTypes.length)];
-
     const cardConfig = {
-      wind: {
-        emoji: '💨',
-        name: 'Wind Card',
-        description: 'Remove opponent heart from a tile'
-      },
-      recycle: {
-        emoji: '♻️',
-        name: 'Recycle Card',
-        description: 'Change tile color to white'
-      }
+      wind: { emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
+      recycle: { emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' }
     };
 
     return {
@@ -485,7 +352,6 @@ app.prepare().then(async () => {
     };
   }
 
-  // Helper function to select random starting player
   function selectRandomStartingPlayer(players) {
     return players[Math.floor(Math.random() * players.length)];
   }
@@ -495,12 +361,8 @@ app.prepare().then(async () => {
 
   io.on("connection", (socket) => {
     const clientIP = getClientIP(socket);
-    const userId = socket.data.userId;
-    const userEmail = socket.data.userEmail;
-    const userName = socket.data.userName;
-    const userSessionId = socket.data.userSessionId;
+    const { userId, userEmail, userName, userSessionId } = socket.data;
 
-    // Check connection limits
     if (!canAcceptConnection(clientIP)) {
       console.log(`Connection rejected for IP ${clientIP}: Too many connections`);
       socket.emit("room-error", "Too many connections from your IP address");
@@ -509,185 +371,97 @@ app.prepare().then(async () => {
     }
 
     incrementConnectionCount(clientIP);
-    console.log(`Authenticated user connected: ${userName} (${userId}) from IP: ${clientIP} with socket: ${socket.id}`);
+    console.log(`User ${userName} (${userId}) connected from ${clientIP}`);
 
     socket.on("join-room", async ({ roomCode }) => {
-      // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
         return;
       }
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
+      await updatePlayerSocket(userId, socket.id, userSessionId, userName, userEmail);
 
-      // Get or create player session for authenticated user
-      const playerSession = await updatePlayerSocket(userId, socket.id, userSessionId, userName, userEmail);
-      console.log(`Player session for ${userName}:`, playerSession);
-
-      const room = rooms.get(roomCode);
+      let room = rooms.get(roomCode);
 
       if (!room) {
-        // Create new room if it doesn't exist
-        const newRoom = {
-          code: roomCode.toUpperCase(),
+        room = {
+          code: roomCode,
           players: [],
           maxPlayers: 2,
           gameState: {
-            tiles: [],
-            gameStarted: false,
-            currentPlayer: null,
-            deck: {
-              emoji: "💌",
-              cards: 10, // Initial deck size
-              type: 'hearts'
-            },
-            magicDeck: {
-              emoji: "🔮",
-              cards: []
-            },
-            playerHands: {},
-            turnCount: 0
+            tiles: [], gameStarted: false, currentPlayer: null,
+            deck: { emoji: "💌", cards: 10, type: 'hearts' },
+            magicDeck: { emoji: "🔮", cards: [] },
+            playerHands: {}, turnCount: 0
           }
         };
-        rooms.set(roomCode, newRoom);
-        await saveRoom(newRoom); // Save room creation
+        rooms.set(roomCode, room);
+        await saveRoom(room);
 
-        // Add authenticated user to new room
-        const player = {
-          userId: userId,
-          name: userName,
-          email: userEmail,
-          isReady: false,
-          score: 0,
-          joinedAt: new Date()
-        };
-
-        // Ensure no duplicate players by userId
-        if (!findPlayerByUserId(newRoom, userId)) {
-          newRoom.players.push(player);
-        }
+        const player = { userId, name: userName, email: userEmail, isReady: false, score: 0, joinedAt: new Date() };
+        if (!findPlayerByUserId(room, userId)) room.players.push(player);
 
         socket.join(roomCode);
         socket.data.roomCode = roomCode;
         socket.data.userId = userId;
 
-        console.log(`Room ${roomCode} created by ${userName} (${userId}) with socket ${socket.id}`);
-
-        // Send room-joined to the creator only
-        io.to(socket.id).emit("room-joined", { players: newRoom.players, playerId: userId });
-        console.log(`Room ${roomCode} created with ${newRoom.players.length} players`);
+        console.log(`Room ${roomCode} created by ${userName}`);
+        io.to(socket.id).emit("room-joined", { players: room.players, playerId: userId });
       } else {
-        // Check if authenticated user is already in the room (by userId)
         const existingPlayerByUserId = findPlayerByUserId(room, userId);
-
-        console.log(`User ${userName} (${userId}) joining room ${roomCode}:`);
-        console.log(`- Existing player by userId:`, existingPlayerByUserId);
-        console.log(`- Room players:`, room.players.map(p => ({ userId: p.userId, name: p.name })));
-
-        // Count unique players by userId to avoid duplicates
         const actualPlayerCount = room.players.length;
 
         if (!existingPlayerByUserId && actualPlayerCount >= room.maxPlayers) {
-          // Room is full and user is not already in it
-          // Check if any players in the room are actually disconnected
           const activePlayerSockets = Array.from(io.sockets.adapter.rooms.get(roomCode) || [])
             .filter(socketId => io.sockets.sockets.has(socketId));
-
-          console.log(`Room ${roomCode} appears full (${room.players.length}/${room.maxPlayers})`);
-          console.log(`Active sockets in room: ${activePlayerSockets.length}`);
-          console.log(`Room players:`, room.players.map(p => ({ userId: p.userId, name: p.name })));
-
-          // Additional check: Look for players with invalid gameState (null currentPlayer in started game)
           const hasInvalidGameState = room.gameState.gameStarted && !room.gameState.currentPlayer;
 
-          // Allow joining if:
-          // 1. There are fewer active sockets than players (disconnected players)
-          // 2. OR the game state is corrupted (null currentPlayer when game started)
           if (activePlayerSockets.length < room.players.length || hasInvalidGameState) {
-            console.log(`Detected disconnected players or invalid game state in room ${roomCode}, allowing reconnection for ${userName}`);
-
-            // If game state is corrupted, reset it to allow fresh game
             if (hasInvalidGameState) {
               console.log(`Resetting invalid game state in room ${roomCode}`);
-              room.gameState.gameStarted = false;
-              room.gameState.currentPlayer = null;
-              room.gameState.tiles = [];
-              room.gameState.playerHands = {};
-              room.gameState.turnCount = 0;
-              room.gameState.deck.cards = 10;
-
-              // Reset all players to not ready
-              room.players.forEach(player => {
-                player.isReady = false;
-              });
-
+              room.gameState = {
+                ...room.gameState,
+                gameStarted: false, currentPlayer: null, tiles: [],
+                playerHands: {}, turnCount: 0,
+                deck: { ...room.gameState.deck, cards: 10 }
+              };
+              room.players.forEach(player => player.isReady = false);
               await saveRoom(room);
             }
           } else {
             socket.emit("room-error", "Room is full");
-            console.log(`Room ${roomCode} is full with active players, rejecting user ${userName}`);
             return;
           }
         }
 
         let isNewJoin = false;
-
         if (!existingPlayerByUserId) {
-          // Add new user to existing room
-          const player = {
-            userId: userId,
-            name: userName,
-            email: userEmail,
-            isReady: false,
-            score: 0,
-            joinedAt: new Date()
-          };
-          room.players.push(player);
+          room.players.push({
+            userId, name: userName, email: userEmail,
+            isReady: false, score: 0, joinedAt: new Date()
+          });
           isNewJoin = true;
-          console.log(`New user ${userName} (${userId}) joined room ${roomCode.toUpperCase()}`);
         } else {
-          // User is reconnecting - update their info
           existingPlayerByUserId.name = userName;
           existingPlayerByUserId.email = userEmail;
-          // Initialize score if it doesn't exist
-          if (existingPlayerByUserId.score === undefined) {
-            existingPlayerByUserId.score = 0;
-          }
-          console.log(`User ${userName} (${userId}) rejoined room ${roomCode.toUpperCase()}`);
+          if (existingPlayerByUserId.score === undefined) existingPlayerByUserId.score = 0;
         }
 
-        // After handling user join/reconnection, save the updated room state
         await saveRoom(room);
-
         socket.join(roomCode);
         socket.data.roomCode = roomCode;
         socket.data.userId = userId;
 
-        // Send room-joined to the joining user only
         io.to(socket.id).emit("room-joined", { players: room.players, playerId: userId });
-        console.log(`User ${userName} joined room ${roomCode}, total players: ${room.players.length}`);
 
-        // Notify other players in the room about the player update
         if (isNewJoin) {
           socket.to(roomCode).emit("player-joined", { players: room.players });
         } else {
-          // For reconnections, update all players about the current state
           io.to(roomCode).emit("player-joined", { players: room.players });
         }
 
-        // If game is already started, send the current game state to the rejoined user
         if (room.gameState.gameStarted) {
-          console.log(`Sending current game state to rejoined user ${userName}`);
-          console.log(`Room state: ${JSON.stringify({
-            tilesCount: room.gameState.tiles.length,
-            currentPlayer: room.gameState.currentPlayer,
-            playersCount: room.players.length,
-            deckCards: room.gameState.deck.cards,
-            magicDeckCards: room.gameState.magicDeck.cards.length,
-            turnCount: room.gameState.turnCount
-          })}`);
-
-          // Include player hands and scores in the player objects for easier client-side handling
           const playersWithHands = room.players.map(player => ({
             ...player,
             hand: room.gameState.playerHands[player.userId] || [],
@@ -701,18 +475,15 @@ app.prepare().then(async () => {
             playerHands: room.gameState.playerHands,
             deck: room.gameState.deck,
             magicDeck: room.gameState.magicDeck,
-            turnCount: room.gameState.turnCount
+            turnCount: room.gameState.turnCount,
+            playerId: userId
           };
-
-          console.log(`Emitting game-start to rejoined user with data:`, gameStateData);
-          gameStateData.playerId = userId; // Add current user's player ID
           io.to(socket.id).emit("game-start", gameStateData);
         }
       }
     });
 
     socket.on("leave-room", async ({ roomCode }) => {
-      // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
         return;
@@ -721,21 +492,14 @@ app.prepare().then(async () => {
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
       if (room) {
-        // Remove authenticated user from room
         room.players = room.players.filter(player => player.userId !== userId);
-
-        // Notify remaining players
         io.to(roomCode).emit("player-left", { players: room.players });
 
-        // Delete room if empty
         if (room.players.length === 0) {
           rooms.delete(roomCode);
           await deleteRoom(roomCode);
-          await saveRoom(room); // Save room deletion
-          console.log(`Room ${roomCode} deleted (empty)`);
+          console.log(`Room ${roomCode} deleted`);
         } else {
-          console.log(`User ${userName} (${userId}) left room ${roomCode}`);
-          // Save room state after player removal
           await saveRoom(room);
         }
 
@@ -745,13 +509,10 @@ app.prepare().then(async () => {
         socket.data.userName = null;
       }
 
-      // Disconnect the socket after leaving room to prevent reconnection
       socket.disconnect(true);
-      console.log(`Socket ${socket.id} disconnected after leaving room ${roomCode}`);
     });
 
     socket.on("player-ready", async ({ roomCode }) => {
-      // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
         return;
@@ -764,62 +525,34 @@ app.prepare().then(async () => {
         const player = room.players.find(p => p.userId === userId);
         if (player) {
           player.isReady = !player.isReady;
-          console.log(`User ${userId} (${player.name}) ready status: ${player.isReady}`);
-
-          // Notify all players in the room
           io.to(roomCode).emit("player-ready", { players: room.players });
 
-          // Check if all players are ready (exactly 2 players required)
           if (room.players.length === 2 && room.players.every(p => p.isReady)) {
-            console.log(`All players ready in room ${roomCode}, starting game!`);
+            console.log(`Game starting in room ${roomCode}`);
 
-            // Generate initial tile state
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
-
-            // Magic deck is now hidden - cards will be dealt to player hands
             room.gameState.magicDeck.cards = [];
+            await saveRoom(room);
 
-            await saveRoom(room); // Save game start
-
-            // Initialize player hands with starting hearts and magic cards
             room.players.forEach(player => {
               room.gameState.playerHands[player.userId] = [];
-              // Deal 3 starting hearts to each player
               for (let i = 0; i < 3; i++) {
                 room.gameState.playerHands[player.userId].push(generateSingleHeart());
               }
-              // Deal 2 starting magic cards to each player
               for (let i = 0; i < 2; i++) {
                 room.gameState.playerHands[player.userId].push(generateSingleMagicCard());
               }
-              console.log(`Dealt 3 hearts and 2 magic cards to player ${player.name} (${player.userId}):`, room.gameState.playerHands[player.userId]);
             });
 
-            // Select random starting player
             room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
             room.gameState.turnCount = 1;
 
-            console.log(`Game started in room ${roomCode}:`, {
-              tilesCount: room.gameState.tiles.length,
-              currentPlayer: room.gameState.currentPlayer?.name,
-              playersCount: room.players.length,
-              playerHandsKeys: Object.keys(room.gameState.playerHands),
-              deckCards: room.gameState.deck.cards,
-              magicDeckCards: room.gameState.magicDeck.cards.length,
-              turnCount: room.gameState.turnCount
-            });
-
-            // Include player hands and scores in the player objects for easier client-side handling
-            const playersWithHands = room.players.map(player => {
-              const playerHand = room.gameState.playerHands[player.userId] || [];
-              console.log(`Player ${player.name} (${player.userId}) hand:`, playerHand);
-              return {
-                ...player,
-                hand: playerHand,
-                score: player.score || 0
-              };
-            });
+            const playersWithHands = room.players.map(player => ({
+              ...player,
+              hand: room.gameState.playerHands[player.userId] || [],
+              score: player.score || 0
+            }));
 
             const gameStartData = {
               tiles: room.gameState.tiles,
@@ -831,35 +564,20 @@ app.prepare().then(async () => {
               turnCount: room.gameState.turnCount
             };
 
-            console.log(`Emitting game-start to all players in room ${roomCode}:`, {
-              tilesCount: gameStartData.tiles.length,
-              currentPlayer: gameStartData.currentPlayer?.name,
-              playersCount: gameStartData.players.length,
-              playerHandsKeys: Object.keys(gameStartData.playerHands),
-              deckCards: gameStartData.deck.cards,
-              magicDeckCards: gameStartData.magicDeck.cards.length,
-              turnCount: gameStartData.turnCount
-            });
-            console.log(`Full game-start data:`, JSON.stringify(gameStartData, null, 2));
-
-            // Send personalized game-start data to each player
             room.players.forEach(player => {
               const personalizedData = { ...gameStartData, playerId: player.userId };
-              // Find the socket for this player and emit to them
-              const playerSocket = Array.from(io.sockets.sockets.values()).find(s => s.data.userId === player.userId);
+              const playerSocket = Array.from(io.sockets.sockets.values())
+                .find(s => s.data.userId === player.userId);
               if (playerSocket) {
                 playerSocket.emit("game-start", personalizedData);
               }
             });
           }
-        } else {
-          console.log(`User ${userId} not found in room ${roomCode}. Players in room:`, room.players.map(p => ({ userId: p.userId, name: p.name })));
         }
       }
     });
 
     socket.on("shuffle-tiles", async ({ roomCode }) => {
-      // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
         return;
@@ -867,19 +585,14 @@ app.prepare().then(async () => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
-      if (room && room.gameState.gameStarted) {
-        // Generate new tiles for all players
+      if (room?.gameState.gameStarted) {
         room.gameState.tiles = generateTiles();
-        await saveRoom(room); // Save tile shuffle
-        console.log(`Tiles shuffled in room ${roomCode}`);
-
-        // Broadcast new tile state to all players
+        await saveRoom(room);
         io.to(roomCode).emit("tiles-updated", { tiles: room.gameState.tiles });
       }
     });
 
     socket.on("draw-heart", async ({ roomCode }) => {
-      // Input validation
       if (!validateRoomCode(roomCode)) {
         socket.emit("room-error", "Invalid room code");
         return;
@@ -887,9 +600,7 @@ app.prepare().then(async () => {
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
-      // Authenticated user - no need for fallback session logic
 
-      // Comprehensive validation
       const roomValidation = validateRoomState(room);
       if (!roomValidation.valid) {
         socket.emit("room-error", roomValidation.error);
@@ -908,7 +619,6 @@ app.prepare().then(async () => {
         return;
       }
 
-      // Validate turn and acquire lock
       const turnValidation = validateTurn(room, userId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
@@ -922,29 +632,20 @@ app.prepare().then(async () => {
 
       try {
         if (room.gameState.gameStarted && room.gameState.deck.cards > 0) {
-          // Generate a new heart and add to player's hand
           const newHeart = generateSingleHeart();
-
-          // Add the heart to the current player's hand
           if (!room.gameState.playerHands[userId]) {
             room.gameState.playerHands[userId] = [];
           }
           room.gameState.playerHands[userId].push(newHeart);
-
-          // Decrease deck count
           room.gameState.deck.cards--;
-          await saveRoom(room); // Save heart draw
+          await saveRoom(room);
 
-          console.log(`Heart drawn by ${userId} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
-
-          // Include player hands and scores in the player objects for broadcasting
           const playersWithUpdatedHands = room.players.map(player => ({
             ...player,
             hand: room.gameState.playerHands[player.userId] || [],
             score: player.score || 0
           }));
 
-          // Broadcast the updated player hands and deck to all players
           io.to(roomCode).emit("heart-drawn", {
             players: playersWithUpdatedHands,
             playerHands: room.gameState.playerHands,
@@ -952,23 +653,20 @@ app.prepare().then(async () => {
           });
         }
       } finally {
-        // Always release the lock
         releaseTurnLock(roomCode, socket.id);
       }
     });
 
     socket.on("place-heart", async ({ roomCode, tileId, heartId }) => {
-      // Input validation
-      if (!validateRoomCode(roomCode) || (typeof tileId !== 'number' && typeof tileId !== 'string') || (typeof heartId !== 'string' && typeof heartId !== 'number')) {
+      if (!validateRoomCode(roomCode) || (typeof tileId !== 'number' && typeof tileId !== 'string') ||
+          (typeof heartId !== 'string' && typeof heartId !== 'number')) {
         socket.emit("room-error", "Invalid input data");
         return;
       }
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
-      // Authenticated user - no need for fallback session logic
 
-      // Comprehensive validation
       const roomValidation = validateRoomState(room);
       if (!roomValidation.valid) {
         socket.emit("room-error", roomValidation.error);
@@ -987,7 +685,6 @@ app.prepare().then(async () => {
         return;
       }
 
-      // Validate turn and acquire lock
       const turnValidation = validateTurn(room, userId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
@@ -1001,27 +698,36 @@ app.prepare().then(async () => {
 
       try {
         if (room.gameState.gameStarted) {
-          // Find the heart in player's hand
+          // Double-check validation inside the critical section to prevent race conditions
+          const revalidation = validateHeartPlacement(room, userId, heartId, tileId);
+          if (!revalidation.valid) {
+            socket.emit("room-error", revalidation.error);
+            return;
+          }
+
           const playerHand = room.gameState.playerHands[userId] || [];
           const heartIndex = playerHand.findIndex(heart => heart.id === heartId);
 
           if (heartIndex !== -1) {
-            // Remove heart from player's hand
             const heart = playerHand.splice(heartIndex, 1)[0];
+            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == tileId);
 
-            // Place heart on the tile
-            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == tileId); // Use == to handle both number and string
             if (tileIndex !== -1) {
               const tile = room.gameState.tiles[tileIndex];
+
+              // Final check - ensure tile is still not occupied
+              if (tile.placedHeart) {
+                socket.emit("room-error", "Tile is already occupied");
+                return;
+              }
+
               const score = calculateScore(heart, tile);
 
-              // Update player score
               const playerIndex = room.players.findIndex(p => p.userId === userId);
               if (playerIndex !== -1) {
                 room.players[playerIndex].score += score;
               }
 
-              // Update tile with heart information
               room.gameState.tiles[tileIndex] = {
                 ...tile,
                 emoji: heart.emoji,
@@ -1034,18 +740,14 @@ app.prepare().then(async () => {
                   score: score
                 }
               };
-              await saveRoom(room); // Save heart placement and score
+              await saveRoom(room);
 
-              console.log(`Heart placed on tile ${tileId} by ${userId} in room ${roomCode.toUpperCase()}, score: ${score}`);
-
-              // Include player hands and scores in the player objects for broadcasting
               const playersWithUpdatedHands = room.players.map(player => ({
                 ...player,
                 hand: room.gameState.playerHands[player.userId] || [],
                 score: player.score
               }));
 
-              // Broadcast the updated tiles, player hands, and scores
               io.to(roomCode).emit("heart-placed", {
                 tiles: room.gameState.tiles,
                 players: playersWithUpdatedHands,
@@ -1055,7 +757,6 @@ app.prepare().then(async () => {
           }
         }
       } finally {
-        // Always release the lock
         releaseTurnLock(roomCode, socket.id);
       }
     });
@@ -1368,24 +1069,16 @@ app.prepare().then(async () => {
 
         const room = rooms.get(roomCode);
         if (room) {
-          // Remove player from room by socket ID or session ID
           const playerName = socket.data.userName;
-          let playerRemoved = false;
-
-          // First try to remove by socket ID
           const initialLength = room.players.length;
           room.players = room.players.filter(player => player.userId !== userId);
 
-          // Legacy session handling - this should not be needed with auth
-          // But keeping for backwards compatibility during transition
           if (room.players.length === initialLength && socket.data.userSessionId) {
             room.players = room.players.filter(player => player.userId === socket.data.userSessionId);
           }
 
-          // If still no player removed, try to remove by player name (for legacy compatibility)
           if (room.players.length === initialLength && playerName) {
             room.players = room.players.filter(player => player.name.toLowerCase() !== playerName.toLowerCase());
-            playerRemoved = true;
           }
 
           // Clean up player hands for disconnected players

@@ -50,7 +50,7 @@ export default function SignUp() {
       } else {
         router.push("/auth/signin?message=Account created successfully")
       }
-    } catch (error) {
+    } catch {
       setError("An error occurred. Please try again.")
     } finally {
       setIsLoading(false)
