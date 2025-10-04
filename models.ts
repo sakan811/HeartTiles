@@ -172,7 +172,41 @@ const roomSchema = new mongoose.Schema({
         type: Number,
         default: 10,
         min: 0
+      },
+      type: {
+        type: String,
+        enum: ['hearts', 'magic'],
+        default: 'hearts'
       }
+    },
+    magicDeck: {
+      emoji: {
+        type: String,
+        default: "🔮"
+      },
+      cards: [{
+        id: {
+          type: mongoose.Schema.Types.Mixed,
+          required: true
+        },
+        type: {
+          type: String,
+          enum: ['wind', 'recycle'],
+          required: true
+        },
+        emoji: {
+          type: String,
+          required: true
+        },
+        name: {
+          type: String,
+          required: true
+        },
+        description: {
+          type: String,
+          required: true
+        }
+      }]
     },
     playerHands: {
       type: Map,

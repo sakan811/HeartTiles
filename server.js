@@ -426,6 +426,65 @@ app.prepare().then(async () => {
     };
   }
 
+  // Helper function to generate magic cards for the deck
+  function generateMagicDeck() {
+    return [
+      {
+        id: Date.now() + Math.random() + 1,
+        type: 'wind',
+        emoji: '💨',
+        name: 'Wind Card',
+        description: 'Remove opponent heart from a tile'
+      },
+      {
+        id: Date.now() + Math.random() + 2,
+        type: 'recycle',
+        emoji: '♻️',
+        name: 'Recycle Card',
+        description: 'Change tile color to white'
+      },
+      {
+        id: Date.now() + Math.random() + 3,
+        type: 'wind',
+        emoji: '💨',
+        name: 'Wind Card',
+        description: 'Remove opponent heart from a tile'
+      },
+      {
+        id: Date.now() + Math.random() + 4,
+        type: 'recycle',
+        emoji: '♻️',
+        name: 'Recycle Card',
+        description: 'Change tile color to white'
+      }
+    ];
+  }
+
+  // Helper function to generate a single magic card
+  function generateSingleMagicCard() {
+    const cardTypes = ['wind', 'recycle'];
+    const randomType = cardTypes[Math.floor(Math.random() * cardTypes.length)];
+
+    const cardConfig = {
+      wind: {
+        emoji: '💨',
+        name: 'Wind Card',
+        description: 'Remove opponent heart from a tile'
+      },
+      recycle: {
+        emoji: '♻️',
+        name: 'Recycle Card',
+        description: 'Change tile color to white'
+      }
+    };
+
+    return {
+      id: Date.now() + Math.random(),
+      type: randomType,
+      ...cardConfig[randomType]
+    };
+  }
+
   // Helper function to select random starting player
   function selectRandomStartingPlayer(players) {
     return players[Math.floor(Math.random() * players.length)];
@@ -479,7 +538,12 @@ app.prepare().then(async () => {
             currentPlayer: null,
             deck: {
               emoji: "💌",
-              cards: 10 // Initial deck size
+              cards: 10, // Initial deck size
+              type: 'hearts'
+            },
+            magicDeck: {
+              emoji: "🔮",
+              cards: []
             },
             playerHands: {},
             turnCount: 0
@@ -619,6 +683,7 @@ app.prepare().then(async () => {
             currentPlayer: room.gameState.currentPlayer,
             playersCount: room.players.length,
             deckCards: room.gameState.deck.cards,
+            magicDeckCards: room.gameState.magicDeck.cards.length,
             turnCount: room.gameState.turnCount
           })}`);
 
@@ -635,6 +700,7 @@ app.prepare().then(async () => {
             players: playersWithHands,
             playerHands: room.gameState.playerHands,
             deck: room.gameState.deck,
+            magicDeck: room.gameState.magicDeck,
             turnCount: room.gameState.turnCount
           };
 
@@ -710,16 +776,24 @@ app.prepare().then(async () => {
             // Generate initial tile state
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
+
+            // Magic deck is now hidden - cards will be dealt to player hands
+            room.gameState.magicDeck.cards = [];
+
             await saveRoom(room); // Save game start
 
-            // Initialize player hands with starting hearts
+            // Initialize player hands with starting hearts and magic cards
             room.players.forEach(player => {
               room.gameState.playerHands[player.userId] = [];
               // Deal 3 starting hearts to each player
               for (let i = 0; i < 3; i++) {
                 room.gameState.playerHands[player.userId].push(generateSingleHeart());
               }
-              console.log(`Dealt 3 hearts to player ${player.name} (${player.userId}):`, room.gameState.playerHands[player.userId]);
+              // Deal 2 starting magic cards to each player
+              for (let i = 0; i < 2; i++) {
+                room.gameState.playerHands[player.userId].push(generateSingleMagicCard());
+              }
+              console.log(`Dealt 3 hearts and 2 magic cards to player ${player.name} (${player.userId}):`, room.gameState.playerHands[player.userId]);
             });
 
             // Select random starting player
@@ -732,6 +806,7 @@ app.prepare().then(async () => {
               playersCount: room.players.length,
               playerHandsKeys: Object.keys(room.gameState.playerHands),
               deckCards: room.gameState.deck.cards,
+              magicDeckCards: room.gameState.magicDeck.cards.length,
               turnCount: room.gameState.turnCount
             });
 
@@ -752,6 +827,7 @@ app.prepare().then(async () => {
               players: playersWithHands,
               playerHands: room.gameState.playerHands,
               deck: room.gameState.deck,
+              magicDeck: room.gameState.magicDeck,
               turnCount: room.gameState.turnCount
             };
 
@@ -761,6 +837,7 @@ app.prepare().then(async () => {
               playersCount: gameStartData.players.length,
               playerHandsKeys: Object.keys(gameStartData.playerHands),
               deckCards: gameStartData.deck.cards,
+              magicDeckCards: gameStartData.magicDeck.cards.length,
               turnCount: gameStartData.turnCount
             });
             console.log(`Full game-start data:`, JSON.stringify(gameStartData, null, 2));
@@ -1050,6 +1127,226 @@ app.prepare().then(async () => {
             currentPlayer: room.gameState.currentPlayer.name,
             turnCount: room.gameState.turnCount,
             playersCount: playersWithHands.length
+          });
+        }
+      } finally {
+        // Always release the lock
+        releaseTurnLock(roomCode, socket.id);
+      }
+    });
+
+    // Draw magic card event
+    socket.on("draw-magic-card", async ({ roomCode }) => {
+      // Input validation
+      if (!validateRoomCode(roomCode)) {
+        socket.emit("room-error", "Invalid room code");
+        return;
+      }
+
+      roomCode = sanitizeInput(roomCode.toUpperCase());
+      const room = rooms.get(roomCode);
+
+      // Comprehensive validation
+      const roomValidation = validateRoomState(room);
+      if (!roomValidation.valid) {
+        socket.emit("room-error", roomValidation.error);
+        return;
+      }
+
+      const playerValidation = validatePlayerInRoom(room, userId);
+      if (!playerValidation.valid) {
+        socket.emit("room-error", playerValidation.error);
+        return;
+      }
+
+      // Validate turn and acquire lock
+      const turnValidation = validateTurn(room, userId);
+      if (!turnValidation.valid) {
+        socket.emit("room-error", turnValidation.error);
+        return;
+      }
+
+      if (!acquireTurnLock(roomCode, socket.id)) {
+        socket.emit("room-error", "Action in progress, please wait");
+        return;
+      }
+
+      try {
+        if (room.gameState.gameStarted) {
+          // Generate a new magic card and add to player's hand
+          const newMagicCard = generateSingleMagicCard();
+
+          // Add the magic card to the current player's hand
+          if (!room.gameState.playerHands[userId]) {
+            room.gameState.playerHands[userId] = [];
+          }
+          room.gameState.playerHands[userId].push(newMagicCard);
+
+          await saveRoom(room); // Save magic card draw
+
+          console.log(`Magic card drawn by ${userId} in room ${roomCode.toUpperCase()}`);
+
+          // Include player hands and scores in the player objects for broadcasting
+          const playersWithUpdatedHands = room.players.map(player => ({
+            ...player,
+            hand: room.gameState.playerHands[player.userId] || [],
+            score: player.score || 0
+          }));
+
+          // Broadcast the updated player hands to all players
+          io.to(roomCode).emit("magic-card-drawn", {
+            players: playersWithUpdatedHands,
+            playerHands: room.gameState.playerHands
+          });
+        }
+      } finally {
+        // Always release the lock
+        releaseTurnLock(roomCode, socket.id);
+      }
+    });
+
+    // Magic card events
+    socket.on("use-magic-card", async ({ roomCode, cardId, targetTileId }) => {
+      console.log(`=== MAGIC CARD USAGE ATTEMPT ===`);
+      console.log(`User ${userId} attempting to use magic card ${cardId} on tile ${targetTileId} in room ${roomCode}`);
+
+      // Input validation
+      if (!validateRoomCode(roomCode) || !cardId || !targetTileId) {
+        socket.emit("room-error", "Invalid input data");
+        return;
+      }
+
+      roomCode = sanitizeInput(roomCode.toUpperCase());
+      const room = rooms.get(roomCode);
+
+      // Comprehensive validation
+      const roomValidation = validateRoomState(room);
+      if (!roomValidation.valid) {
+        socket.emit("room-error", roomValidation.error);
+        return;
+      }
+
+      const playerValidation = validatePlayerInRoom(room, userId);
+      if (!playerValidation.valid) {
+        socket.emit("room-error", playerValidation.error);
+        return;
+      }
+
+      // Validate turn and acquire lock
+      const turnValidation = validateTurn(room, userId);
+      if (!turnValidation.valid) {
+        socket.emit("room-error", turnValidation.error);
+        return;
+      }
+
+      if (!acquireTurnLock(roomCode, socket.id)) {
+        socket.emit("room-error", "Action in progress, please wait");
+        return;
+      }
+
+      try {
+        if (room.gameState.gameStarted) {
+          // Find the magic card in the player's hand
+          const playerHand = room.gameState.playerHands[userId] || [];
+          const cardIndex = playerHand.findIndex(card => card.id === cardId);
+
+          if (cardIndex === -1) {
+            socket.emit("room-error", "Magic card not found in your hand");
+            return;
+          }
+
+          const card = playerHand[cardIndex];
+          const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == targetTileId);
+
+          if (tileIndex === -1) {
+            socket.emit("room-error", "Target tile not found");
+            return;
+          }
+
+          const tile = room.gameState.tiles[tileIndex];
+          let actionResult = null;
+
+          // Apply card effect based on type
+          if (card.type === 'wind') {
+            // Remove opponent heart from tile and restore square format
+            if (tile.placedHeart && tile.placedHeart.placedBy !== userId) {
+              actionResult = {
+                type: 'wind',
+                removedHeart: tile.placedHeart,
+                tileId: tile.id
+              };
+              // Clear the placed heart from tile and restore square emoji based on original tile color
+              const getSquareEmoji = (color) => {
+                const colorEmojis = {
+                  'red': '🟥',
+                  'yellow': '🟨',
+                  'green': '🟩',
+                  'blue': '🟦',
+                  'brown': '🟫',
+                  'white': '⬜'
+                };
+                return colorEmojis[color] || '⬜';
+              };
+
+              // Restore original tile state, removing the heart and restoring the square emoji
+              room.gameState.tiles[tileIndex] = {
+                id: tile.id,
+                color: tile.color,
+                emoji: getSquareEmoji(tile.color),
+                // Remove placedHeart completely to restore original tile state
+                placedHeart: undefined
+              };
+              console.log(`Wind card used by ${userId} to remove heart from tile ${targetTileId} and restore ${tile.color} square format (${getSquareEmoji(tile.color)})`);
+            } else {
+              socket.emit("room-error", "No opponent heart on target tile");
+              return;
+            }
+          } else if (card.type === 'recycle') {
+            // Change tile color to white, keeping square format
+            actionResult = {
+              type: 'recycle',
+              previousColor: tile.color,
+              newColor: 'white',
+              tileId: tile.id
+            };
+            // Set tile to white square, preserving any heart if it exists
+            room.gameState.tiles[tileIndex] = {
+              id: tile.id,
+              color: 'white',
+              emoji: '⬜',
+              // Preserve placedHeart if it exists, but update the tile underneath
+              placedHeart: tile.placedHeart
+            };
+            console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${tile.color} to white square (⬜)`);
+          }
+
+          // Remove the used magic card from player's hand
+          room.gameState.playerHands[userId].splice(cardIndex, 1);
+          await saveRoom(room);
+
+          // Include player hands and scores in the player objects for broadcasting
+          const playersWithUpdatedHands = room.players.map(player => ({
+            ...player,
+            hand: room.gameState.playerHands[player.userId] || [],
+            score: player.score || 0
+          }));
+
+          // Broadcast the magic card usage to all players
+          console.log(`=== BROADCASTING MAGIC CARD USAGE ===`);
+          console.log(`Broadcasting magic-card-used event to room ${roomCode}:`, {
+            card: card,
+            actionResult: actionResult,
+            tilesCount: room.gameState.tiles.length,
+            playersCount: playersWithUpdatedHands.length,
+            usedBy: userId
+          });
+          io.to(roomCode).emit("magic-card-used", {
+            card: card,
+            actionResult: actionResult,
+            tiles: room.gameState.tiles,
+            players: playersWithUpdatedHands,
+            playerHands: room.gameState.playerHands,
+            usedBy: userId
           });
         }
       } finally {

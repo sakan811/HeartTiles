@@ -18,6 +18,7 @@ interface Tile {
     placedBy: string;
     score: number;
   };
+  type?: 'heart' | 'magic';
 }
 
 interface Player {
@@ -31,6 +32,20 @@ interface Player {
 interface Deck {
   emoji: string;
   cards: number;
+  type?: string;
+}
+
+interface MagicCard {
+  id: number | string;
+  type: 'wind' | 'recycle';
+  emoji: string;
+  name: string;
+  description: string;
+}
+
+interface MagicDeck {
+  emoji: string;
+  cards: MagicCard[];
 }
 
 export default function GameRoomPage() {
@@ -41,8 +56,10 @@ export default function GameRoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [playerHands, setPlayerHands] = useState<Record<string, Tile[]>>({});
   const [deck, setDeck] = useState<Deck>({ emoji: "💌", cards: 10 });
+  const [magicDeck, setMagicDeck] = useState<MagicDeck>({ emoji: "🔮", cards: [] });
   const [turnCount, setTurnCount] = useState(0);
   const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
+  const [selectedMagicCard, setSelectedMagicCard] = useState<MagicCard | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string>("");
   const { socket, isConnected, socketId, disconnect } = useSocket();
   const params = useParams();
@@ -112,6 +129,7 @@ export default function GameRoomPage() {
         players: gameData.players || [],
         playerHands: gameData.playerHands || {},
         deck: gameData.deck || { emoji: "💌", cards: 10 },
+        magicDeck: gameData.magicDeck || { emoji: "🔮", cards: [] },
         turnCount: gameData.turnCount || 0,
         playerId: gameData.playerId || null
       };
@@ -121,6 +139,7 @@ export default function GameRoomPage() {
       console.log("Player hands:", safeGameData.playerHands);
       console.log("Tiles:", safeGameData.tiles);
       console.log("Deck:", safeGameData.deck);
+      console.log("Magic Deck:", safeGameData.magicDeck);
       console.log("Turn count:", safeGameData.turnCount);
       console.log("My player ID from server:", safeGameData.playerId);
 
@@ -137,6 +156,7 @@ export default function GameRoomPage() {
       setPlayers(safeGameData.players);
       setPlayerHands(safeGameData.playerHands);
       setDeck(safeGameData.deck);
+      setMagicDeck(safeGameData.magicDeck);
       setTurnCount(safeGameData.turnCount);
 
       console.log("=== GAME START STATE SET ===");
@@ -206,6 +226,48 @@ export default function GameRoomPage() {
       setSelectedHeart(null);
     };
 
+    const onMagicCardDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]> }) => {
+      console.log("=== MAGIC CARD DRAWN ===");
+      console.log("Updated players:", data.players);
+      console.log("Updated player hands:", data.playerHands);
+
+      // Always update all states
+      setPlayers(data.players);
+      setPlayerHands(data.playerHands);
+
+      // Find and update current player based on current state
+      const currentPlayerId = currentPlayer?.userId;
+      if (currentPlayerId) {
+        const updatedCurrentPlayer = data.players.find(p => p.userId === currentPlayerId);
+        if (updatedCurrentPlayer) {
+          setCurrentPlayer(updatedCurrentPlayer);
+        }
+      }
+
+      const myPlayerData = getCurrentPlayer();
+      console.log("Your hand after magic card draw:", myPlayerData ? data.playerHands[myPlayerData.userId] || [] : "Player not found");
+    };
+
+    const onMagicCardUsed = (data: {
+      card: MagicCard;
+      actionResult: any;
+      tiles: Tile[];
+      players: Player[];
+      playerHands: Record<string, Tile[]>;
+      usedBy: string
+    }) => {
+      console.log("=== MAGIC CARD USED ===");
+      console.log("Card used:", data.card);
+      console.log("Action result:", data.actionResult);
+      console.log("Updated tiles:", data.tiles);
+      console.log("Updated players:", data.players);
+      console.log("Updated player hands:", data.playerHands);
+      setTiles(data.tiles);
+      setPlayers(data.players);
+      setPlayerHands(data.playerHands);
+      setSelectedMagicCard(null);
+    };
+
     const onRoomError = (errorMessage: string) => {
       console.error("Game page: Room error:", errorMessage);
       if (errorMessage === "Room is full") {
@@ -224,6 +286,8 @@ export default function GameRoomPage() {
     socket.on("turn-changed", onTurnChanged);
     socket.on("heart-drawn", onHeartDrawn);
     socket.on("heart-placed", onHeartPlaced);
+    socket.on("magic-card-drawn", onMagicCardDrawn);
+    socket.on("magic-card-used", onMagicCardUsed);
     socket.on("room-error", onRoomError);
 
     console.log("Game room socket listeners registered");
@@ -266,6 +330,8 @@ export default function GameRoomPage() {
       socket?.off("turn-changed", onTurnChanged);
       socket?.off("heart-drawn", onHeartDrawn);
       socket?.off("heart-placed", onHeartPlaced);
+      socket?.off("magic-card-drawn", onMagicCardDrawn);
+      socket?.off("magic-card-used", onMagicCardUsed);
       socket?.off("room-error", onRoomError);
     };
   }, [params.roomCode, socket, socketId, myPlayerId, session, status, router]);
@@ -279,13 +345,20 @@ export default function GameRoomPage() {
     console.log("Current player:", currentPlayer);
     console.log("Socket ID:", socketId);
     console.log("Deck:", deck);
+    console.log("Magic Deck:", magicDeck);
     console.log("Turn count:", turnCount);
-  }, [tiles, players, playerHands, currentPlayer, socketId, deck, turnCount]);
+  }, [tiles, players, playerHands, currentPlayer, socketId, deck, magicDeck, turnCount]);
 
 
   const drawHeart = () => {
     if (socket && roomCode && isCurrentPlayer()) {
       socket.emit("draw-heart", { roomCode });
+    }
+  };
+
+  const drawMagicCard = () => {
+    if (socket && roomCode && isCurrentPlayer()) {
+      socket.emit("draw-magic-card", { roomCode });
     }
   };
 
@@ -329,6 +402,78 @@ export default function GameRoomPage() {
     console.log(`IDs match: ${currentPlayer.userId} === ${myPlayerId} = ${isCurrentTurn}`);
 
     return isCurrentTurn;
+  };
+
+  const selectMagicCard = (card: MagicCard) => {
+    if (isCurrentPlayer()) {
+      setSelectedMagicCard(card);
+      setSelectedHeart(null); // Clear heart selection when selecting magic card
+    }
+  };
+
+  const selectCardFromHand = (card: Tile) => {
+    if (!isCurrentPlayer()) return;
+
+    console.log(`=== CARD SELECTED ===`);
+    console.log(`Card selected:`, card);
+
+    // Check if card has magic card properties (type field that's not 'heart' or color field is missing)
+    const isMagicCard = (card as any).type === 'recycle' || (card as any).type === 'wind';
+
+    if (isMagicCard) {
+      // Convert Tile to MagicCard interface for compatibility
+      const magicCard: MagicCard = {
+        id: card.id,
+        type: (card as any).type === 'wind' ? 'wind' : 'recycle',
+        emoji: card.emoji,
+        name: (card as any).name || 'Magic Card',
+        description: (card as any).description || 'A magic card'
+      };
+      console.log(`Magic card selected:`, magicCard);
+      setSelectedMagicCard(magicCard);
+      setSelectedHeart(null);
+    } else {
+      // Regular heart card
+      console.log(`Heart card selected:`, card);
+      setSelectedHeart(card);
+      setSelectedMagicCard(null);
+    }
+  };
+
+  const useMagicCard = (tileId: number | string) => {
+    if (socket && selectedMagicCard && roomCode && isCurrentPlayer()) {
+      console.log(`=== EMITTING MAGIC CARD USAGE ===`);
+      console.log(`Emitting use-magic-card with:`, {
+        roomCode,
+        cardId: selectedMagicCard.id,
+        targetTileId: tileId,
+        cardType: selectedMagicCard.type
+      });
+      socket.emit("use-magic-card", {
+        roomCode,
+        cardId: selectedMagicCard.id,
+        targetTileId: tileId
+      });
+    }
+  };
+
+  const handleTileClick = (tile: Tile) => {
+    if (!isCurrentPlayer()) return;
+
+    console.log(`=== TILE CLICK ===`);
+    console.log(`Tile clicked:`, tile);
+    console.log(`Selected magic card:`, selectedMagicCard);
+    console.log(`Selected heart:`, selectedHeart);
+
+    if (selectedMagicCard) {
+      // Use magic card on tile
+      console.log(`Using magic card ${selectedMagicCard.type} on tile ${tile.id}`);
+      useMagicCard(Number(tile.id));
+    } else if (selectedHeart) {
+      // Place heart on tile (existing functionality)
+      console.log(`Placing heart on tile ${tile.id}`);
+      placeHeart(tile.id);
+    }
   };
 
   return (
@@ -454,17 +599,24 @@ export default function GameRoomPage() {
                 const isOccupiedByMe = hasHeart && tile.placedHeart!.placedBy === myPlayerId;
                 const isOccupiedByOpponent = hasHeart && tile.placedHeart!.placedBy !== myPlayerId;
                 const canPlaceHeart = selectedHeart && !hasHeart && isCurrentPlayer();
+                const canUseMagicCard = selectedMagicCard && isCurrentPlayer();
+                const isMagicCardTarget = selectedMagicCard && (
+                  (selectedMagicCard.type === 'wind' && isOccupiedByOpponent) ||
+                  (selectedMagicCard.type === 'recycle' && tile.color !== 'white')
+                );
 
                 return (
                 <div
                   key={tile.id}
-                  onClick={() => canPlaceHeart && placeHeart(Number(tile.id))}
+                  onClick={() => handleTileClick(tile)}
                   className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors relative ${
                     canPlaceHeart
                       ? 'hover:bg-white/30 bg-white/20 cursor-pointer'
-                      : hasHeart
-                        ? 'cursor-not-allowed'
-                        : 'bg-white/10 cursor-not-allowed'
+                      : canUseMagicCard && isMagicCardTarget
+                        ? 'hover:bg-purple-400/30 bg-purple-400/20 cursor-pointer border-2 border-purple-400/50'
+                        : hasHeart
+                          ? 'cursor-not-allowed'
+                          : 'bg-white/10 cursor-not-allowed'
                   } ${
                     isOccupiedByMe
                       ? 'ring-4 ring-green-400 bg-green-900/30'
@@ -494,18 +646,23 @@ export default function GameRoomPage() {
           </div>
 
           {/* Central Deck */}
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center gap-4 mb-6">
             <div className="bg-white/20 rounded-lg p-4 flex flex-col items-center">
               <div className="text-6xl mb-2">{deck.emoji}</div>
-              <div className="text-white text-sm">Deck: {deck.cards} cards</div>
+              <div className="text-white text-sm">Heart Deck: {deck.cards} cards</div>
             </div>
+            <div className="bg-purple-600/20 rounded-lg p-4 flex flex-col items-center border border-purple-400/30">
+              <div className="text-6xl mb-2">{magicDeck.emoji}</div>
+              <div className="text-white text-sm">Magic Deck: {magicDeck.cards.length} cards</div>
+            </div>
+          </div>
           </div>
 
           {/* Player Hands (Bottom) */}
           <div className="mb-6">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-white text-lg font-semibold">
-                Your Hearts
+                Your Hand
               </h3>
               {(() => {
                 const myPlayerData = getCurrentPlayer();
@@ -538,24 +695,33 @@ export default function GameRoomPage() {
                 console.log("Available player hands keys:", Object.keys(playerHands));
                 console.log("Your hand:", playerHand);
 
-                return playerHand.map((heart) => {
-                  console.log("Rendering your heart:", heart);
+                return playerHand.map((card) => {
+                  console.log("Rendering your card:", card);
+                  const isHeart = card.type !== 'magic';
+                  const isSelected = isHeart ? selectedHeart?.id === card.id : selectedMagicCard?.id === card.id;
+
                   return (
                   <div
-                    key={heart.id}
-                    onClick={() => isCurrentPlayer() && setSelectedHeart(heart)}
+                    key={card.id}
+                    onClick={() => isCurrentPlayer() && selectCardFromHand(card)}
                     className={`w-16 h-16 rounded-lg flex items-center justify-center text-3xl transition-colors cursor-pointer ${
-                      selectedHeart?.id === heart.id
+                      isSelected
                         ? 'bg-yellow-400/50 ring-2 ring-yellow-400'
-                        : 'bg-white/20 hover:bg-white/30'
+                        : isHeart
+                          ? 'bg-white/20 hover:bg-white/30'
+                          : 'bg-purple-600/20 hover:bg-purple-600/30 border border-purple-400/30'
                     }`}
-                    title={`${heart.color} heart (value: ${heart.value || 1})`}
+                    title={
+                      isHeart
+                        ? `${card.color} heart (value: ${card.value || 1})`
+                        : `${(card as any).name}: ${(card as any).description}`
+                    }
                   >
                     <div className="relative">
-                      {heart.emoji}
-                      {heart.value && (
+                      {card.emoji}
+                      {isHeart && card.value && (
                         <span className="absolute -top-1 -right-1 text-xs bg-white/80 text-black rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                          {heart.value}
+                          {card.value}
                         </span>
                       )}
                     </div>
@@ -567,6 +733,11 @@ export default function GameRoomPage() {
             {selectedHeart && (
               <p className="text-center text-yellow-400 mt-2">
                 Selected: {selectedHeart.emoji} (value: {selectedHeart.value || 1}) - Click a tile to place it
+              </p>
+            )}
+            {selectedMagicCard && (
+              <p className="text-center text-purple-400 mt-2">
+                Selected: {selectedMagicCard.emoji} {selectedMagicCard.name} - Click a target tile
               </p>
             )}
           </div>
@@ -586,6 +757,12 @@ export default function GameRoomPage() {
                   Draw Heart
                 </button>
                 <button
+                  onClick={drawMagicCard}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                >
+                  Draw Magic Card
+                </button>
+                <button
                   onClick={endTurn}
                   className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
                 >
@@ -595,7 +772,6 @@ export default function GameRoomPage() {
             )}
           </div>
         </div>
-      </div>
       </div>
     </ErrorBoundary>
   );
