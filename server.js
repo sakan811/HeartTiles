@@ -635,12 +635,19 @@ app.prepare().then(async () => {
           console.log(`Room ${roomCode} deleted (empty)`);
         } else {
           console.log(`User ${userName} (${userId}) left room ${roomCode}`);
+          // Save room state after player removal
+          await saveRoom(room);
         }
 
         socket.leave(roomCode);
         socket.data.roomCode = null;
         socket.data.userId = null;
+        socket.data.userName = null;
       }
+
+      // Disconnect the socket after leaving room to prevent reconnection
+      socket.disconnect(true);
+      console.log(`Socket ${socket.id} disconnected after leaving room ${roomCode}`);
     });
 
     socket.on("player-ready", async ({ roomCode }) => {

@@ -8,6 +8,7 @@ interface SocketContextType {
   isConnected: boolean;
   socketId: string | null;
   connectionError: string | null;
+  disconnect: () => void;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -15,6 +16,7 @@ const SocketContext = createContext<SocketContextType>({
   isConnected: false,
   socketId: null,
   connectionError: null,
+  disconnect: () => {},
 });
 
 export const useSocket = () => {
@@ -74,11 +76,18 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     };
   }, []);
 
+  const disconnect = () => {
+    if (socket) {
+      socket.disconnect();
+    }
+  };
+
   const value: SocketContextType = {
     socket,
     isConnected,
     socketId,
     connectionError,
+    disconnect,
   };
 
   return (

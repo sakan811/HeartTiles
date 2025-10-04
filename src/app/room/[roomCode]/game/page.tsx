@@ -35,7 +35,7 @@ export default function GameRoomPage() {
   const [turnCount, setTurnCount] = useState(0);
   const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string>("");
-  const { socket, isConnected, socketId } = useSocket();
+  const { socket, isConnected, socketId, disconnect } = useSocket();
   const params = useParams();
   const router = useRouter();
 
@@ -296,8 +296,14 @@ export default function GameRoomPage() {
   const leaveGame = () => {
     if (socket) {
       socket.emit("leave-room", { roomCode });
+      // Disconnect the socket after leaving room to prevent reconnection
+      setTimeout(() => {
+        disconnect();
+        router.push("/");
+      }, 100);
+    } else {
+      router.push("/");
     }
-    router.push(`/room/${roomCode}`);
   };
 
   const isCurrentPlayer = () => {

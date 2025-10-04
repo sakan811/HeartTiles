@@ -23,7 +23,7 @@ export default function RoomPage() {
   const [error, setError] = useState("");
   const [currentPlayerId, setCurrentPlayerId] = useState("");
   const [hasJoined, setHasJoined] = useState(false);
-  const { socket, isConnected, socketId } = useSocket();
+  const { socket, isConnected, socketId, disconnect } = useSocket();
   const params = useParams();
   const router = useRouter();
   const roomCode = params.roomCode as string;
@@ -125,8 +125,14 @@ export default function RoomPage() {
   const leaveRoom = () => {
     if (socket) {
       socket.emit("leave-room", { roomCode });
+      // Disconnect the socket after leaving room to prevent reconnection
+      setTimeout(() => {
+        disconnect();
+        router.push("/");
+      }, 100);
+    } else {
+      router.push("/");
     }
-    router.push("/");
   };
 
   const toggleReady = () => {
