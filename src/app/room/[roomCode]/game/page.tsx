@@ -10,6 +10,14 @@ interface Tile {
   id: number | string;
   color: string;
   emoji: string;
+  value?: number;
+  placedHeart?: {
+    value: number;
+    color: string;
+    emoji: string;
+    placedBy: string;
+    score: number;
+  };
 }
 
 interface Player {
@@ -17,6 +25,7 @@ interface Player {
   name: string;
   isReady: boolean;
   hand?: Tile[];
+  score?: number;
 }
 
 interface Deck {
@@ -397,6 +406,9 @@ export default function GameRoomPage() {
                       <div className="text-gray-300 text-xs mt-1">
                         Cards: {playerHands[opponent.userId]?.length || 0}
                       </div>
+                      <div className="text-yellow-300 text-xs mt-1 font-bold">
+                        Score: {opponent.score || 0}
+                      </div>
                       <div className="flex gap-1 mt-2">
                         {playerHands[opponent.userId]?.map((_heart: Tile, index: number) => (
                           <div key={index} className="text-2xl">
@@ -425,16 +437,22 @@ export default function GameRoomPage() {
             <div className="grid grid-cols-4 gap-4 max-w-md mx-auto">
               {tiles.map((tile) => {
                 console.log("Rendering tile:", tile);
+                const hasHeart = tile.placedHeart;
                 return (
                 <div
                   key={tile.id}
                   onClick={() => selectedHeart && placeHeart(Number(tile.id))}
-                  className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors cursor-pointer ${
+                  className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors cursor-pointer relative ${
                     selectedHeart ? 'hover:bg-white/30 bg-white/20' : 'bg-white/10 cursor-not-allowed'
-                  }`}
-                  title={`${tile.color} tile`}
+                  } ${hasHeart ? 'ring-2 ring-yellow-400' : ''}`}
+                  title={`${tile.color} tile${hasHeart ? ` - ${tile.placedHeart!.emoji} (score: ${tile.placedHeart!.score})` : ''}`}
                 >
                   {tile.emoji}
+                  {hasHeart && (
+                    <div className="absolute top-0 right-0 bg-yellow-400 text-black text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold transform translate-x-1 -translate-y-1">
+                      {tile.placedHeart!.score}
+                    </div>
+                  )}
                 </div>
               )})}
             </div>
@@ -450,8 +468,20 @@ export default function GameRoomPage() {
 
           {/* Player Hands (Bottom) */}
           <div className="mb-6">
-            <h3 className="text-white text-lg font-semibold mb-3">
-              Your Hearts
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-white text-lg font-semibold">
+                Your Hearts
+              </h3>
+              {(() => {
+                const myPlayerData = getCurrentPlayer();
+                return myPlayerData && (
+                  <div className="text-green-400 text-lg font-bold">
+                    Score: {myPlayerData.score || 0}
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center">
               {(() => {
                 const myPlayerData = getCurrentPlayer();
                 console.log("=== PLAYER HANDS RENDERING ===");
@@ -461,7 +491,7 @@ export default function GameRoomPage() {
                 console.log("Your hand length:", myPlayerData ? (playerHands[myPlayerData.userId] || []).length : 0);
                 return null;
               })()}
-            </h3>
+            </div>
             <div className="flex flex-wrap gap-2 justify-center">
               {(() => {
                 const myPlayerData = getCurrentPlayer();
@@ -484,16 +514,25 @@ export default function GameRoomPage() {
                         ? 'bg-yellow-400/50 ring-2 ring-yellow-400'
                         : 'bg-white/20 hover:bg-white/30'
                     }`}
-                    title={`${heart.color} heart`}
+                    title={`${heart.color} heart (value: ${heart.value || 1})`}
                   >
-                    {heart.emoji}
+                    <div className="relative">
+                      {heart.emoji}
+                      {heart.value && (
+                        <span className="absolute -top-1 -right-1 text-xs bg-white/80 text-black rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                          {heart.value}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
                 });
               })()}
             </div>
             {selectedHeart && (
-              <p className="text-center text-yellow-400 mt-2">Selected: {selectedHeart.emoji} - Click a tile to place it</p>
+              <p className="text-center text-yellow-400 mt-2">
+                Selected: {selectedHeart.emoji} (value: {selectedHeart.value || 1}) - Click a tile to place it
+              </p>
             )}
           </div>
 

@@ -111,6 +111,10 @@ const roomSchema = new mongoose.Schema({
     joinedAt: {
       type: Date,
       default: Date.now
+    },
+    score: {
+      type: Number,
+      default: 0
     }
   }],
   maxPlayers: {
@@ -126,11 +130,27 @@ const roomSchema = new mongoose.Schema({
       color: {
         type: String,
         required: true,
-        enum: ['red', 'yellow', 'green', 'blue', 'brown']
+        enum: ['red', 'yellow', 'green', 'blue', 'brown', 'white']
       },
       emoji: {
         type: String,
         required: true
+      },
+      placedHeart: {
+        value: {
+          type: Number,
+          default: 0
+        },
+        color: {
+          type: String,
+          enum: ['red', 'yellow', 'green', 'blue', 'brown']
+        },
+        emoji: String,
+        placedBy: String,
+        score: {
+          type: Number,
+          default: 0
+        }
       }
     }],
     gameStarted: {
@@ -169,6 +189,12 @@ const roomSchema = new mongoose.Schema({
         emoji: {
           type: String,
           required: true
+        },
+        value: {
+          type: Number,
+          required: true,
+          min: 1,
+          max: 3
         }
       }]
     },

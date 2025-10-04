@@ -376,14 +376,34 @@ app.prepare().then(async () => {
     const tiles = [];
 
     for (let i = 0; i < 8; i++) {
-      const randomIndex = Math.floor(Math.random() * colors.length);
-      tiles.push({
-        id: i,
-        color: colors[randomIndex],
-        emoji: emojis[randomIndex]
-      });
+      // 30% chance for white tile, 70% for colored tile
+      if (Math.random() < 0.3) {
+        tiles.push({
+          id: i,
+          color: "white",
+          emoji: "⬜"
+        });
+      } else {
+        const randomIndex = Math.floor(Math.random() * colors.length);
+        tiles.push({
+          id: i,
+          color: colors[randomIndex],
+          emoji: emojis[randomIndex]
+        });
+      }
     }
     return tiles;
+  }
+
+  // Helper function to calculate score based on heart and tile colors
+  function calculateScore(heart, tile) {
+    if (tile.color === "white") {
+      return heart.value; // Return value as-is for white tiles
+    } else if (heart.color === tile.color) {
+      return heart.value * 2; // Double score for matching colors
+    } else {
+      return 0; // No score for different colors
+    }
   }
 
   // Helper function to generate a single heart card
@@ -391,11 +411,13 @@ app.prepare().then(async () => {
     const colors = ["red", "yellow", "green", "blue", "brown"];
     const heartEmojis = ["❤️", "💛", "💚", "💙", "🤎"];
     const randomIndex = Math.floor(Math.random() * colors.length);
+    const randomValue = Math.floor(Math.random() * 3) + 1; // Random value 1-3
 
     return {
       id: Date.now() + Math.random(), // Unique ID based on timestamp
       color: colors[randomIndex],
-      emoji: heartEmojis[randomIndex]
+      emoji: heartEmojis[randomIndex],
+      value: randomValue
     };
   }
 
@@ -589,10 +611,11 @@ app.prepare().then(async () => {
             turnCount: room.gameState.turnCount
           })}`);
 
-          // Include player hands in the player objects for easier client-side handling
+          // Include player hands and scores in the player objects for easier client-side handling
           const playersWithHands = room.players.map(player => ({
             ...player,
-            hand: room.gameState.playerHands[player.userId] || []
+            hand: room.gameState.playerHands[player.userId] || [],
+            score: player.score || 0
           }));
 
           const gameStateData = {
@@ -701,13 +724,14 @@ app.prepare().then(async () => {
               turnCount: room.gameState.turnCount
             });
 
-            // Include player hands in the player objects for easier client-side handling
+            // Include player hands and scores in the player objects for easier client-side handling
             const playersWithHands = room.players.map(player => {
               const playerHand = room.gameState.playerHands[player.userId] || [];
               console.log(`Player ${player.name} (${player.userId}) hand:`, playerHand);
               return {
                 ...player,
-                hand: playerHand
+                hand: playerHand,
+                score: player.score || 0
               };
             });
 
@@ -825,10 +849,11 @@ app.prepare().then(async () => {
 
           console.log(`Heart drawn by ${userId} in room ${roomCode.toUpperCase()}, deck has ${room.gameState.deck.cards} cards left`);
 
-          // Include player hands in the player objects for broadcasting
+          // Include player hands and scores in the player objects for broadcasting
           const playersWithUpdatedHands = room.players.map(player => ({
             ...player,
-            hand: room.gameState.playerHands[player.userId] || []
+            hand: room.gameState.playerHands[player.userId] || [],
+            score: player.score || 0
           }));
 
           // Broadcast the updated player hands and deck to all players
@@ -899,22 +924,40 @@ app.prepare().then(async () => {
             // Place heart on the tile
             const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == tileId); // Use == to handle both number and string
             if (tileIndex !== -1) {
+              const tile = room.gameState.tiles[tileIndex];
+              const score = calculateScore(heart, tile);
+
+              // Update player score
+              const playerIndex = room.players.findIndex(p => p.userId === userId);
+              if (playerIndex !== -1) {
+                room.players[playerIndex].score += score;
+              }
+
+              // Update tile with heart information
               room.gameState.tiles[tileIndex] = {
-                ...room.gameState.tiles[tileIndex],
+                ...tile,
                 emoji: heart.emoji,
-                color: heart.color
+                color: heart.color,
+                placedHeart: {
+                  value: heart.value,
+                  color: heart.color,
+                  emoji: heart.emoji,
+                  placedBy: userId,
+                  score: score
+                }
               };
-              await saveRoom(room); // Save heart placement
+              await saveRoom(room); // Save heart placement and score
 
-              console.log(`Heart placed on tile ${tileId} by ${userId} in room ${roomCode.toUpperCase()}`);
+              console.log(`Heart placed on tile ${tileId} by ${userId} in room ${roomCode.toUpperCase()}, score: ${score}`);
 
-              // Include player hands in the player objects for broadcasting
+              // Include player hands and scores in the player objects for broadcasting
               const playersWithUpdatedHands = room.players.map(player => ({
                 ...player,
-                hand: room.gameState.playerHands[player.userId] || []
+                hand: room.gameState.playerHands[player.userId] || [],
+                score: player.score
               }));
 
-              // Broadcast the updated tiles and player hands
+              // Broadcast the updated tiles, player hands, and scores
               io.to(roomCode).emit("heart-placed", {
                 tiles: room.gameState.tiles,
                 players: playersWithUpdatedHands,
