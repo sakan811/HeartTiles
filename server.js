@@ -207,8 +207,18 @@ app.prepare().then(async () => {
 
   function validateHeartPlacement(room, userId, heartId, tileId) {
     const playerHand = room.gameState.playerHands[userId] || [];
-    const heartExists = playerHand.some(heart => heart.id === heartId);
-    if (!heartExists) return { valid: false, error: "Heart not in player's hand" };
+    const heart = playerHand.find(card => card.id === heartId);
+    if (!heart) return { valid: false, error: "Card not in player's hand" };
+
+    // Validate that the card is actually a heart card, not a magic card
+    // Heart cards have: color, value, emoji (❤️💛💚💙🤎)
+    // Magic cards have: type, name, description, emoji (💨♻️)
+    const isHeartCard = heart.color && heart.value !== undefined &&
+      ['❤️', '💛', '💚', '💙', '🤎'].includes(heart.emoji);
+
+    if (!isHeartCard) {
+      return { valid: false, error: "Only heart cards can be placed on tiles" };
+    }
 
     const tile = room.gameState.tiles.find(tile => tile.id == tileId);
     if (!tile) return { valid: false, error: "Tile not found" };

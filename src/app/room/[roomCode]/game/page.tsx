@@ -18,15 +18,11 @@ interface Tile {
     placedBy: string;
     score: number;
   };
-  type?: 'heart' | 'magic';
+  type?: 'heart' | 'magic' | 'wind' | 'recycle';
   name?: string;
   description?: string;
 }
 
-interface MagicTile extends Tile {
-  type: 'magic';
-  magicType?: 'wind' | 'recycle';
-}
 
 interface Player {
   userId: string;
@@ -334,28 +330,33 @@ export default function GameRoomPage() {
   const selectCardFromHand = (card: Tile) => {
     if (!isCurrentPlayer()) return;
 
-    // Check if card is a magic card by examining its properties
-    const isMagicCard = card.type === 'magic' && (
-      'magicType' in card && (card as MagicTile).magicType !== undefined ||
-      // Fallback: check if card name contains magic card indicators
-      card.name?.toLowerCase().includes('wind') || card.name?.toLowerCase().includes('recycle')
-    );
+    // Properly distinguish between heart cards and magic cards
+    // Heart cards have: color, value, emoji (❤️💛💚💙🤎)
+    // Magic cards have: type, name, description, emoji (💨♻️)
+    const isHeartCard = 'color' in card && 'value' in card &&
+      ['❤️', '💛', '💚', '💙', '🤎'].includes(card.emoji);
+
+    const isMagicCard = 'type' in card && 'name' in card &&
+      ['💨', '♻️'].includes(card.emoji);
 
     if (isMagicCard) {
-      // Determine magic type from card properties
-      const magicType = ('magicType' in card && (card as MagicTile).magicType) ||
-        (card.name?.toLowerCase().includes('wind') ? 'wind' : 'recycle');
-
+      // Create magic card object from hand card
       const magicCard: MagicCard = {
         id: card.id,
-        type: magicType as 'wind' | 'recycle',
+        type: card.type as 'wind' | 'recycle',
         emoji: card.emoji,
         name: card.name || 'Magic Card',
         description: card.description || 'A magic card'
       };
       setSelectedMagicCard(magicCard);
       setSelectedHeart(null);
+    } else if (isHeartCard) {
+      setSelectedHeart(card);
+      setSelectedMagicCard(null);
     } else {
+      // Fallback for any card types that don't match expected patterns
+      console.warn('Unknown card type:', card);
+      // Default to treating as heart card for safety
       setSelectedHeart(card);
       setSelectedMagicCard(null);
     }
@@ -556,8 +557,13 @@ export default function GameRoomPage() {
                 const playerHand = myPlayerData ? (playerHands[myPlayerData.userId] || []) : [];
 
                 return playerHand.map((card) => {
-                  const isHeart = card.type !== 'magic';
-                  const isSelected = isHeart ? selectedHeart?.id === card.id : selectedMagicCard?.id === card.id;
+                  // Use the same logic as selectCardFromHand for consistency
+                  const isHeartCard = 'color' in card && 'value' in card &&
+                    ['❤️', '💛', '💚', '💙', '🤎'].includes(card.emoji);
+                  const isMagicCard = 'type' in card && 'name' in card &&
+                    ['💨', '♻️'].includes(card.emoji);
+                  const isSelected = isHeartCard ? selectedHeart?.id === card.id :
+                                   isMagicCard ? selectedMagicCard?.id === card.id : false;
 
                   return (
                   <div
@@ -566,19 +572,23 @@ export default function GameRoomPage() {
                     className={`w-16 h-16 rounded-lg flex items-center justify-center text-3xl transition-colors cursor-pointer ${
                       isSelected
                         ? 'bg-yellow-400/50 ring-2 ring-yellow-400'
-                        : isHeart
+                        : isHeartCard
                           ? 'bg-white/20 hover:bg-white/30'
-                          : 'bg-purple-600/20 hover:bg-purple-600/30 border border-purple-400/30'
+                          : isMagicCard
+                            ? 'bg-purple-600/20 hover:bg-purple-600/30 border border-purple-400/30'
+                            : 'bg-gray-600/20 hover:bg-gray-600/30'
                     }`}
                     title={
-                      isHeart
+                      isHeartCard
                         ? `${card.color} heart (value: ${card.value || 1})`
-                        : `${card.name}: ${card.description}`
+                        : isMagicCard
+                          ? `${card.name}: ${card.description}`
+                          : 'Unknown card type'
                     }
                   >
                     <div className="relative">
                       {card.emoji}
-                      {isHeart && card.value && (
+                      {isHeartCard && card.value && (
                         <span className="absolute -top-1 -right-1 text-xs bg-white/80 text-black rounded-full w-4 h-4 flex items-center justify-center font-bold">
                           {card.value}
                         </span>
