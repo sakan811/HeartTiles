@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/socket";
 import { useSession } from "next-auth/react";
@@ -24,7 +24,7 @@ export default function RoomPage() {
   const roomCode = params.roomCode as string;
 
   // Get player name from authenticated session or fallback
-  const getPlayerName = () => {
+  const getPlayerName = useCallback(() => {
     if (session?.user?.name) {
       return session.user.name;
     }
@@ -45,7 +45,7 @@ export default function RoomPage() {
     }
 
     return playerName;
-  };
+  }, [session?.user?.name, socketId]);
 
   useEffect(() => {
     // Redirect unauthenticated users to sign in
@@ -76,10 +76,7 @@ export default function RoomPage() {
       setPlayers(data.players);
     };
 
-    const onGameStart = (data: {
-    success?: boolean;
-    message?: string;
-  }) => {
+    const onGameStart = () => {
       // Navigate to game page - server will provide all necessary state
       router.push(`/room/${roomCode}/game`);
     };

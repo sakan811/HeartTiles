@@ -23,6 +23,11 @@ interface Tile {
   description?: string;
 }
 
+interface MagicTile extends Tile {
+  type: 'magic';
+  magicType?: 'wind' | 'recycle';
+}
+
 interface Player {
   userId: string;
   name: string;
@@ -63,6 +68,7 @@ export default function GameRoomPage() {
   const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
   const [selectedMagicCard, setSelectedMagicCard] = useState<MagicCard | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string>("");
+  const [currentRoom, setCurrentRoom] = useState<string>("");
   const { socket, isConnected, socketId, disconnect } = useSocket();
   const params = useParams();
   const router = useRouter();
@@ -252,20 +258,16 @@ export default function GameRoomPage() {
     socket.on("room-error", onRoomError);
 
     // Only join if we haven't already joined this room with this socket
-    if (!socket.data?.currentRoom || socket.data.currentRoom !== roomCodeParam) {
+    if (!currentRoom || currentRoom !== roomCodeParam) {
       const tempPlayerName = `Player_${socketId?.slice(-6) || 'unknown'}`;
       console.log(`Joining room ${roomCodeParam} as ${tempPlayerName}`);
 
-      if (socket.data?.currentRoom && socket.data.currentRoom !== roomCodeParam) {
-        socket.emit("leave-room", { roomCode: socket.data.currentRoom });
+      if (currentRoom && currentRoom !== roomCodeParam) {
+        socket.emit("leave-room", { roomCode: currentRoom });
       }
 
       socket.emit("join-room", { roomCode: roomCodeParam, playerName: tempPlayerName });
-
-      if (!socket.data) {
-        socket.data = {};
-      }
-      socket.data.currentRoom = roomCodeParam;
+      setCurrentRoom(roomCodeParam);
     }
 
     return () => {
@@ -281,7 +283,7 @@ export default function GameRoomPage() {
       socket?.off("magic-card-used", onMagicCardUsed);
       socket?.off("room-error", onRoomError);
     };
-  }, [params.roomCode, socket, socketId, myPlayerId, currentPlayer?.userId, session, status, router]);
+  }, [params.roomCode, socket, socketId, myPlayerId, currentPlayer?.userId, session, status, router, currentRoom]);
 
   
 
@@ -332,12 +334,21 @@ export default function GameRoomPage() {
   const selectCardFromHand = (card: Tile) => {
     if (!isCurrentPlayer()) return;
 
-    const isMagicCard = card.type === 'recycle' || card.type === 'wind';
+    // Check if card is a magic card by examining its properties
+    const isMagicCard = card.type === 'magic' && (
+      'magicType' in card && (card as MagicTile).magicType !== undefined ||
+      // Fallback: check if card name contains magic card indicators
+      card.name?.toLowerCase().includes('wind') || card.name?.toLowerCase().includes('recycle')
+    );
 
     if (isMagicCard) {
+      // Determine magic type from card properties
+      const magicType = ('magicType' in card && (card as MagicTile).magicType) ||
+        (card.name?.toLowerCase().includes('wind') ? 'wind' : 'recycle');
+
       const magicCard: MagicCard = {
         id: card.id,
-        type: card.type === 'wind' ? 'wind' : 'recycle',
+        type: magicType as 'wind' | 'recycle',
         emoji: card.emoji,
         name: card.name || 'Magic Card',
         description: card.description || 'A magic card'
@@ -366,7 +377,7 @@ export default function GameRoomPage() {
     if (selectedMagicCard) {
       executeMagicCard(Number(tile.id));
     } else if (selectedHeart) {
-      placeHeart(tile.id);
+      placeHeart(Number(tile.id));
     }
   };
 
