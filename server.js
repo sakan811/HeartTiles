@@ -290,6 +290,10 @@ app.prepare().then(async () => {
       room.players[playerIndex].userId = newUserId;
       room.players[playerIndex].name = userName;
       room.players[playerIndex].email = userEmail;
+      // Initialize score if it doesn't exist
+      if (room.players[playerIndex].score === undefined) {
+        room.players[playerIndex].score = 0;
+      }
       console.log(`Updated existing player at index ${playerIndex}`);
     } else {
       // Add new player if not found
@@ -298,6 +302,7 @@ app.prepare().then(async () => {
         name: userName,
         email: userEmail,
         isReady: false,
+        score: 0,
         joinedAt: new Date()
       });
       console.log(`Added new player as existing player not found`);
@@ -489,6 +494,7 @@ app.prepare().then(async () => {
           name: userName,
           email: userEmail,
           isReady: false,
+          score: 0,
           joinedAt: new Date()
         };
 
@@ -569,6 +575,7 @@ app.prepare().then(async () => {
             name: userName,
             email: userEmail,
             isReady: false,
+            score: 0,
             joinedAt: new Date()
           };
           room.players.push(player);
@@ -578,6 +585,10 @@ app.prepare().then(async () => {
           // User is reconnecting - update their info
           existingPlayerByUserId.name = userName;
           existingPlayerByUserId.email = userEmail;
+          // Initialize score if it doesn't exist
+          if (existingPlayerByUserId.score === undefined) {
+            existingPlayerByUserId.score = 0;
+          }
           console.log(`User ${userName} (${userId}) rejoined room ${roomCode.toUpperCase()}`);
         }
 

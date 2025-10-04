@@ -362,6 +362,19 @@ export default function GameRoomPage() {
               </p>
             )}
             <p className="text-sm">Turn: {turnCount}</p>
+
+            {/* Score Display */}
+            <div className="mt-4 p-3 bg-white/10 rounded-lg">
+              <h3 className="text-white text-sm font-semibold mb-2">Scores</h3>
+              {players.map(player => (
+                <div key={player.userId} className="flex justify-between items-center text-sm">
+                  <span className={player.userId === myPlayerId ? "text-green-400" : "text-yellow-400"}>
+                    {player.name} {player.userId === myPlayerId && "(You)"}
+                  </span>
+                  <span className="text-white font-bold">{player.score || 0}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Opponent Display (Top) */}
@@ -438,18 +451,40 @@ export default function GameRoomPage() {
               {tiles.map((tile) => {
                 console.log("Rendering tile:", tile);
                 const hasHeart = tile.placedHeart;
+                const isOccupiedByMe = hasHeart && tile.placedHeart!.placedBy === myPlayerId;
+                const isOccupiedByOpponent = hasHeart && tile.placedHeart!.placedBy !== myPlayerId;
+                const canPlaceHeart = selectedHeart && !hasHeart && isCurrentPlayer();
+
                 return (
                 <div
                   key={tile.id}
-                  onClick={() => selectedHeart && placeHeart(Number(tile.id))}
-                  className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors cursor-pointer relative ${
-                    selectedHeart ? 'hover:bg-white/30 bg-white/20' : 'bg-white/10 cursor-not-allowed'
-                  } ${hasHeart ? 'ring-2 ring-yellow-400' : ''}`}
-                  title={`${tile.color} tile${hasHeart ? ` - ${tile.placedHeart!.emoji} (score: ${tile.placedHeart!.score})` : ''}`}
+                  onClick={() => canPlaceHeart && placeHeart(Number(tile.id))}
+                  className={`w-20 h-20 rounded-lg flex items-center justify-center text-4xl transition-colors relative ${
+                    canPlaceHeart
+                      ? 'hover:bg-white/30 bg-white/20 cursor-pointer'
+                      : hasHeart
+                        ? 'cursor-not-allowed'
+                        : 'bg-white/10 cursor-not-allowed'
+                  } ${
+                    isOccupiedByMe
+                      ? 'ring-4 ring-green-400 bg-green-900/30'
+                      : isOccupiedByOpponent
+                        ? 'ring-4 ring-red-400 bg-red-900/30'
+                        : ''
+                  }`}
+                  title={`${tile.color} tile${
+                    hasHeart
+                      ? ` - ${tile.placedHeart!.emoji} by ${tile.placedHeart!.placedBy === myPlayerId ? 'you' : 'opponent'} (score: ${tile.placedHeart!.score})`
+                      : canPlaceHeart
+                        ? ' - Click to place heart'
+                        : ''
+                  }`}
                 >
                   {tile.emoji}
                   {hasHeart && (
-                    <div className="absolute top-0 right-0 bg-yellow-400 text-black text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold transform translate-x-1 -translate-y-1">
+                    <div className={`absolute top-0 right-0 text-black text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold transform translate-x-1 -translate-y-1 ${
+                      isOccupiedByMe ? 'bg-green-400' : 'bg-red-400'
+                    }`}>
                       {tile.placedHeart!.score}
                     </div>
                   )}
