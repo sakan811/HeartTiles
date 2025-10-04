@@ -1013,6 +1013,18 @@ app.prepare().then(async () => {
               return;
             }
           } else if (card.type === 'recycle') {
+            // Check if tile is already occupied by a heart
+            if (tile.placedHeart) {
+              socket.emit("room-error", "Tile is already occupied");
+              return;
+            }
+
+            // Check if tile is already white (no need to recycle)
+            if (tile.color === 'white') {
+              socket.emit("room-error", "Tile is already white");
+              return;
+            }
+
             // Change tile color to white, keeping square format
             actionResult = {
               type: 'recycle',
@@ -1020,13 +1032,13 @@ app.prepare().then(async () => {
               newColor: 'white',
               tileId: tile.id
             };
-            // Set tile to white square, preserving any heart if it exists
+            // Set tile to white square (no heart since we validated it's empty)
             room.gameState.tiles[tileIndex] = {
               id: tile.id,
               color: 'white',
               emoji: '⬜',
-              // Preserve placedHeart if it exists, but update the tile underneath
-              placedHeart: tile.placedHeart
+              // No placedHeart since we validated the tile is empty
+              placedHeart: undefined
             };
             console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${tile.color} to white square (⬜)`);
           }

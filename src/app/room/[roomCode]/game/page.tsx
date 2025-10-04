@@ -480,7 +480,7 @@ export default function GameRoomPage() {
                 const canUseMagicCard = selectedMagicCard && isCurrentPlayer();
                 const isMagicCardTarget = selectedMagicCard && (
                   (selectedMagicCard.type === 'wind' && isOccupiedByOpponent) ||
-                  (selectedMagicCard.type === 'recycle' && tile.color !== 'white')
+                  (selectedMagicCard.type === 'recycle' && tile.color !== 'white' && !hasHeart)
                 );
 
                 return (
