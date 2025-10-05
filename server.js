@@ -848,7 +848,8 @@ app.prepare().then(async () => {
                   color: heart.color,
                   emoji: heart.emoji,
                   placedBy: userId,
-                  score: score
+                  score: score,
+                  originalTileColor: tile.color // Store original tile color
                 }
               };
               await saveRoom(room);
@@ -903,6 +904,22 @@ app.prepare().then(async () => {
       const turnValidation = validateTurn(room, userId);
       if (!turnValidation.valid) {
         socket.emit("room-error", turnValidation.error);
+        return;
+      }
+
+      // Check if player has drawn both heart and magic card as required by rules
+      // But allow ending turn if respective decks are empty
+      const cardDrawValidation = validateCardDrawLimit(room, userId);
+      const heartDeckEmpty = room.gameState.deck.cards <= 0;
+      const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
+
+      if (!cardDrawValidation.currentActions.drawnHeart && !heartDeckEmpty) {
+        socket.emit("room-error", "You must draw a heart card before ending your turn");
+        return;
+      }
+
+      if (!cardDrawValidation.currentActions.drawnMagic && !magicDeckEmpty) {
+        socket.emit("room-error", "You must draw a magic card before ending your turn");
         return;
       }
 
@@ -1123,14 +1140,15 @@ app.prepare().then(async () => {
               };
 
               // Restore original tile state, removing the heart and restoring the square emoji
+              const originalTileColor = tile.placedHeart.originalTileColor;
               room.gameState.tiles[tileIndex] = {
                 id: tile.id,
-                color: tile.color,
-                emoji: getSquareEmoji(tile.color),
+                color: originalTileColor,
+                emoji: getSquareEmoji(originalTileColor),
                 // Remove placedHeart completely to restore original tile state
                 placedHeart: undefined
               };
-              console.log(`Wind card used by ${userId} to remove heart from tile ${targetTileId} and restore ${tile.color} square format (${getSquareEmoji(tile.color)})`);
+              console.log(`Wind card used by ${userId} to remove heart from tile ${targetTileId} and restore ${originalTileColor} square format (${getSquareEmoji(originalTileColor)})`);
             } else {
               socket.emit("room-error", "No opponent heart on target tile");
               return;

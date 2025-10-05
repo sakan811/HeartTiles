@@ -48,11 +48,15 @@ Player with most points at end of game wins.
 #### Magic Cards
 - **Wind (💨)**: Remove an opponent's heart from a tile
     - Can only target tiles occupied by opponent's hearts
-    - After removal, the tile color is the same as before
-        - For example, if a red heart is removed from a red tile, the tile remains red
-        - If a red heart is removed from a white tile, the tile becomes white
+    - **CRITICAL: Tile color preservation rule** - The tile color ALWAYS remains unchanged after heart removal:
+        - If a red heart is removed from a red tile: tile remains red (🟥)
+        - If a red heart is removed from a white tile: tile becomes white (⬜)
+        - If a yellow heart is removed from a yellow tile: tile remains yellow (🟨)
+        - If a green heart is removed from a green tile: tile remains green (🟩)
+    - The heart is removed but the underlying tile color is preserved exactly as it was before
 - **Recycle (♻️)**: Change a tile into a white tile
     - Can only target non-white tiles
+    - Changes tile color to white regardless of original color
 
 ### Gameplay Flow
 1. Players must authenticate to create or join rooms
