@@ -366,6 +366,63 @@ app.prepare().then(async () => {
     return players[Math.floor(Math.random() * players.length)];
   }
 
+  function checkGameEndConditions(room) {
+    if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null };
+
+    // Condition 1: All tiles are filled (have hearts)
+    const allTilesFilled = room.gameState.tiles.every(tile => tile.placedHeart);
+    if (allTilesFilled) {
+      return { shouldEnd: true, reason: "All tiles are filled" };
+    }
+
+    // Condition 2: Both decks are empty
+    const heartDeckEmpty = room.gameState.deck.cards <= 0;
+    const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
+    if (heartDeckEmpty && magicDeckEmpty) {
+      return { shouldEnd: true, reason: "Both decks are empty" };
+    }
+
+    return { shouldEnd: false, reason: null };
+  }
+
+  async function endGame(room, roomCode, io) {
+    const gameEndResult = checkGameEndConditions(room);
+    if (!gameEndResult.shouldEnd) return false;
+
+    console.log(`Game ending in room ${roomCode}: ${gameEndResult.reason}`);
+
+    // Determine winner based on scores
+    const sortedPlayers = [...room.players].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const winner = sortedPlayers[0];
+    const isTie = sortedPlayers.length > 1 && sortedPlayers[0].score === sortedPlayers[1].score;
+
+    const gameEndData = {
+      reason: gameEndResult.reason,
+      players: room.players.map(player => ({
+        ...player,
+        hand: room.gameState.playerHands[player.userId] || []
+      })),
+      winner: isTie ? null : winner,
+      isTie: isTie,
+      finalScores: room.players.map(player => ({
+        userId: player.userId,
+        name: player.name,
+        score: player.score || 0
+      }))
+    };
+
+    // Broadcast game over to all players
+    io.to(roomCode).emit("game-over", gameEndData);
+
+    // Mark game as ended
+    room.gameState.gameStarted = false;
+    room.gameState.gameEnded = true;
+    room.gameState.endReason = gameEndResult.reason;
+    await saveRoom(room);
+
+    return true;
+  }
+
   // Use authentication middleware
   io.use(authenticateSocket);
 
@@ -402,7 +459,7 @@ app.prepare().then(async () => {
           gameState: {
             tiles: [], gameStarted: false, currentPlayer: null,
             deck: { emoji: "💌", cards: 10, type: 'hearts' },
-            magicDeck: { emoji: "🔮", cards: [] },
+            magicDeck: { emoji: "🔮", cards: 10, type: 'magic' },
             playerHands: {}, turnCount: 0
           }
         };
@@ -542,7 +599,7 @@ app.prepare().then(async () => {
 
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
-            room.gameState.magicDeck.cards = [];
+            room.gameState.magicDeck.cards = 10;
             await saveRoom(room);
 
             room.players.forEach(player => {
@@ -661,6 +718,9 @@ app.prepare().then(async () => {
             playerHands: room.gameState.playerHands,
             deck: room.gameState.deck
           });
+
+          // Check if game should end after drawing (if deck becomes empty)
+          await endGame(room, roomCode, io);
         }
       } finally {
         releaseTurnLock(roomCode, socket.id);
@@ -763,6 +823,9 @@ app.prepare().then(async () => {
                 players: playersWithUpdatedHands,
                 playerHands: room.gameState.playerHands
               });
+
+              // Check if game should end after heart placement
+              await endGame(room, roomCode, io);
             }
           }
         }
@@ -883,7 +946,7 @@ app.prepare().then(async () => {
       }
 
       try {
-        if (room.gameState.gameStarted) {
+        if (room.gameState.gameStarted && room.gameState.magicDeck.cards > 0) {
           // Generate a new magic card and add to player's hand
           const newMagicCard = generateSingleMagicCard();
 
@@ -892,6 +955,9 @@ app.prepare().then(async () => {
             room.gameState.playerHands[userId] = [];
           }
           room.gameState.playerHands[userId].push(newMagicCard);
+
+          // Decrement magic deck count
+          room.gameState.magicDeck.cards--;
 
           await saveRoom(room); // Save magic card draw
 
@@ -907,8 +973,14 @@ app.prepare().then(async () => {
           // Broadcast the updated player hands to all players
           io.to(roomCode).emit("magic-card-drawn", {
             players: playersWithUpdatedHands,
-            playerHands: room.gameState.playerHands
+            playerHands: room.gameState.playerHands,
+            magicDeck: room.gameState.magicDeck
           });
+
+          // Check if game should end after drawing magic card (if deck becomes empty)
+          await endGame(room, roomCode, io);
+        } else {
+          socket.emit("room-error", "No more magic cards in deck");
         }
       } finally {
         // Always release the lock
@@ -1071,6 +1143,9 @@ app.prepare().then(async () => {
             playerHands: room.gameState.playerHands,
             usedBy: userId
           });
+
+          // Check if game should end after magic card usage (wind card could potentially clear tiles)
+          await endGame(room, roomCode, io);
         }
       } finally {
         // Always release the lock

@@ -48,7 +48,8 @@ interface MagicCard {
 
 interface MagicDeck {
   emoji: string;
-  cards: MagicCard[];
+  cards: number;
+  type: string;
 }
 
 export default function GameRoomPage() {
@@ -59,7 +60,7 @@ export default function GameRoomPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [playerHands, setPlayerHands] = useState<Record<string, Tile[]>>({});
   const [deck, setDeck] = useState<Deck>({ emoji: "💌", cards: 10 });
-  const [magicDeck, setMagicDeck] = useState<MagicDeck>({ emoji: "🔮", cards: [] });
+  const [magicDeck, setMagicDeck] = useState<MagicDeck>({ emoji: "🔮", cards: 10, type: 'magic' });
   const [turnCount, setTurnCount] = useState(0);
   const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
   const [selectedMagicCard, setSelectedMagicCard] = useState<MagicCard | null>(null);
@@ -132,7 +133,7 @@ export default function GameRoomPage() {
         players: gameData.players || [],
         playerHands: gameData.playerHands || {},
         deck: gameData.deck || { emoji: "💌", cards: 10 },
-        magicDeck: gameData.magicDeck || { emoji: "🔮", cards: [] },
+        magicDeck: gameData.magicDeck || { emoji: "🔮", cards: 10, type: 'magic' },
         turnCount: gameData.turnCount || 0,
         playerId: gameData.playerId || null
       };
@@ -195,11 +196,14 @@ export default function GameRoomPage() {
       setSelectedHeart(null);
     };
 
-    const onMagicCardDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]> }) => {
+    const onMagicCardDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]>; magicDeck?: MagicDeck }) => {
       console.log("Magic card drawn");
 
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
+      if (data.magicDeck) {
+        setMagicDeck(data.magicDeck);
+      }
 
       const currentPlayerId = currentPlayer?.userId;
       if (currentPlayerId) {
@@ -231,6 +235,35 @@ export default function GameRoomPage() {
       setSelectedMagicCard(null);
     };
 
+    const onGameOver = (data: {
+      reason: string;
+      players: Player[];
+      winner: Player | null;
+      isTie: boolean;
+      finalScores: { userId: string; name: string; score: number }[];
+    }) => {
+      console.log("Game over:", data);
+
+      // Update the game state to show final results
+      setPlayers(data.players);
+      setPlayerHands(data.players.reduce((acc, player) => {
+        acc[player.userId] = player.hand || [];
+        return acc;
+      }, {} as Record<string, Tile[]>));
+
+      // Could add a game over modal or notification here
+      const winnerText = data.isTie
+        ? "It's a tie!"
+        : data.winner
+          ? `${data.winner.name} wins!`
+          : "Game ended";
+
+      // For now, just show an alert
+      setTimeout(() => {
+        alert(`Game Over!\n${winnerText}\nReason: ${data.reason}\n\nFinal Scores:\n${data.finalScores.map(s => `${s.name}: ${s.score}`).join('\n')}`);
+      }, 500);
+    };
+
     const onRoomError = (errorMessage: string) => {
       console.error("Game page: Room error:", errorMessage);
       if (errorMessage === "Room is full") {
@@ -251,6 +284,7 @@ export default function GameRoomPage() {
     socket.on("heart-placed", onHeartPlaced);
     socket.on("magic-card-drawn", onMagicCardDrawn);
     socket.on("magic-card-used", onMagicCardUsed);
+    socket.on("game-over", onGameOver);
     socket.on("room-error", onRoomError);
 
     // Only join if we haven't already joined this room with this socket
@@ -277,6 +311,7 @@ export default function GameRoomPage() {
       socket?.off("heart-placed", onHeartPlaced);
       socket?.off("magic-card-drawn", onMagicCardDrawn);
       socket?.off("magic-card-used", onMagicCardUsed);
+      socket?.off("game-over", onGameOver);
       socket?.off("room-error", onRoomError);
     };
   }, [params.roomCode, socket, socketId, myPlayerId, currentPlayer?.userId, session, status, router, currentRoom]);
@@ -531,7 +566,7 @@ export default function GameRoomPage() {
             </div>
             <div className="bg-purple-600/20 rounded-lg p-4 flex flex-col items-center border border-purple-400/30">
               <div className="text-6xl mb-2">{magicDeck.emoji}</div>
-              <div className="text-white text-sm">Magic Deck: {magicDeck.cards.length} cards</div>
+              <div className="text-white text-sm">Magic Deck: {magicDeck.cards} cards</div>
             </div>
           </div>
           </div>
