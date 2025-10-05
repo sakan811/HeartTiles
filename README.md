@@ -63,9 +63,11 @@ Player with most points at end of game wins.
 6. Turn-based heart placement gameplay
 
 ### Game Elements
-- **Tiles**: 8 colored tiles (🟥🟨🟩🟦🟫) that can be shuffled
-- **Hearts**: 5 colored heart cards (❤️💛💚💙🤎) drawn from deck
-- **Deck**: Starts with 10 cards, decreases as players draw
-- **Player Hands**: Each player starts with 3 hearts, can draw more
+- **Tiles**: 8 colored tiles
+    - Tiles can be white or colored (red, yellow, green) (⬜, 🟥, 🟨, 🟩)
+- **Hearts**: 3 colored heart cards
+    - Hearts can be red, yellow, or green (❤️, 💛, 💚)
+- **Deck**: Starts with 10 heart cards and 10 magic cards
+- **Player Hands**: Each player starts with 3 hearts, 2 magic cards
 - **Magic Cards**: Special cards with unique abilities (Wind, Recycle)
 - **Scoring System**: Points awarded for matching hearts on tiles

@@ -120,6 +120,39 @@ app.prepare().then(async () => {
     return { valid: true };
   }
 
+  function validateCardDrawLimit(room, userId) {
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+
+    const playerActions = room.gameState.playerActions[userId] || { drawnHeart: false, drawnMagic: false };
+
+    return { valid: true, currentActions: playerActions };
+  }
+
+  function recordCardDraw(room, userId, cardType) {
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+
+    if (!room.gameState.playerActions[userId]) {
+      room.gameState.playerActions[userId] = { drawnHeart: false, drawnMagic: false };
+    }
+
+    if (cardType === 'heart') {
+      room.gameState.playerActions[userId].drawnHeart = true;
+    } else if (cardType === 'magic') {
+      room.gameState.playerActions[userId].drawnMagic = true;
+    }
+  }
+
+  function resetPlayerActions(room, userId) {
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+    room.gameState.playerActions[userId] = { drawnHeart: false, drawnMagic: false };
+  }
+
   function validateRoomCode(roomCode) {
     return roomCode && typeof roomCode === 'string' && /^[A-Z0-9]{6}$/i.test(roomCode);
   }
@@ -375,11 +408,12 @@ app.prepare().then(async () => {
       return { shouldEnd: true, reason: "All tiles are filled" };
     }
 
-    // Condition 2: Both decks are empty
+    // Condition 2: Either deck is empty (if deck is empty, game ends)
     const heartDeckEmpty = room.gameState.deck.cards <= 0;
     const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
-    if (heartDeckEmpty && magicDeckEmpty) {
-      return { shouldEnd: true, reason: "Both decks are empty" };
+    if (heartDeckEmpty || magicDeckEmpty) {
+      const emptyDeck = heartDeckEmpty ? "Heart" : "Magic";
+      return { shouldEnd: true, reason: `${emptyDeck} deck is empty` };
     }
 
     return { shouldEnd: false, reason: null };
@@ -692,6 +726,12 @@ app.prepare().then(async () => {
         return;
       }
 
+      const cardDrawValidation = validateCardDrawLimit(room, userId);
+      if (cardDrawValidation.currentActions.drawnHeart) {
+        socket.emit("room-error", "You can only draw one heart card per turn");
+        return;
+      }
+
       if (!acquireTurnLock(roomCode, socket.id)) {
         socket.emit("room-error", "Action in progress, please wait");
         return;
@@ -699,6 +739,7 @@ app.prepare().then(async () => {
 
       try {
         if (room.gameState.gameStarted && room.gameState.deck.cards > 0) {
+          recordCardDraw(room, userId, 'heart');
           const newHeart = generateSingleHeart();
           if (!room.gameState.playerHands[userId]) {
             room.gameState.playerHands[userId] = [];
@@ -872,6 +913,9 @@ app.prepare().then(async () => {
 
       try {
         if (room.gameState.gameStarted) {
+        // Reset actions for the current player whose turn is ending
+        resetPlayerActions(room, room.gameState.currentPlayer.userId);
+
         // Find the current player index
         const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId);
         const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length;
@@ -940,6 +984,12 @@ app.prepare().then(async () => {
         return;
       }
 
+      const cardDrawValidation = validateCardDrawLimit(room, userId);
+      if (cardDrawValidation.currentActions.drawnMagic) {
+        socket.emit("room-error", "You can only draw one magic card per turn");
+        return;
+      }
+
       if (!acquireTurnLock(roomCode, socket.id)) {
         socket.emit("room-error", "Action in progress, please wait");
         return;
@@ -947,6 +997,7 @@ app.prepare().then(async () => {
 
       try {
         if (room.gameState.gameStarted && room.gameState.magicDeck.cards > 0) {
+          recordCardDraw(room, userId, 'magic');
           // Generate a new magic card and add to player's hand
           const newMagicCard = generateSingleMagicCard();
 
