@@ -9,69 +9,68 @@ A browser game inspired by Kitty Card game from Love and Deepspace.
 ## Game Mechanics
 
 ### Room System
-- Rooms are created dynamically when first player joins
-- 6-character alphanumeric codes (uppercase)
-- Maximum 2 players per room
-- Automatic cleanup of empty rooms
 
-### Game Rules
-- Game start with 3 heart cards and 2 Magic cards each
-- Turn-based gameplay with random starting player
-- Player actions: 
-    - draw 1 heart; player can only draw 1 card per turn
-    - draw 1 magic card; player can only draw 1 card per turn
-    - place heart on tile; can place multiple hearts if have enough hearts
-    - use magic card ability; can use multiple magic cards if have enough magic cards
-    - end turn
-- Player can end turn without placing or using cards
-- Player must draw heart and magic card
-- There is 10 heart cards in deck
-- There is 10 magic cards in deck
-- Game ends when all tiles are filled
-- If deck is empty, game ends
+- **Dynamic Creation**: Rooms are created when the first player joins
+- **Room Codes**: 6-character alphanumeric codes (uppercase letters and numbers)
+- **Player Limit**: Maximum 2 players per room
+- **Auto Cleanup**: Empty rooms are automatically removed
 
-#### How to Win
-Player with most points at end of game wins.
+### Core Gameplay
 
-#### Point system
-- Each heart card has it owns points ranged from 1 to 3
-- Place a heart on a white tile: gain points as it is
-- Place a heart on a tile with different color: gain 0 points
-- Place a heart on a tile with the same color a heart: gain double points
+- **Starting Cards**: Each player begins with 3 heart cards and 2 magic cards
+- **Turn Order**: Random player starts first, then players alternate turns
+- **Deck Size**: 10 heart cards and 10 magic cards total
+- **Win Condition**: Player with the most points when all tiles are filled or deck is empty wins
 
-#### Heart placing system
-- Players can only place hearts on tiles that do not already have a heart
-- Players can only place hearts during their turn
-- Players can only place hearts if they have hearts in their hand
-- Players can only place hearts on tiles that are not already filled
+### Turn Structure
 
-#### Magic Cards
-- **Wind (💨)**: Remove an opponent's heart from a tile
-    - Can only target tiles occupied by opponent's hearts
-    - **CRITICAL: Tile color preservation rule** - The tile color ALWAYS remains unchanged after heart removal:
-        - If a red heart is removed from a red tile: tile remains red (🟥)
-        - If a red heart is removed from a white tile: tile becomes white (⬜)
-        - If a yellow heart is removed from a yellow tile: tile remains yellow (🟨)
-        - If a green heart is removed from a green tile: tile remains green (🟩)
-    - The heart is removed but the underlying tile color is preserved exactly as it was before
-- **Recycle (♻️)**: Change a tile into a white tile
-    - Can only target non-white tiles
-    - Changes tile color to white regardless of original color
+During your turn, you can:
 
-### Gameplay Flow
-1. Players must authenticate to create or join rooms
-2. Players create or join rooms
-3. Players mark themselves ready
-4. Game starts when both players are ready
-5. Random player starts first
-6. Turn-based heart placement gameplay
+1. **Draw Cards**: Draw 1 heart card and 1 magic card (mandatory)
+2. **Place Hearts**: Place multiple heart cards on empty tiles (if you have cards)
+3. **Use Magic**: Activate magic card abilities (if you have cards)
+4. **End Turn**: Pass control to the next player
+
+### Scoring System
+
+- **Heart Values**: Each heart card ❤️ 💛 💚 has 1-3 points
+- **White Tiles ⬜**: Place heart → gain face value points
+- **Color Mismatch**: Different colored heart/tile (e.g., ❤️ on 🟨) → 0 points
+- **Color Match**: Same colored heart/tile (e.g., ❤️ on 🟥) → double points
+
+### Placement Rules
+
+- Hearts can only be placed on empty tiles
+- Players can place multiple hearts per turn
+- Hearts can only be placed during your turn
+
+### Magic Cards
+
+#### Wind 💨
+
+- **Effect**: Remove an opponent's heart ❤️ from any tile
+- **Target**: Only tiles occupied by opponent's hearts
+- **Tile Color Rule**: The underlying tile color never changes
+  - ❤️ removed from 🟥 → tile stays 🟥
+  - ❤️ removed from ⬜ → tile stays ⬜
+
+#### Recycle ♻️
+
+- **Effect**: Change any colored tile to white ⬜
+- **Target**: Only non-white tiles 🟥 🟨 🟩
+- **Result**: Tile becomes ⬜ regardless of original color
 
 ### Game Elements
-- **Tiles**: 8 colored tiles
-    - Tiles can be white or colored (red, yellow, green) (⬜, 🟥, 🟨, 🟩)
-- **Hearts**: 3 colored heart cards
-    - Hearts can be red, yellow, or green (❤️, 💛, 💚)
-- **Deck**: Starts with 10 heart cards and 10 magic cards
-- **Player Hands**: Each player starts with 3 hearts, 2 magic cards
-- **Magic Cards**: Special cards with unique abilities (Wind, Recycle)
-- **Scoring System**: Points awarded for matching hearts on tiles
+
+- **Tiles**: 8 colored tiles ⬜ 🟥 🟨 🟩
+- **Hearts**: Colored cards ❤️ 💛 💚 with 1-3 points
+- **Magic Cards**: Special ability cards 💨 ♻️ (Wind, Recycle)
+
+### Game Flow
+
+1. **Authentication**: Players sign in to access game features
+2. **Room Creation**: Create new room or join existing room with code
+3. **Ready Phase**: Both players must mark themselves as ready
+4. **Game Start**: Random player selected to go first
+5. **Turn Play**: Players take turns drawing, placing, and using cards
+6. **Game End**: All tiles filled or deck empty → winner determined
