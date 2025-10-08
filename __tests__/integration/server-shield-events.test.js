@@ -348,6 +348,7 @@ describe('Server Shield Event Integration', () => {
       // Player2 tries to activate shield
       const player2Shield = new ShieldCard('shield2');
 
+      // Player2 should not be able to activate shield while player1 has shield
       expect(() => {
         player2Shield.executeEffect(mockRoom.gameState, player2Id);
       }).toThrow("Cannot activate Shield while opponent has active Shield");

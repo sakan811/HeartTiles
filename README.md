@@ -74,7 +74,9 @@ During your turn, you can:
   - Red shield icon on opponent's protected tiles
   - Only protected tiles show shield icons
     - Shield icons are on the upper-left of the tile, both for you and the opponent
+  - Shield icon has turn counter indicating remaining turns
 - **Limitation**: Only one Shield can be active per player at a time
+  - Both player cannot have active Shields simultaneously
 - **Stacking**: Playing a new Shield replaces the previous one
   - Cannot replace opponent's active Shield
 
