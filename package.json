@@ -8,6 +8,11 @@
     "build": "next build --turbopack",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint . --fix",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
     "docker:start": "docker compose up -d",
     "docker:stop": "docker compose down",
     "docker:logs": "docker compose logs -f"

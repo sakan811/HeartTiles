@@ -1076,8 +1076,17 @@ function checkAndExpireShields(room) {
       console.log(`User ${userId} attempting to use magic card ${cardId} on tile ${targetTileId} in room ${roomCode}`);
 
       // Input validation
-      if (!validateRoomCode(roomCode) || !cardId || !targetTileId) {
+      if (!validateRoomCode(roomCode) || !cardId) {
         socket.emit("room-error", "Invalid input data");
+        return;
+      }
+
+      // For Shield cards, targetTileId can be 'self' or undefined
+      // For other magic cards, targetTileId is required
+      if (!targetTileId || targetTileId === 'self') {
+        // This might be a Shield card, continue and validate later
+      } else if (typeof targetTileId !== 'number' && typeof targetTileId !== 'string') {
+        socket.emit("room-error", "Invalid target tile ID");
         return;
       }
 
@@ -1127,6 +1136,21 @@ function checkAndExpireShields(room) {
           let magicCard = card;
           if (!(card instanceof WindCard || card instanceof RecycleCard || card instanceof ShieldCard)) {
             magicCard = createCardFromData(card);
+          }
+
+          // Validate target based on card type
+          if (magicCard.type === 'shield') {
+            // Shield cards don't need a target tile, targetTileId should be 'self' or undefined
+            if (targetTileId && targetTileId !== 'self') {
+              socket.emit("room-error", "Shield cards don't target tiles");
+              return;
+            }
+          } else {
+            // For non-shield cards, validate that targetTileId is provided and valid
+            if (!targetTileId || targetTileId === 'self') {
+              socket.emit("room-error", "Target tile is required for this card");
+              return;
+            }
           }
 
           // Apply card effect based on type using the new card classes

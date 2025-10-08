@@ -196,7 +196,7 @@ export class ShieldCard extends MagicCard {
     }
 
     // Check if player can activate shield under current conditions
-    const activationCheck = this.canActivateShield(gameState, playerId);
+    const activationCheck = ShieldCard.canActivateShield(gameState, playerId);
     if (!activationCheck.canActivate) {
       throw new Error(activationCheck.reason);
     }
@@ -204,7 +204,7 @@ export class ShieldCard extends MagicCard {
     // Check if player already has an active shield
     const currentTurnCount = gameState.turnCount || 1;
     const existingShield = gameState.shields[playerId];
-    if (existingShield && this.isActive(existingShield, currentTurnCount)) {
+    if (existingShield && ShieldCard.isActive(existingShield, currentTurnCount)) {
       // Allow reinforcement but reset the duration
       gameState.shields[playerId] = {
         active: true,
