@@ -125,7 +125,7 @@ describe('Server Shield Event Integration', () => {
       // Verify shield activation
       expect(actionResult.type).toBe('shield');
       expect(actionResult.activatedFor).toBe(player1Id);
-      expect(actionResult.remainingTurns).toBe(2);
+      expect(actionResult.remainingTurns).toBe(3);
 
       // Update player hands
       mockRoom.gameState.playerHands[player1Id] = playerHand;
@@ -199,7 +199,7 @@ describe('Server Shield Event Integration', () => {
       const actionResult = shieldCard.executeEffect(mockRoom.gameState, player1Id);
 
       expect(actionResult.reinforced).toBe(true);
-      expect(actionResult.remainingTurns).toBe(2);
+      expect(actionResult.remainingTurns).toBe(3);
     });
   });
 
@@ -277,9 +277,9 @@ describe('Server Shield Event Integration', () => {
       const shield = new ShieldCard('shield1');
       shield.executeEffect(mockRoom.gameState, player1Id);
 
-      // Turn 1: 2 turns remaining
+      // Turn 1: 3 turns remaining
       await serverFunctions.checkAndExpireShields(mockRoom);
-      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
+      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(3);
 
       // Turn 2: 1 turn remaining
       mockRoom.gameState.turnCount = 2;
@@ -396,7 +396,7 @@ describe('Server Shield Event Integration', () => {
       // Verify shield state is preserved
       expect(serializedRoom.gameState.shields[player1Id]).toBeDefined();
       expect(serializedRoom.gameState.shields[player1Id].active).toBe(true);
-      expect(serializedRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
+      expect(serializedRoom.gameState.shields[player1Id].remainingTurns).toBe(3);
 
       // Test shield functionality on deserialized state
       const isProtected = ShieldCard.isPlayerProtected(serializedRoom.gameState, player1Id, 1);
@@ -446,12 +446,12 @@ describe('Server Shield Event Integration', () => {
 
       // Verify broadcast contains all necessary visual data
       expect(broadcastData.shields[player1Id]).toBeDefined();
-      expect(broadcastData.shields[player1Id].remainingTurns).toBe(2);
+      expect(broadcastData.shields[player1Id].remainingTurns).toBe(3);
       expect(broadcastData.shields[player1Id].protectedPlayerId).toBe(player1Id);
 
       // Verify action result contains visual feedback data
       expect(broadcastData.actionResult.type).toBe('shield');
-      expect(broadcastData.actionResult.remainingTurns).toBe(2);
+      expect(broadcastData.actionResult.remainingTurns).toBe(3);
       expect(broadcastData.actionResult.message).toContain('Shield activated');
     });
 
@@ -497,7 +497,7 @@ describe('Server Shield Event Integration', () => {
 
       // Verify opponent can see Player 1's shield state
       expect(opponentVisualData.shields[player1Id]).toBeDefined();
-      expect(opponentVisualData.shields[player1Id].remainingTurns).toBe(2);
+      expect(opponentVisualData.shields[player1Id].remainingTurns).toBe(3);
 
       // Verify tiles with Player 1's hearts should show shield indicators
       const protectedTiles = mockRoom.gameState.tiles.filter(tile =>
@@ -522,8 +522,8 @@ describe('Server Shield Event Integration', () => {
 
       // Verify visual state is updated correctly
       expect(reinforceResult.reinforced).toBe(true);
-      expect(reinforceResult.remainingTurns).toBe(2);
-      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
+      expect(reinforceResult.remainingTurns).toBe(3);
+      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(3);
 
       // Broadcast data should reflect reinforcement
       const reinforceBroadcastData = {
@@ -532,7 +532,7 @@ describe('Server Shield Event Integration', () => {
       };
 
       expect(reinforceBroadcastData.actionResult.message).toContain('Shield reinforced');
-      expect(reinforceBroadcastData.shields[player1Id].remainingTurns).toBe(2);
+      expect(reinforceBroadcastData.shields[player1Id].remainingTurns).toBe(3);
     });
   });
 });

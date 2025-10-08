@@ -323,14 +323,17 @@ app.prepare().then(async () => {
 function checkAndExpireShields(room) {
   if (!room.gameState.shields) return;
 
-  // Use ShieldCard's static method to check shield status
+  // Decrement remaining turns for all active shields at the end of each turn
   for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    if (!ShieldCard.isActive(shield, room.gameState.turnCount)) {
-      console.log(`Shield expired for ${userId}`);
-      delete room.gameState.shields[userId];
-    } else {
-      // Update remaining turns using ShieldCard's static method
-      shield.remainingTurns = ShieldCard.getRemainingTurns(shield, room.gameState.turnCount);
+    if (shield.remainingTurns > 0) {
+      shield.remainingTurns--;
+      console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
+
+      // Remove shield if it has expired
+      if (shield.remainingTurns <= 0) {
+        console.log(`Shield expired for ${userId}`);
+        delete room.gameState.shields[userId];
+      }
     }
   }
 }

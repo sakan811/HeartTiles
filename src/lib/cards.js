@@ -102,7 +102,7 @@ export class WindCard extends MagicCard {
     const currentTurnCount = gameState.turnCount || 1;
 
     if (ShieldCard.isPlayerProtected(gameState, opponentId, currentTurnCount)) {
-      const remainingTurns = ShieldCard.getRemainingTurns(gameState.shields[opponentId], currentTurnCount);
+      const remainingTurns = ShieldCard.getRemainingTurns(gameState.shields[opponentId]);
       throw new Error(`Opponent is protected by Shield (${remainingTurns} turns remaining)`);
     }
 
@@ -147,15 +147,14 @@ export class RecycleCard extends MagicCard {
 
     // Check shield protection using the new ShieldCard protection logic
     // Recycle protects tiles from any player who has active hearts on the board
-    const currentTurnCount = gameState.turnCount || 1;
 
     if (gameState.shields) {
       for (const [shieldUserId, shield] of Object.entries(gameState.shields)) {
-        if (ShieldCard.isActive(shield, currentTurnCount)) {
+        if (ShieldCard.isActive(shield)) {
           // Check if this shielded player has hearts on the board
           const hasPlayerHearts = gameState.tiles.some(t => t.placedHeart && t.placedHeart.placedBy === shieldUserId);
           if (hasPlayerHearts) {
-            const remainingTurns = ShieldCard.getRemainingTurns(shield, currentTurnCount);
+            const remainingTurns = ShieldCard.getRemainingTurns(shield);
             throw new Error(`Tile is protected by Shield (${remainingTurns} turns remaining)`);
           }
         }
@@ -202,16 +201,14 @@ export class ShieldCard extends MagicCard {
     }
 
     // Check if player already has an active shield
-    const currentTurnCount = gameState.turnCount || 1;
     const existingShield = gameState.shields[playerId];
-    if (existingShield && ShieldCard.isActive(existingShield, currentTurnCount)) {
+    if (existingShield && ShieldCard.isActive(existingShield, gameState.turnCount)) {
       // Allow reinforcement but reset the duration
       gameState.shields[playerId] = {
         active: true,
-        remainingTurns: 2, // Reset to full duration
+        remainingTurns: 3, // Reset to full duration
         activatedAt: Date.now(),
         activatedBy: playerId,
-        turnActivated: currentTurnCount,
         protectedPlayerId: playerId
       };
 
@@ -219,53 +216,49 @@ export class ShieldCard extends MagicCard {
         type: 'shield',
         activatedFor: playerId,
         protectedPlayerId: playerId,
-        remainingTurns: 2,
-        message: `Shield reinforced! Protection extended for 2 more turns.`,
+        remainingTurns: 3,
+        message: `Shield reinforced! Protection extended for 3 more turns.`,
         reinforced: true
       };
     }
 
-    // Activate new shield for player (duration: until end of player's next turn)
-    // This means the shield protects during opponent's next turn and player's next turn
+    // Activate new shield for player (duration: 3 turns total)
+    // Shield starts at 3 and decreases by 1 at the end of each player's turn
     gameState.shields[playerId] = {
       active: true,
-      remainingTurns: 2, // Opponent's turn + player's next turn
+      remainingTurns: 3, // Start with 3 turns
       activatedAt: Date.now(),
       activatedBy: playerId,
-      turnActivated: currentTurnCount,
-      protectedPlayerId: playerId // Explicitly track which player is protected
+      protectedPlayerId: playerId
     };
 
     return {
       type: 'shield',
       activatedFor: playerId,
       protectedPlayerId: playerId,
-      remainingTurns: 2,
-      message: `Shield activated! Your tiles and hearts are protected until end of your next turn.`,
+      remainingTurns: 3,
+      message: `Shield activated! Your tiles and hearts are protected for 3 turns.`,
       reinforced: false
     };
   }
 
-  // Check if shield is still active based on game turn count
-  static isActive(shield, turnCount) {
-    if (!shield || !shield.turnActivated) return false;
-    const turnsSinceActivation = turnCount - shield.turnActivated;
-    // Shield is active for 2 turns: opponent's next turn + player's next turn
-    return turnsSinceActivation < 2;
+  // Check if shield is still active based on remaining turns
+  static isActive(shield) {
+    if (!shield || shield.remainingTurns === undefined) return false;
+    return shield.remainingTurns > 0;
   }
 
   // Get remaining turns for UI display
-  static getRemainingTurns(shield, turnCount) {
-    if (!this.isActive(shield, turnCount)) return 0;
-    const turnsSinceActivation = turnCount - shield.turnActivated;
-    return Math.max(0, 2 - turnsSinceActivation);
+  static getRemainingTurns(shield) {
+    if (!this.isActive(shield)) return 0;
+    return Math.max(0, shield.remainingTurns || 0);
   }
 
   // Check if a player's tiles are protected by shield
   static isPlayerProtected(gameState, playerId, currentTurnCount) {
     if (!gameState.shields || !gameState.shields[playerId]) return false;
     const shield = gameState.shields[playerId];
-    return this.isActive(shield, currentTurnCount);
+    return this.isActive(shield);
   }
 
   // Check if a specific tile is protected (belongs to a shielded player)
@@ -280,7 +273,7 @@ export class ShieldCard extends MagicCard {
     // Cannot replace opponent's active shield
     if (gameState.shields && gameState.shields[opponentId]) {
       const opponentShield = gameState.shields[opponentId];
-      if (this.isActive(opponentShield, gameState.turnCount || 1)) {
+      if (this.isActive(opponentShield)) {
         return false;
       }
     }
@@ -289,15 +282,13 @@ export class ShieldCard extends MagicCard {
 
   // Check if player can activate a shield under current conditions
   static canActivateShield(gameState, playerId) {
-    const currentTurnCount = gameState.turnCount || 1;
-
     // Check if any opponent has an active shield (prevents activation)
     if (gameState.shields) {
       for (const [otherPlayerId, shield] of Object.entries(gameState.shields)) {
-        if (otherPlayerId !== playerId && this.isActive(shield, currentTurnCount)) {
+        if (otherPlayerId !== playerId && this.isActive(shield)) {
           return {
             canActivate: false,
-            reason: `Cannot activate Shield while opponent has active Shield (${this.getRemainingTurns(shield, currentTurnCount)} turns remaining)`
+            reason: `Cannot activate Shield while opponent has active Shield (${this.getRemainingTurns(shield)} turns remaining)`
           };
         }
       }

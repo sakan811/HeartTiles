@@ -75,6 +75,12 @@ During your turn, you can:
   - Only protected tiles show shield icons
     - Shield icons are on the upper-left of the tile, both for you and the opponent
   - Shield icon has turn counter indicating remaining turns
+    - It starts at 3 then decrements by 1 at the end of each player turns
+      - For example:
+        - Player 1 plays Shield 🛡️ on turn 1 → counter shows 3
+        - Player 2's turn ends → counter shows 2
+        - Player 1's turn ends → counter shows 1
+        - Player 2's turn ends → Shield expires and is removed
 - **Limitation**: Only one Shield can be active per player at a time
   - Both player cannot have active Shields simultaneously
 - **Stacking**: Playing a new Shield replaces the previous one
