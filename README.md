@@ -69,11 +69,11 @@ During your turn, you can:
 - **Protection**: Blocks Wind 💨 and Recycle ♻️ from targeting your tiles
 - **Visual Indicators**:
   - Green shield icon on the protected tiles when your shield is active
-    - Opponent see this as a red shield icon
+    - Opponent see this as a red shield icon when your shield is active
+    - Both players see the shield icon when it is active
   - Red shield icon on opponent's protected tiles
   - Only protected tiles show shield icons
-    - Shield icons are on the upper-left of the tile for you and opponent
-  - Shows remaining turns in tooltips
+    - Shield icons are on the upper-left of the tile, both for you and the opponent
 - **Limitation**: Only one Shield can be active per player at a time
 - **Stacking**: Playing a new Shield replaces the previous one
   - Cannot replace opponent's active Shield

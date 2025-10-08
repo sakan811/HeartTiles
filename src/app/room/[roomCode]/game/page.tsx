@@ -490,13 +490,9 @@ export default function GameRoomPage() {
             )}
             <p className="text-sm">Turn: {turnCount}</p>
 
-            {/* Enhanced Shield Status Display */}
-            {shields && Object.keys(shields).length > 0 && (
-              <div className="mt-3 p-3 bg-blue-900/30 rounded-lg border border-blue-400/30">
-                <h4 className="text-white text-xs font-semibold mb-2 flex items-center gap-2">
-                  <FaShieldAlt size={12} />
-                  Shield Protection Status
-                </h4>
+            {/* Simple Shield Status Display */}
+            {shields && Object.keys(shields).length > 0 && Object.entries(shields).some(([_, shield]) => shield.remainingTurns > 0) && (
+              <div className="mt-3 flex justify-center gap-3">
                 {Object.entries(shields).map(([playerId, shield]) => {
                   const player = players.find(p => p.userId === playerId);
                   const isMyShield = playerId === myPlayerId;
@@ -505,27 +501,15 @@ export default function GameRoomPage() {
                   if (!isActive) return null;
 
                   return (
-                    <div key={playerId} className={`text-xs p-2 rounded ${isMyShield ? 'bg-green-900/30 border border-green-400/40' : 'bg-red-900/30 border border-red-400/40'}`}>
-                      <div className={`flex items-center gap-2 font-semibold ${isMyShield ? 'text-green-300' : 'text-red-300'}`}>
-                        <FaShieldAlt size={10} />
-                        <span>
-                          {isMyShield ? 'YOUR SHIELD' : `${player?.name?.toUpperCase() || 'OPPONENT'} SHIELD`}
-                        </span>
-                      </div>
-                      <div className={`ml-4 mt-1 ${isMyShield ? 'text-green-200' : 'text-red-200'}`}>
-                        {shield.remainingTurns} turn{shield.remainingTurns !== 1 ? 's' : ''} remaining
-                      </div>
-                      <div className={`ml-4 text-xs ${isMyShield ? 'text-green-100/70' : 'text-red-100/70'}`}>
-                        Protects tiles and hearts from magic cards
-                      </div>
+                    <div key={playerId} className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${isMyShield ? 'bg-green-400/20 border border-green-400/50 text-green-300' : 'bg-red-400/20 border border-red-400/50 text-red-300'}`}>
+                      <FaShieldAlt size={8} />
+                      <span>{isMyShield ? 'YOU' : (player?.name?.slice(0, 3).toUpperCase() || 'OPP')}</span>
+                      <span className="bg-white/20 rounded-full px-1 py-0.5 text-[10px]">
+                        {shield.remainingTurns}
+                      </span>
                     </div>
                   );
                 })}
-                {Object.values(shields).every(shield => shield.remainingTurns <= 0) && (
-                  <div className="text-xs text-gray-400 italic">
-                    No active shields
-                  </div>
-                )}
               </div>
             )}
 
@@ -623,50 +607,7 @@ export default function GameRoomPage() {
                         ? 'ring-4 ring-red-400 bg-red-900/30'
                         : ''
                   }`}
-                  title={`${tile.color} tile${
-                    (() => {
-                      const myShield = shields[myPlayerId];
-                      const isMyShieldActive = myShield && myShield.remainingTurns > 0;
-                      let titleText = '';
-
-                      if (isMyShieldActive && !hasHeart) {
-                        titleText += ' - PROTECTED by your shield (empty tiles)';
-                      }
-
-                      if (hasHeart) {
-                        titleText += ` - ${tile.placedHeart!.emoji} by ${tile.placedHeart!.placedBy === myPlayerId ? 'you' : 'opponent'} (score: ${tile.placedHeart!.score})`;
-
-                        const heartOwner = tile.placedHeart!.placedBy;
-                        const ownerShield = shields[heartOwner];
-                        const isShieldActive = ownerShield && ownerShield.remainingTurns > 0;
-
-                        if (isShieldActive) {
-                          const isMyTile = heartOwner === myPlayerId;
-                          titleText += ` - PROTECTED by ${isMyTile ? 'your' : 'opponent\'s'} shield (${ownerShield.remainingTurns} turn${ownerShield.remainingTurns !== 1 ? 's' : ''} remaining)`;
-                        }
-                      } else if (isShieldCardTarget) {
-                        if (isMyShieldActive) {
-                          titleText += ' - Click any tile to reinforce your shield';
-                        } else {
-                          titleText += ' - Click any tile to activate shield protection';
-                        }
-                      } else if (canPlaceHeart) {
-                        titleText += ' - Click to place heart';
-                      }
-
-                      // Add info about why tile might not be targetable
-                      if (selectedMagicCard && selectedMagicCard.type !== 'shield') {
-                        if (selectedMagicCard.type === 'wind' && !isOccupiedByOpponent) {
-                          titleText += ' - Wind card can only target opponent hearts';
-                        } else if (selectedMagicCard.type === 'recycle' && (!tile.color || tile.color === 'white' || hasHeart)) {
-                          titleText += ' - Recycle card can only target empty colored tiles';
-                        }
-                      }
-
-                      return titleText;
-                    })()
-                  }`}
-                >
+                  >
                   {tile.emoji}
                   {/* Preserve tile color indicator when heart is placed */}
                   {hasHeart && tile.placedHeart!.originalTileColor && tile.placedHeart!.originalTileColor !== tile.color && (
@@ -690,26 +631,43 @@ export default function GameRoomPage() {
                     </div>
                   )}
 
-                  {/* Enhanced shield icon for protected tiles */}
+                  {/* Enhanced shield icon for ALL protected tiles */}
                   {(() => {
                     // Check if current player has an active shield
                     const myShield = shields[myPlayerId];
                     const isMyShieldActive = myShield && myShield.remainingTurns > 0;
 
-                    // Show shield on tiles that have hearts protected by the player's shield
+                    // Show shield protection indicator on ALL tiles if player has active shield
+                    if (isMyShieldActive) {
+                      return (
+                        <div className="absolute top-0 left-0 transform -translate-x-1 -translate-y-1">
+                          <div className="bg-green-400/90 rounded-full w-6 h-6 flex items-center justify-center shadow-lg border-2 border-green-400 relative">
+                            <FaShieldAlt size={10} className="text-white" />
+                            {/* Duration badge */}
+                            <div className="absolute -top-1 -right-1 bg-white text-green-600 rounded-full w-3 h-3 flex items-center justify-center text-xs font-bold">
+                              {myShield.remainingTurns}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Show opponent's shield protection on tiles with hearts
                     if (hasHeart) {
                       const heartOwner = tile.placedHeart!.placedBy;
-                      const ownerShield = shields[heartOwner];
-                      const isShieldActive = ownerShield && ownerShield.remainingTurns > 0;
+                      const opponentShield = shields[heartOwner];
+                      const isOpponentShieldActive = opponentShield && opponentShield.remainingTurns > 0 && heartOwner !== myPlayerId;
 
-                      if (isShieldActive) {
-                        const isMyTile = heartOwner === myPlayerId;
+                      if (isOpponentShieldActive) {
                         return (
-                          <div className={`absolute ${isMyTile ? 'top-0 left-0' : 'top-0 right-0'} ${isMyTile ? 'text-green-400' : 'text-red-400'} bg-white/90 rounded-full w-6 h-6 flex items-center justify-center transform -translate-x-1 -translate-y-1 shadow-lg border-2 ${isMyTile ? 'border-green-400' : 'border-red-400'}`}>
-                            <FaShieldAlt
-                              size={12}
-                              title={`${isMyTile ? 'Your' : "Opponent's"} shield (${ownerShield.remainingTurns} turn${ownerShield.remainingTurns !== 1 ? 's' : ''} remaining) - Protects from Wind and Recycle cards`}
-                            />
+                          <div className="absolute top-0 left-0 transform -translate-x-1 -translate-y-1">
+                            <div className="bg-red-400/90 rounded-full w-6 h-6 flex items-center justify-center shadow-lg border-2 border-red-400 relative">
+                              <FaShieldAlt size={10} className="text-white" />
+                              {/* Duration badge */}
+                              <div className="absolute -top-1 -right-1 bg-white text-red-600 rounded-full w-3 h-3 flex items-center justify-center text-xs font-bold">
+                                {opponentShield.remainingTurns}
+                              </div>
+                            </div>
                           </div>
                         );
                       }
@@ -720,24 +678,7 @@ export default function GameRoomPage() {
                       return (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className={`${isMyShieldActive ? 'text-green-300 bg-green-900/70 border border-green-400/60' : 'text-blue-300 bg-blue-900/70 border border-blue-400/60'} rounded-full w-8 h-8 flex items-center justify-center animate-pulse shadow-lg`}>
-                            <FaShieldAlt
-                              size={16}
-                              title={isMyShieldActive
-                                ? `Shield active (${myShield.remainingTurns} turn${myShield.remainingTurns !== 1 ? 's' : ''} remaining) - Click to reinforce protection`
-                                : 'Click any tile to activate shield protection (blocks Wind & Recycle cards for 2 turns)'
-                              }
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Show shield protection border on empty tiles if player has active shield
-                    if (!hasHeart && isMyShieldActive && isCurrentPlayer()) {
-                      return (
-                        <div className="absolute inset-0 border-2 border-green-400/60 rounded-lg pointer-events-none animate-pulse">
-                          <div className="absolute -top-2 -right-2 bg-green-400/90 rounded-full w-4 h-4 flex items-center justify-center border border-white">
-                            <FaShieldAlt size={8} className="text-white" />
+                            <FaShieldAlt size={16} />
                           </div>
                         </div>
                       );
@@ -847,13 +788,13 @@ export default function GameRoomPage() {
                       const myShield = shields[myPlayerId];
                       const isMyShieldActive = myShield && myShield.remainingTurns > 0;
                       return isMyShieldActive
-                        ? `Shield active (${myShield.remainingTurns} turn${myShield.remainingTurns !== 1 ? 's' : ''} remaining) - Click anywhere or press "Use Shield" to reinforce protection`
-                        : 'Click anywhere or press "Use Shield" to activate protection (blocks Wind & Recycle cards for 2 turns)';
+                        ? `Shield active (${myShield.remainingTurns} turns left) - Click to reinforce`
+                        : 'Click to activate shield (blocks magic cards for 2 turns)';
                     })()
                     : selectedMagicCard.type === 'wind'
-                      ? 'Target an opponent\'s heart to remove it (blocked by shields)'
+                      ? 'Target opponent heart to remove it'
                       : selectedMagicCard.type === 'recycle'
-                        ? 'Target an empty colored tile to make it white (blocked by shields)'
+                        ? 'Target empty colored tile to make it white'
                         : 'Click a target tile'
                   }
                 </p>
@@ -874,8 +815,8 @@ export default function GameRoomPage() {
                       const myShield = shields[myPlayerId];
                       const isMyShieldActive = myShield && myShield.remainingTurns > 0;
                       return isMyShieldActive
-                        ? `Reinforce Shield 🛡️ (${myShield.remainingTurns} → 2 turns)`
-                        : 'Activate Shield 🛡️ (2 turns protection)';
+                        ? `Reinforce Shield 🛡️ (${myShield.remainingTurns}→2)`
+                        : 'Activate Shield 🛡️ (2 turns)';
                     })()}
                   </button>
                 )}
