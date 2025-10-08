@@ -73,6 +73,10 @@ During your turn, you can:
 ### Game Elements
 
 - **Tiles**: 8 colored tiles ⬜ 🟥 🟨 🟩
+  - Each tile has a color and can hold one heart card
+  - Tiles hightlight who placed the heart and its score
+    - Green for your hearts, Red for opponent's hearts
+  - Tiles show original color when hearts are placed
 - **Hearts**: Colored cards ❤️ 💛 💚 with 1-3 points
 - **Magic Cards**: Special ability cards 💨 ♻️ 🛡️ (Wind, Recycle, Shield)
   - Wind 💨: 6 cards in deck

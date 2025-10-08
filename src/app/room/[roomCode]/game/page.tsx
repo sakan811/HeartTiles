@@ -17,6 +17,7 @@ interface Tile {
     emoji: string;
     placedBy: string;
     score: number;
+    originalTileColor?: string;
   };
   type?: 'heart' | 'magic' | 'wind' | 'recycle';
   name?: string;
@@ -416,12 +417,7 @@ export default function GameRoomPage() {
     }
   };
 
-  const activateShield = () => {
-    if (socket && selectedMagicCard && selectedMagicCard.type === 'shield' && roomCode && isCurrentPlayer()) {
-      executeMagicCard('self');
-    }
-  };
-
+  
   const handleTileClick = (tile: Tile) => {
     if (!isCurrentPlayer()) return;
 
@@ -566,6 +562,20 @@ export default function GameRoomPage() {
                   }`}
                 >
                   {tile.emoji}
+                  {/* Preserve tile color indicator when heart is placed */}
+                  {hasHeart && tile.placedHeart!.originalTileColor && tile.placedHeart!.originalTileColor !== tile.color && (
+                    <div className="absolute bottom-0 left-0 w-3 h-3 rounded"
+                         style={{
+                           backgroundColor: tile.placedHeart!.originalTileColor === 'red' ? '#ef4444' :
+                                           tile.placedHeart!.originalTileColor === 'yellow' ? '#eab308' :
+                                           tile.placedHeart!.originalTileColor === 'green' ? '#22c55e' :
+                                           tile.placedHeart!.originalTileColor === 'blue' ? '#3b82f6' :
+                                           tile.placedHeart!.originalTileColor === 'brown' ? '#92400e' :
+                                           '#ffffff'
+                         }}
+                         title={`Original tile color: ${tile.placedHeart!.originalTileColor}`}>
+                    </div>
+                  )}
                   {hasHeart && (
                     <div className={`absolute top-0 right-0 text-black text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold transform translate-x-1 -translate-y-1 ${
                       isOccupiedByMe ? 'bg-green-400' : 'bg-red-400'
@@ -664,20 +674,12 @@ export default function GameRoomPage() {
             {selectedMagicCard && (
               <p className="text-center text-purple-400 mt-2">
                 Selected: {selectedMagicCard.emoji} {selectedMagicCard.name} -
-                {selectedMagicCard.type === 'shield' ? ' Click anywhere to activate' : ' Click a target tile'}
+                {selectedMagicCard.type === 'shield' ? ' (Self-activating protection)' : ' Click a target tile'}
               </p>
             )}
           </div>
 
           <div className="flex flex-col gap-4 items-center">
-            {isCurrentPlayer() && selectedMagicCard?.type === 'shield' && (
-              <button
-                onClick={activateShield}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors animate-pulse"
-              >
-                🛡️ Activate Shield
-              </button>
-            )}
             <div className="flex gap-4 justify-center">
             {isCurrentPlayer() && (
               <>

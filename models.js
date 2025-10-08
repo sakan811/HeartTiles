@@ -1,14 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-// User interface
-interface IUser {
-  name: string;
-  email: string;
-  password: string;
-  comparePassword(candidatePassword: string): Promise<boolean>;
-}
-
 // User Schema
 const userSchema = new mongoose.Schema({
   name: {
@@ -40,7 +32,7 @@ userSchema.pre('save', async function(next) {
 });
 
 // Method to check password
-userSchema.methods.comparePassword = async function(candidatePassword: string) {
+userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
@@ -231,6 +223,12 @@ const roomSchema = new mongoose.Schema({
 // Note: Indexes are automatically created by unique: true in schema definitions
 
 // Export models with caching to prevent OverwriteModelError
-export const User = mongoose.models.User || mongoose.model<IUser>('User', userSchema);
-export const PlayerSession = mongoose.models.PlayerSession || mongoose.model('PlayerSession', playerSessionSchema);
-export const Room = mongoose.models.Room || mongoose.model('Room', roomSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+const PlayerSession = mongoose.models.PlayerSession || mongoose.model('PlayerSession', playerSessionSchema);
+const Room = mongoose.models.Room || mongoose.model('Room', roomSchema);
+
+export {
+  User,
+  PlayerSession,
+  Room
+};

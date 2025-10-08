@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
 import mongoose from 'mongoose';
-import { PlayerSession, Room, User } from './models.ts';
+import { PlayerSession, Room, User } from './models.js';
 import { getToken } from 'next-auth/jwt';
 
 const dev = process.env.NODE_ENV !== "production";
@@ -425,7 +425,7 @@ function checkAndExpireShields(room, currentUserId) {
     const cardTypes = [
       { type: 'wind', emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
       { type: 'recycle', emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' },
-      { type: 'shield', emoji: '🛡️', name: 'Shield Card', description: 'Protect your tiles from magic cards' }
+      { type: 'shield', emoji: '🛡️', name: 'Shield Card', description: 'Self-activating: Protect your tiles from magic cards for 2 turns' }
     ];
 
     // Generate 6 Wind, 5 Recycle, 5 Shield cards for balanced gameplay
@@ -450,7 +450,7 @@ function checkAndExpireShields(room, currentUserId) {
     const cardTypes = [
       { type: 'wind', weight: 6, emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
       { type: 'recycle', weight: 5, emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' },
-      { type: 'shield', weight: 5, emoji: '🛡️', name: 'Shield Card', description: 'Protect your tiles from magic cards' }
+      { type: 'shield', weight: 5, emoji: '🛡️', name: 'Shield Card', description: 'Self-activating: Protect your tiles from magic cards for 2 turns' }
     ];
 
     // Weighted random selection based on desired distribution (6:5:5 ratio)
