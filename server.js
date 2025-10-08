@@ -1138,8 +1138,15 @@ function checkAndExpireShields(room) {
               return;
             }
 
-            actionResult = magicCard.executeEffect(room.gameState, userId);
-            console.log(`Shield card used by ${userId} - protection activated for ${actionResult.remainingTurns} turns`);
+            try {
+              actionResult = magicCard.executeEffect(room.gameState, userId);
+              const actionType = actionResult.reinforced ? 'reinforced' : 'activated';
+              console.log(`Shield card ${actionType} by ${userId} - protection for ${actionResult.remainingTurns} turns`);
+            } catch (error) {
+              console.log(`Shield card error for ${userId}: ${error.message}`);
+              socket.emit("room-error", error.message);
+              return;
+            }
           } else {
             // For other magic cards, validate target tile
             const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == targetTileId);
