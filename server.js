@@ -1075,7 +1075,6 @@ function checkAndExpireShields(room) {
 
     // Magic card events
     socket.on("use-magic-card", async ({ roomCode, cardId, targetTileId }) => {
-      console.log(`=== MAGIC CARD USAGE ATTEMPT ===`);
       console.log(`User ${userId} attempting to use magic card ${cardId} on tile ${targetTileId} in room ${roomCode}`);
 
       // Input validation
@@ -1086,7 +1085,9 @@ function checkAndExpireShields(room) {
 
       // For Shield cards, targetTileId can be 'self' or undefined
       // For other magic cards, targetTileId is required
-      if (!targetTileId || targetTileId === 'self') {
+      if (targetTileId === null || targetTileId === undefined) {
+        // This might be a Shield card, continue and validate later
+      } else if (targetTileId === 'self') {
         // This might be a Shield card, continue and validate later
       } else if (typeof targetTileId !== 'number' && typeof targetTileId !== 'string') {
         socket.emit("room-error", "Invalid target tile ID");
@@ -1150,7 +1151,8 @@ function checkAndExpireShields(room) {
             }
           } else {
             // For non-shield cards, validate that targetTileId is provided and valid
-            if (!targetTileId || targetTileId === 'self') {
+            // Note: targetTileId can be 0, so we need to check if it's explicitly null or undefined
+            if (targetTileId === null || targetTileId === undefined || targetTileId === 'self') {
               socket.emit("room-error", "Target tile is required for this card");
               return;
             }
@@ -1188,7 +1190,7 @@ function checkAndExpireShields(room) {
             if (magicCard.type === 'wind') {
               // Use WindCard's canTargetTile method for validation
               if (!magicCard.canTargetTile(tile, userId)) {
-                socket.emit("room-error", "Invalid target for Wind card");
+                socket.emit("room-error", "Invalid target for Wind card - you can only target opponent's hearts");
                 return;
               }
 
