@@ -326,23 +326,35 @@ function activatePlayerShield(room, userId) {
     room.gameState.shields = {};
   }
 
-  // Shield lasts for 2 full turns (including opponent's turn)
+  // Shield remains active until the end of the player's next turn
+  // This means it protects during: opponent's turn + player's next turn
+  // Playing a new Shield replaces the previous one
   room.gameState.shields[userId] = {
     active: true,
-    remainingTurns: 2, // Shield protects for 2 turns
+    remainingTurns: 2, // 2 full turns: opponent's next turn + player's next turn
     activatedAt: Date.now(),
-    activatedBy: userId
+    activatedBy: userId,
+    turnActivated: room.gameState.turnCount
   };
+
+  console.log(`Shield activated for ${userId} on turn ${room.gameState.turnCount}, will expire after ${room.gameState.shields[userId].remainingTurns} turns`);
 }
 
 function checkAndExpireShields(room, currentUserId) {
   if (!room.gameState.shields) return;
 
-  // Decrease remaining turns for all active shields at the start of each turn
+  // Only decrease shield turns when the shield owner's turn ends
   for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    shield.remainingTurns--;
-    if (shield.remainingTurns <= 0) {
+    // Shield expires when the owner has completed a full turn cycle
+    // Check if current turn is after the shield activation + 2 turns
+    const turnsSinceActivation = room.gameState.turnCount - shield.turnActivated;
+
+    if (turnsSinceActivation >= 2) {
+      console.log(`Shield expired for ${userId} (active for ${turnsSinceActivation} turns)`);
       delete room.gameState.shields[userId];
+    } else {
+      // Update remaining turns for UI display
+      shield.remainingTurns = Math.max(0, 2 - turnsSinceActivation);
     }
   }
 }
@@ -1190,6 +1202,12 @@ function checkAndExpireShields(room, currentUserId) {
           // Apply card effect based on type
           if (card.type === 'shield') {
             // Shield cards don't need a target tile
+            // Shield can only be activated for the current player
+            if (room.gameState.currentPlayer.userId !== userId) {
+              socket.emit("room-error", "You can only use Shield cards on your own turn");
+              return;
+            }
+
             activatePlayerShield(room, userId);
             actionResult = {
               type: 'shield',
@@ -1214,14 +1232,17 @@ function checkAndExpireShields(room, currentUserId) {
               // Check if the opponent is shielded
               const opponentId = tile.placedHeart.placedBy;
               if (isPlayerShielded(room, opponentId)) {
-                socket.emit("room-error", "Opponent is protected by Shield");
+                const opponentShield = room.gameState.shields[opponentId];
+                socket.emit("room-error", `Opponent is protected by Shield (${opponentShield.remainingTurns} turns remaining)`);
+                console.log(`Wind card blocked by shield: ${userId} tried to target ${opponentId}'s heart on tile ${targetTileId}`);
                 return;
               }
 
               actionResult = {
                 type: 'wind',
                 removedHeart: tile.placedHeart,
-                tileId: tile.id
+                tileId: tile.id,
+                blocked: false
               };
               // Clear the placed heart from tile and restore square emoji based on original tile color
               const getSquareEmoji = (color) => {
@@ -1263,12 +1284,33 @@ function checkAndExpireShields(room, currentUserId) {
               return;
             }
 
+            // Check if any player has an active shield that would protect this tile
+            // Shield protects all player's tiles from magic cards
+            let shieldBlocker = null;
+            for (const [playerId, shield] of Object.entries(room.gameState.shields || {})) {
+              if (shield.remainingTurns > 0) {
+                // Check if this player has any hearts on the board (shield only protects tiles with player's hearts)
+                const hasPlayerHearts = room.gameState.tiles.some(t => t.placedHeart && t.placedHeart.placedBy === playerId);
+                if (hasPlayerHearts) {
+                  shieldBlocker = { userId: playerId, shield };
+                  break;
+                }
+              }
+            }
+
+            if (shieldBlocker) {
+              socket.emit("room-error", `Tile is protected by Shield (${shieldBlocker.shield.remainingTurns} turns remaining)`);
+              console.log(`Recycle card blocked by shield: ${userId} tried to recycle tile ${targetTileId}, shield active for ${shieldBlocker.userId}`);
+              return;
+            }
+
             // Change tile color to white, keeping square format
             actionResult = {
               type: 'recycle',
               previousColor: tile.color,
               newColor: 'white',
-              tileId: tile.id
+              tileId: tile.id,
+              blocked: false
             };
             // Set tile to white square (no heart since we validated it's empty)
             room.gameState.tiles[tileIndex] = {

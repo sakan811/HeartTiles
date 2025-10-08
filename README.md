@@ -67,16 +67,25 @@ During your turn, you can:
 - **Effect**: Protect your tiles and hearts from opponent's magic cards
 - **Duration**: Remains active until the end of your next turn
 - **Protection**: Blocks Wind 💨 and Recycle ♻️ from targeting your tiles
+- **Visual Indicators**:
+  - Blue shield icon on all tiles when your shield is active
+  - Red shield icon on opponent's protected heart tiles
+  - Shows remaining turns in tooltips
 - **Limitation**: Only one Shield can be active per player at a time
 - **Stacking**: Playing a new Shield replaces the previous one
+  - Cannot replace opponent's active Shield
 
 ### Game Elements
 
 - **Tiles**: 8 colored tiles ⬜ 🟥 🟨 🟩
   - Each tile has a color and can hold one heart card
-  - Tiles hightlight who placed the heart and its score
-    - Green for your hearts, Red for opponent's hearts
-  - Tiles show original color when hearts are placed
+  - **Visual Feedback**:
+    - Green ring: Your hearts, Red ring: Opponent's hearts
+    - Score badge shows points earned on placed hearts
+    - Original tile color indicator when hearts are placed
+    - Blue shield icon (top-left): Your shield protects all tiles
+    - Red shield icon (top-right): Opponent shield protects their hearts
+    - Hover highlights show valid moves and card targets
 - **Hearts**: Colored cards ❤️ 💛 💚 with 1-3 points
 - **Magic Cards**: Special ability cards 💨 ♻️ 🛡️ (Wind, Recycle, Shield)
   - Wind 💨: 6 cards in deck

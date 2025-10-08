@@ -559,9 +559,7 @@ export default function GameRoomPage() {
                 // For shield cards, highlight all tiles to indicate shield can be activated
                 const isShieldCardTarget = selectedMagicCard && selectedMagicCard.type === 'shield';
 
-                // Check if this tile's occupant is shielded
-                const isTileShielded = hasHeart && shields[tile.placedHeart!.placedBy]?.active;
-
+  
                 return (
                 <div
                   key={tile.id}
@@ -584,13 +582,33 @@ export default function GameRoomPage() {
                         : ''
                   }`}
                   title={`${tile.color} tile${
-                    hasHeart
-                      ? ` - ${tile.placedHeart!.emoji} by ${tile.placedHeart!.placedBy === myPlayerId ? 'you' : 'opponent'} (score: ${tile.placedHeart!.score})${isTileShielded ? ' - SHIELDED' : ''}`
-                      : isShieldCardTarget
-                        ? ' - Click any tile to activate shield'
-                        : canPlaceHeart
-                          ? ' - Click to place heart'
-                          : ''
+                    (() => {
+                      const myShield = shields[myPlayerId];
+                      const isMyShieldActive = myShield && myShield.remainingTurns > 0;
+                      let titleText = '';
+
+                      if (isMyShieldActive) {
+                        titleText += ' - PROTECTED by your shield';
+                      }
+
+                      if (hasHeart) {
+                        titleText += ` - ${tile.placedHeart!.emoji} by ${tile.placedHeart!.placedBy === myPlayerId ? 'you' : 'opponent'} (score: ${tile.placedHeart!.score})`;
+
+                        const heartOwner = tile.placedHeart!.placedBy;
+                        const ownerShield = shields[heartOwner];
+                        const isOpponentShieldActive = ownerShield && ownerShield.remainingTurns > 0 && heartOwner !== myPlayerId;
+
+                        if (isOpponentShieldActive) {
+                          titleText += ' - PROTECTED by opponent shield';
+                        }
+                      } else if (isShieldCardTarget) {
+                        titleText += ' - Click any tile to activate shield';
+                      } else if (canPlaceHeart) {
+                        titleText += ' - Click to place heart';
+                      }
+
+                      return titleText;
+                    })()
                   }`}
                 >
                   {tile.emoji}
@@ -617,11 +635,43 @@ export default function GameRoomPage() {
                   )}
 
                   {/* Shield icon for protected tiles */}
-                  {isTileShielded && (
-                    <div className="absolute top-0 left-0 text-blue-400 bg-white/90 rounded-full w-6 h-6 flex items-center justify-center transform -translate-x-1 -translate-y-1 shadow-lg">
-                      <FaShieldAlt size={12} title={`Shielded (${shields[tile.placedHeart!.placedBy].remainingTurns} turns remaining)`} />
-                    </div>
-                  )}
+                  {(() => {
+                    // Check if current player has an active shield
+                    const myShield = shields[myPlayerId];
+                    const isMyShieldActive = myShield && myShield.remainingTurns > 0;
+
+                    // Show shield on tiles that have hearts protected by the player's shield
+                    if (hasHeart) {
+                      const heartOwner = tile.placedHeart!.placedBy;
+                      const ownerShield = shields[heartOwner];
+                      const isShieldActive = ownerShield && ownerShield.remainingTurns > 0;
+
+                      if (isShieldActive) {
+                        const isMyTile = heartOwner === myPlayerId;
+                        return (
+                          <div className={`absolute ${isMyTile ? 'top-0 left-0' : 'top-0 right-0'} ${isMyTile ? 'text-blue-400' : 'text-red-400'} bg-white/90 rounded-full w-6 h-6 flex items-center justify-center transform -translate-x-1 -translate-y-1 shadow-lg`}>
+                            <FaShieldAlt
+                              size={12}
+                              title={`${isMyTile ? 'Your' : "Opponent's"} shield (${ownerShield.remainingTurns} turns remaining)`}
+                            />
+                          </div>
+                        );
+                      }
+                    }
+
+                    // Show shield activation indicator when player has shield card selected
+                    if (isShieldCardTarget && isMyShieldActive) {
+                      return (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="text-blue-300 bg-blue-900/50 rounded-full w-8 h-8 flex items-center justify-center animate-pulse">
+                            <FaShieldAlt size={16} title={`Shield active (${myShield.remainingTurns} turns remaining)`} />
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })()}
                 </div>
               )})}
             </div>
@@ -711,10 +761,29 @@ export default function GameRoomPage() {
               </p>
             )}
             {selectedMagicCard && (
-              <p className="text-center text-purple-400 mt-2">
-                Selected: {selectedMagicCard.emoji} {selectedMagicCard.name} -
-                {selectedMagicCard.type === 'shield' ? ' (Self-activating protection)' : ' Click a target tile'}
-              </p>
+              <div className="text-center space-y-1">
+                <p className="text-purple-400">
+                  Selected: {selectedMagicCard.emoji} {selectedMagicCard.name}
+                </p>
+                <p className="text-sm text-gray-300">
+                  {selectedMagicCard.type === 'shield'
+                    ? 'Click anywhere or press "Use Shield" to activate protection'
+                    : selectedMagicCard.type === 'wind'
+                      ? 'Target an opponent\'s heart to remove it'
+                      : selectedMagicCard.type === 'recycle'
+                        ? 'Target an empty colored tile to make it white'
+                        : 'Click a target tile'
+                  }
+                </p>
+                {selectedMagicCard.type === 'shield' && (
+                  <button
+                    onClick={() => executeMagicCard('self')}
+                    className="mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Use Shield 🛡️
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
