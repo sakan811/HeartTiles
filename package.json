@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "tsx server.js",
     "build": "next build --turbopack",
-    "start": "NODE_ENV=production node server.js",
+    "start": "NODE_ENV=production tsx server.js",
     "lint": "eslint . --fix",
     "docker:start": "docker compose up -d",
     "docker:stop": "docker compose down",
@@ -33,6 +33,7 @@
     "eslint": "^9.37.0",
     "eslint-config-next": "15.5.4",
     "tailwindcss": "^4.1.14",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
 }

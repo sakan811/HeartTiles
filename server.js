@@ -166,7 +166,7 @@ app.prepare().then(async () => {
     try {
       const token = await getToken({
         req: socket.handshake,
-        secret: process.env.NEXTAUTH_SECRET
+        secret: process.env.AUTH_SECRET
       });
 
       if (!token?.id) return next(new Error('Authentication required'));
