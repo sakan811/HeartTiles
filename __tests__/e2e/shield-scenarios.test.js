@@ -100,12 +100,12 @@ describe('Shield Card End-to-End Scenarios', () => {
 
       // Try to use Recycle on tile with heart (fails basic targeting)
       expect(() => {
-        actualRecycleCard.executeEffect(room.gameState, 1);
+        actualRecycleCard.executeEffect(room.gameState, 1, mockClient2.userId);
       }).toThrow("Invalid target for Recycle card");
 
       // Try to use Recycle on empty tile (basic targeting passes, but shield blocks)
       expect(() => {
-        actualRecycleCard.executeEffect(room.gameState, 3);
+        actualRecycleCard.executeEffect(room.gameState, 3, mockClient2.userId);
       }).toThrow("Tile is protected by Shield");
 
       // 5. Advance turns until shield expires

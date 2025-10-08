@@ -1211,7 +1211,7 @@ function checkAndExpireShields(room) {
               }
 
               // Execute the Recycle card effect using the new class method
-              actionResult = magicCard.executeEffect(room.gameState, targetTileId);
+              actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId);
 
               // Apply the result to the game state
               if (actionResult) {

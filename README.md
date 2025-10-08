@@ -68,6 +68,7 @@ During your turn, you can:
 - **Duration**: Active for 3 full turns (starts at 3, decrements each turn end)
 - **Protection**: Blocks opponent's magic cards from targeting your tiles
 - **Heart Placement**: You can still place hearts on your tiles while shield is active
+- **Self-Recycle**: You can still use your own Recycle ♻️ cards on tiles while shield is active
 - **Visual Indicators**:
   - Green shield icon (your perspective) / Red shield icon (opponent's perspective)
   - Shield icons appear on protected tiles with turn counter

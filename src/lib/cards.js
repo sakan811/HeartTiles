@@ -139,21 +139,19 @@ export class RecycleCard extends MagicCard {
     return !tile.placedHeart && tile.color !== 'white';
   }
 
-  executeEffect(gameState, targetTileId) {
+  executeEffect(gameState, targetTileId, currentPlayerId) {
     const tile = gameState.tiles.find(t => t.id == targetTileId);
     if (!tile || !this.canTargetTile(tile)) {
       throw new Error('Invalid target for Recycle card');
     }
 
-    // Check shield protection using the new ShieldCard protection logic
-    // Recycle protects tiles from any player who has active hearts on the board
-
-    if (gameState.shields) {
+    // Check shield protection - block all opponent recycle cards
+    // Allow self-recycle even when shielded
+    if (gameState.shields && currentPlayerId) {
       for (const [shieldUserId, shield] of Object.entries(gameState.shields)) {
         if (ShieldCard.isActive(shield, gameState.turnCount)) {
-          // Check if this shielded player has hearts on the board
-          const hasPlayerHearts = gameState.tiles.some(t => t.placedHeart && t.placedHeart.placedBy === shieldUserId);
-          if (hasPlayerHearts) {
+          // Only block if the current player is NOT the shielded player
+          if (currentPlayerId !== shieldUserId) {
             const remainingTurns = ShieldCard.getRemainingTurns(shield, gameState.turnCount);
             throw new Error(`Tile is protected by Shield (${remainingTurns} turns remaining)`);
           }
