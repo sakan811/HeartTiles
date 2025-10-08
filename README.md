@@ -64,27 +64,18 @@ During your turn, you can:
 
 #### Shield 🛡️
 
-- **Effect**: Protect your tiles and hearts from opponent's magic cards
-- **Duration**: Remains active until the end of your next turn
-- **Protection**: Blocks Wind 💨 and Recycle ♻️ from targeting your tiles
+- **Effect**: Protect your tiles from opponent's Wind 💨 and Recycle ♻️ cards
+- **Duration**: Active for 3 full turns (starts at 3, decrements each turn end)
+- **Protection**: Blocks opponent's magic cards from targeting your tiles
+- **Heart Placement**: You can still place hearts on your tiles while shield is active
 - **Visual Indicators**:
-  - Green shield icon on the protected tiles when your shield is active
-    - Opponent see this as a red shield icon when your shield is active
-    - Both players see the shield icon when it is active
-  - Red shield icon on opponent's protected tiles
-  - Only protected tiles show shield icons
-    - Shield icons are on the upper-left of the tile, both for you and the opponent
-  - Shield icon has turn counter indicating remaining turns
-    - It starts at 3 then decrements by 1 at the end of each player turns
-      - For example:
-        - Player 1 plays Shield 🛡️ on turn 1 → counter shows 3
-        - Player 2's turn ends → counter shows 2
-        - Player 1's turn ends → counter shows 1
-        - Player 2's turn ends → Shield expires and is removed
-- **Limitation**: Only one Shield can be active per player at a time
-  - Both player cannot have active Shields simultaneously
-- **Stacking**: Playing a new Shield replaces the previous one
-  - Cannot replace opponent's active Shield
+  - Green shield icon (your perspective) / Red shield icon (opponent's perspective)
+  - Shield icons appear on protected tiles with turn counter
+  - Icons show in upper-left corner of each protected tile
+- **Limitations**:
+  - Only one shield per player allowed
+  - Both players cannot have active shields simultaneously
+  - New shield replaces your previous shield (not opponent's)
 
 ### Game Elements
 
