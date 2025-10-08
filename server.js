@@ -286,6 +286,12 @@ app.prepare().then(async () => {
       delete room.gameState.playerHands[oldUserId];
     }
 
+    // Migrate shield state
+    if (room.gameState.shields && room.gameState.shields[oldUserId]) {
+      room.gameState.shields[newUserId] = room.gameState.shields[oldUserId];
+      delete room.gameState.shields[oldUserId];
+    }
+
     if (room.gameState.currentPlayer?.userId === oldUserId) {
       room.gameState.currentPlayer = {
         userId: newUserId, name: userName, email: userEmail,
@@ -297,6 +303,57 @@ app.prepare().then(async () => {
       if (lockKey.includes(oldUserId)) turnLocks.delete(lockKey);
     }
   }
+
+function isPlayerShielded(room, userId) {
+  if (!room.gameState.shields || !room.gameState.shields[userId]) {
+    return false;
+  }
+
+  const shield = room.gameState.shields[userId];
+  const currentTime = Date.now();
+
+  // Check if shield is still active (until end of player's next turn)
+  if (currentTime > shield.expiresAt) {
+    delete room.gameState.shields[userId];
+    return false;
+  }
+
+  return true;
+}
+
+function activatePlayerShield(room, userId) {
+  if (!room.gameState.shields) {
+    room.gameState.shields = {};
+  }
+
+  // Shield lasts until end of player's next turn (approximately 2 full turns)
+  const shieldDuration = 2 * 60000; // 2 minutes in milliseconds (conservative estimate)
+  const expiresAt = Date.now() + shieldDuration;
+
+  room.gameState.shields[userId] = {
+    active: true,
+    expiresAt: expiresAt,
+    activatedAt: Date.now()
+  };
+}
+
+function checkAndExpireShields(room, currentUserId) {
+  if (!room.gameState.shields) return;
+
+  const currentTime = Date.now();
+  const expiredShields = [];
+
+  for (const [userId, shield] of Object.entries(room.gameState.shields)) {
+    if (currentTime > shield.expiresAt) {
+      expiredShields.push(userId);
+    }
+  }
+
+  // Remove expired shields
+  for (const userId of expiredShields) {
+    delete room.gameState.shields[userId];
+  }
+}
 
   function validateDeckState(room) {
     if (!room.gameState.deck) return { valid: false, error: "Invalid deck state" };
@@ -367,11 +424,20 @@ app.prepare().then(async () => {
     const baseTime = Date.now();
     const cardTypes = [
       { type: 'wind', emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
-      { type: 'recycle', emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' }
+      { type: 'recycle', emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' },
+      { type: 'shield', emoji: '🛡️', name: 'Shield Card', description: 'Protect your tiles from magic cards' }
     ];
 
-    for (let i = 0; i < 4; i++) {
-      const cardType = cardTypes[i % 2];
+    // Generate 6 Wind, 5 Recycle, 5 Shield cards for balanced gameplay
+    for (let i = 0; i < 16; i++) {
+      let cardType;
+      if (i < 6) {
+        cardType = cardTypes[0]; // Wind (6 cards)
+      } else if (i < 11) {
+        cardType = cardTypes[1]; // Recycle (5 cards)
+      } else {
+        cardType = cardTypes[2]; // Shield (5 cards)
+      }
       cards.push({
         id: baseTime + Math.random() + i + 1,
         ...cardType
@@ -381,17 +447,31 @@ app.prepare().then(async () => {
   }
 
   function generateSingleMagicCard() {
-    const cardTypes = ['wind', 'recycle'];
-    const randomType = cardTypes[Math.floor(Math.random() * cardTypes.length)];
-    const cardConfig = {
-      wind: { emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
-      recycle: { emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' }
-    };
+    const cardTypes = [
+      { type: 'wind', weight: 6, emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
+      { type: 'recycle', weight: 5, emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' },
+      { type: 'shield', weight: 5, emoji: '🛡️', name: 'Shield Card', description: 'Protect your tiles from magic cards' }
+    ];
+
+    // Weighted random selection based on desired distribution (6:5:5 ratio)
+    const totalWeight = cardTypes.reduce((sum, card) => sum + card.weight, 0);
+    let random = Math.random() * totalWeight;
+
+    let selectedType = cardTypes[0];
+    for (const cardType of cardTypes) {
+      random -= cardType.weight;
+      if (random <= 0) {
+        selectedType = cardType;
+        break;
+      }
+    }
 
     return {
       id: Date.now() + Math.random(),
-      type: randomType,
-      ...cardConfig[randomType]
+      type: selectedType.type,
+      emoji: selectedType.emoji,
+      name: selectedType.name,
+      description: selectedType.description
     };
   }
 
@@ -492,9 +572,9 @@ app.prepare().then(async () => {
           maxPlayers: 2,
           gameState: {
             tiles: [], gameStarted: false, currentPlayer: null,
-            deck: { emoji: "💌", cards: 10, type: 'hearts' },
-            magicDeck: { emoji: "🔮", cards: 10, type: 'magic' },
-            playerHands: {}, turnCount: 0
+            deck: { emoji: "💌", cards: 16, type: 'hearts' },
+            magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+            playerHands: {}, shields: {}, turnCount: 0
           }
         };
         rooms.set(roomCode, room);
@@ -525,7 +605,7 @@ app.prepare().then(async () => {
                 ...room.gameState,
                 gameStarted: false, currentPlayer: null, tiles: [],
                 playerHands: {}, turnCount: 0,
-                deck: { ...room.gameState.deck, cards: 10 }
+                deck: { ...room.gameState.deck, cards: 16 }
               };
               room.players.forEach(player => player.isReady = false);
               await saveRoom(room);
@@ -633,7 +713,7 @@ app.prepare().then(async () => {
 
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
-            room.gameState.magicDeck.cards = 10;
+            room.gameState.magicDeck.cards = 16;
             await saveRoom(room);
 
             room.players.forEach(player => {
@@ -933,6 +1013,9 @@ app.prepare().then(async () => {
         // Reset actions for the current player whose turn is ending
         resetPlayerActions(room, room.gameState.currentPlayer.userId);
 
+        // Check and expire shields that should expire after this turn
+        checkAndExpireShields(room, room.gameState.currentPlayer.userId);
+
         // Find the current player index
         const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId);
         const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length;
@@ -1121,6 +1204,13 @@ app.prepare().then(async () => {
           if (card.type === 'wind') {
             // Remove opponent heart from tile and restore square format
             if (tile.placedHeart && tile.placedHeart.placedBy !== userId) {
+              // Check if the opponent is shielded
+              const opponentId = tile.placedHeart.placedBy;
+              if (isPlayerShielded(room, opponentId)) {
+                socket.emit("room-error", "Opponent is protected by Shield");
+                return;
+              }
+
               actionResult = {
                 type: 'wind',
                 removedHeart: tile.placedHeart,
@@ -1182,6 +1272,15 @@ app.prepare().then(async () => {
               placedHeart: undefined
             };
             console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${tile.color} to white square (⬜)`);
+          } else if (card.type === 'shield') {
+            // Activate shield protection for the player
+            activatePlayerShield(room, userId);
+            actionResult = {
+              type: 'shield',
+              activatedFor: userId,
+              expiresAt: room.gameState.shields[userId].expiresAt
+            };
+            console.log(`Shield card used by ${userId} - protection activated until ${new Date(room.gameState.shields[userId].expiresAt).toLocaleTimeString()}`);
           }
 
           // Remove the used magic card from player's hand

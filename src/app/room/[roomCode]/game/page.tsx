@@ -40,7 +40,7 @@ interface Deck {
 
 interface MagicCard {
   id: number | string;
-  type: 'wind' | 'recycle';
+  type: 'wind' | 'recycle' | 'shield';
   emoji: string;
   name: string;
   description: string;
@@ -59,8 +59,8 @@ export default function GameRoomPage() {
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [playerHands, setPlayerHands] = useState<Record<string, Tile[]>>({});
-  const [deck, setDeck] = useState<Deck>({ emoji: "💌", cards: 10 });
-  const [magicDeck, setMagicDeck] = useState<MagicDeck>({ emoji: "🔮", cards: 10, type: 'magic' });
+  const [deck, setDeck] = useState<Deck>({ emoji: "💌", cards: 16 });
+  const [magicDeck, setMagicDeck] = useState<MagicDeck>({ emoji: "🔮", cards: 16, type: 'magic' });
   const [turnCount, setTurnCount] = useState(0);
   const [selectedHeart, setSelectedHeart] = useState<Tile | null>(null);
   const [selectedMagicCard, setSelectedMagicCard] = useState<MagicCard | null>(null);
@@ -132,8 +132,8 @@ export default function GameRoomPage() {
         currentPlayer: gameData.currentPlayer || null,
         players: gameData.players || [],
         playerHands: gameData.playerHands || {},
-        deck: gameData.deck || { emoji: "💌", cards: 10 },
-        magicDeck: gameData.magicDeck || { emoji: "🔮", cards: 10, type: 'magic' },
+        deck: gameData.deck || { emoji: "💌", cards: 16 },
+        magicDeck: gameData.magicDeck || { emoji: "🔮", cards: 16, type: 'magic' },
         turnCount: gameData.turnCount || 0,
         playerId: gameData.playerId || null
       };
@@ -372,13 +372,13 @@ export default function GameRoomPage() {
       ['❤️', '💛', '💚', '💙', '🤎'].includes(card.emoji);
 
     const isMagicCard = 'type' in card && 'name' in card &&
-      ['💨', '♻️'].includes(card.emoji);
+      ['💨', '♻️', '🛡️'].includes(card.emoji);
 
     if (isMagicCard) {
       // Create magic card object from hand card
       const magicCard: MagicCard = {
         id: card.id,
-        type: card.type as 'wind' | 'recycle',
+        type: card.type as 'wind' | 'recycle' | 'shield',
         emoji: card.emoji,
         name: card.name || 'Magic Card',
         description: card.description || 'A magic card'
@@ -399,11 +399,26 @@ export default function GameRoomPage() {
 
   const executeMagicCard = (tileId: number | string) => {
     if (socket && selectedMagicCard && roomCode && isCurrentPlayer()) {
-      socket.emit("use-magic-card", {
-        roomCode,
-        cardId: selectedMagicCard.id,
-        targetTileId: tileId
-      });
+      // Shield cards don't need a target tile, but we need to handle them differently
+      if (selectedMagicCard.type === 'shield') {
+        socket.emit("use-magic-card", {
+          roomCode,
+          cardId: selectedMagicCard.id,
+          targetTileId: 'self' // Shield targets self, no tile needed
+        });
+      } else {
+        socket.emit("use-magic-card", {
+          roomCode,
+          cardId: selectedMagicCard.id,
+          targetTileId: tileId
+        });
+      }
+    }
+  };
+
+  const activateShield = () => {
+    if (socket && selectedMagicCard && selectedMagicCard.type === 'shield' && roomCode && isCurrentPlayer()) {
+      executeMagicCard('self');
     }
   };
 
@@ -411,7 +426,12 @@ export default function GameRoomPage() {
     if (!isCurrentPlayer()) return;
 
     if (selectedMagicCard) {
-      executeMagicCard(Number(tile.id));
+      if (selectedMagicCard.type === 'shield') {
+        // Shield cards are used directly, not on tiles
+        executeMagicCard('self');
+      } else {
+        executeMagicCard(Number(tile.id));
+      }
     } else if (selectedHeart) {
       placeHeart(Number(tile.id));
     }
@@ -513,7 +533,7 @@ export default function GameRoomPage() {
                 const isOccupiedByOpponent = hasHeart && tile.placedHeart!.placedBy !== myPlayerId;
                 const canPlaceHeart = selectedHeart && !hasHeart && isCurrentPlayer();
                 const canUseMagicCard = selectedMagicCard && isCurrentPlayer();
-                const isMagicCardTarget = selectedMagicCard && (
+                const isMagicCardTarget = selectedMagicCard && selectedMagicCard.type !== 'shield' && (
                   (selectedMagicCard.type === 'wind' && isOccupiedByOpponent) ||
                   (selectedMagicCard.type === 'recycle' && tile.color !== 'white' && !hasHeart)
                 );
@@ -596,7 +616,7 @@ export default function GameRoomPage() {
                   const isHeartCard = 'color' in card && 'value' in card &&
                     ['❤️', '💛', '💚', '💙', '🤎'].includes(card.emoji);
                   const isMagicCard = 'type' in card && 'name' in card &&
-                    ['💨', '♻️'].includes(card.emoji);
+                    ['💨', '♻️', '🛡️'].includes(card.emoji);
                   const isSelected = isHeartCard ? selectedHeart?.id === card.id :
                                    isMagicCard ? selectedMagicCard?.id === card.id : false;
 
@@ -610,7 +630,9 @@ export default function GameRoomPage() {
                         : isHeartCard
                           ? 'bg-white/20 hover:bg-white/30'
                           : isMagicCard
-                            ? 'bg-purple-600/20 hover:bg-purple-600/30 border border-purple-400/30'
+                            ? card.emoji === '🛡️'
+                              ? 'bg-blue-600/20 hover:bg-blue-600/30 border border-blue-400/30'
+                              : 'bg-purple-600/20 hover:bg-purple-600/30 border border-purple-400/30'
                             : 'bg-gray-600/20 hover:bg-gray-600/30'
                     }`}
                     title={
@@ -641,12 +663,22 @@ export default function GameRoomPage() {
             )}
             {selectedMagicCard && (
               <p className="text-center text-purple-400 mt-2">
-                Selected: {selectedMagicCard.emoji} {selectedMagicCard.name} - Click a target tile
+                Selected: {selectedMagicCard.emoji} {selectedMagicCard.name} -
+                {selectedMagicCard.type === 'shield' ? ' Click anywhere to activate' : ' Click a target tile'}
               </p>
             )}
           </div>
 
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-col gap-4 items-center">
+            {isCurrentPlayer() && selectedMagicCard?.type === 'shield' && (
+              <button
+                onClick={activateShield}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors animate-pulse"
+              >
+                🛡️ Activate Shield
+              </button>
+            )}
+            <div className="flex gap-4 justify-center">
             {isCurrentPlayer() && (
               <>
                 <button
@@ -674,6 +706,7 @@ export default function GameRoomPage() {
                 </button>
               </>
             )}
+            </div>
           </div>
         </div>
       </div>
