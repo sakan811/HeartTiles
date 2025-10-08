@@ -310,10 +310,10 @@ function isPlayerShielded(room, userId) {
   }
 
   const shield = room.gameState.shields[userId];
-  const currentTime = Date.now();
 
   // Check if shield is still active (until end of player's next turn)
-  if (currentTime > shield.expiresAt) {
+  // Shield expires when currentPlayer has completed the number of turns specified by shield.remainingTurns
+  if (shield.remainingTurns <= 0) {
     delete room.gameState.shields[userId];
     return false;
   }
@@ -326,32 +326,24 @@ function activatePlayerShield(room, userId) {
     room.gameState.shields = {};
   }
 
-  // Shield lasts until end of player's next turn (approximately 2 full turns)
-  const shieldDuration = 2 * 60000; // 2 minutes in milliseconds (conservative estimate)
-  const expiresAt = Date.now() + shieldDuration;
-
+  // Shield lasts for 2 full turns (including opponent's turn)
   room.gameState.shields[userId] = {
     active: true,
-    expiresAt: expiresAt,
-    activatedAt: Date.now()
+    remainingTurns: 2, // Shield protects for 2 turns
+    activatedAt: Date.now(),
+    activatedBy: userId
   };
 }
 
 function checkAndExpireShields(room, currentUserId) {
   if (!room.gameState.shields) return;
 
-  const currentTime = Date.now();
-  const expiredShields = [];
-
+  // Decrease remaining turns for all active shields at the start of each turn
   for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    if (currentTime > shield.expiresAt) {
-      expiredShields.push(userId);
+    shield.remainingTurns--;
+    if (shield.remainingTurns <= 0) {
+      delete room.gameState.shields[userId];
     }
-  }
-
-  // Remove expired shields
-  for (const userId of expiredShields) {
-    delete room.gameState.shields[userId];
   }
 }
 
@@ -657,7 +649,8 @@ function checkAndExpireShields(room, currentUserId) {
             deck: room.gameState.deck,
             magicDeck: room.gameState.magicDeck,
             turnCount: room.gameState.turnCount,
-            playerId: userId
+            playerId: userId,
+            shields: room.gameState.shields || {}
           };
           io.to(socket.id).emit("game-start", gameStateData);
         }
@@ -742,7 +735,8 @@ function checkAndExpireShields(room, currentUserId) {
               playerHands: room.gameState.playerHands,
               deck: room.gameState.deck,
               magicDeck: room.gameState.magicDeck,
-              turnCount: room.gameState.turnCount
+              turnCount: room.gameState.turnCount,
+              shields: room.gameState.shields || {}
             };
 
             room.players.forEach(player => {
@@ -1039,7 +1033,8 @@ function checkAndExpireShields(room, currentUserId) {
             turnCount: room.gameState.turnCount,
             players: playersWithHands,
             playerHands: room.gameState.playerHands,
-            deck: room.gameState.deck
+            deck: room.gameState.deck,
+            shields: room.gameState.shields || {}
           });
           console.log(`Turn change broadcasted to room ${roomCode}:`, {
             currentPlayer: room.gameState.currentPlayer.name,
@@ -1190,18 +1185,30 @@ function checkAndExpireShields(room, currentUserId) {
           }
 
           const card = playerHand[cardIndex];
-          const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == targetTileId);
-
-          if (tileIndex === -1) {
-            socket.emit("room-error", "Target tile not found");
-            return;
-          }
-
-          const tile = room.gameState.tiles[tileIndex];
           let actionResult = null;
 
           // Apply card effect based on type
-          if (card.type === 'wind') {
+          if (card.type === 'shield') {
+            // Shield cards don't need a target tile
+            activatePlayerShield(room, userId);
+            actionResult = {
+              type: 'shield',
+              activatedFor: userId,
+              remainingTurns: room.gameState.shields[userId].remainingTurns
+            };
+            console.log(`Shield card used by ${userId} - protection activated for ${room.gameState.shields[userId].remainingTurns} turns`);
+          } else {
+            // For other magic cards, validate target tile
+            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == targetTileId);
+
+            if (tileIndex === -1) {
+              socket.emit("room-error", "Target tile not found");
+              return;
+            }
+
+            const tile = room.gameState.tiles[tileIndex];
+
+            if (card.type === 'wind') {
             // Remove opponent heart from tile and restore square format
             if (tile.placedHeart && tile.placedHeart.placedBy !== userId) {
               // Check if the opponent is shielded
@@ -1272,16 +1279,8 @@ function checkAndExpireShields(room, currentUserId) {
               placedHeart: undefined
             };
             console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${tile.color} to white square (⬜)`);
-          } else if (card.type === 'shield') {
-            // Activate shield protection for the player
-            activatePlayerShield(room, userId);
-            actionResult = {
-              type: 'shield',
-              activatedFor: userId,
-              expiresAt: room.gameState.shields[userId].expiresAt
-            };
-            console.log(`Shield card used by ${userId} - protection activated until ${new Date(room.gameState.shields[userId].expiresAt).toLocaleTimeString()}`);
           }
+          } // Close the else block for non-shield cards
 
           // Remove the used magic card from player's hand
           room.gameState.playerHands[userId].splice(cardIndex, 1);
@@ -1309,7 +1308,8 @@ function checkAndExpireShields(room, currentUserId) {
             tiles: room.gameState.tiles,
             players: playersWithUpdatedHands,
             playerHands: room.gameState.playerHands,
-            usedBy: userId
+            usedBy: userId,
+            shields: room.gameState.shields || {}
           });
 
           // Check if game should end after magic card usage (wind card could potentially clear tiles)

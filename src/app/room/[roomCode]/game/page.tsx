@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/socket";
 import { useSession } from "next-auth/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { FaShieldAlt } from "react-icons/fa";
 
 interface Tile {
   id: number | string;
@@ -53,6 +54,13 @@ interface MagicDeck {
   type: string;
 }
 
+interface Shield {
+  active: boolean;
+  remainingTurns: number;
+  activatedAt: number;
+  activatedBy: string;
+}
+
 export default function GameRoomPage() {
   const { data: session, status } = useSession();
   const [tiles, setTiles] = useState<Tile[]>([]);
@@ -67,6 +75,7 @@ export default function GameRoomPage() {
   const [selectedMagicCard, setSelectedMagicCard] = useState<MagicCard | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string>("");
   const [currentRoom, setCurrentRoom] = useState<string>("");
+  const [shields, setShields] = useState<Record<string, Shield>>({});
   const { socket, isConnected, socketId, disconnect } = useSocket();
   const params = useParams();
   const router = useRouter();
@@ -120,6 +129,7 @@ export default function GameRoomPage() {
       magicDeck?: MagicDeck;
       turnCount?: number;
       playerId?: string;
+      shields?: Record<string, Shield>;
     }) => {
       const gameData = Array.isArray(data) ? data[0] : data;
 
@@ -136,7 +146,8 @@ export default function GameRoomPage() {
         deck: gameData.deck || { emoji: "💌", cards: 16 },
         magicDeck: gameData.magicDeck || { emoji: "🔮", cards: 16, type: 'magic' },
         turnCount: gameData.turnCount || 0,
-        playerId: gameData.playerId || null
+        playerId: gameData.playerId || null,
+        shields: gameData.shields || {}
       };
 
       console.log(`Game started: ${safeGameData.players.length} players, current: ${safeGameData.currentPlayer?.name}`);
@@ -154,6 +165,7 @@ export default function GameRoomPage() {
       setDeck(safeGameData.deck);
       setMagicDeck(safeGameData.magicDeck);
       setTurnCount(safeGameData.turnCount);
+      setShields(safeGameData.shields);
     };
 
     const onTurnChanged = (data: {
@@ -161,7 +173,8 @@ export default function GameRoomPage() {
       turnCount: number;
       players?: Player[];
       playerHands?: Record<string, Tile[]>;
-      deck?: Deck
+      deck?: Deck;
+      shields?: Record<string, Shield>;
     }) => {
       console.log(`Turn changed: ${data.currentPlayer.name} (turn ${data.turnCount})`);
 
@@ -170,6 +183,7 @@ export default function GameRoomPage() {
       if (data.players) setPlayers(data.players);
       if (data.playerHands) setPlayerHands(data.playerHands);
       if (data.deck) setDeck(data.deck);
+      if (data.shields) setShields(data.shields);
     };
 
     const onHeartDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]>; deck: Deck }) => {
@@ -222,11 +236,14 @@ export default function GameRoomPage() {
         description: string;
         affectedTiles?: number[];
         newValues?: Record<number, number>;
+        activatedFor?: string;
+        remainingTurns?: number;
       };
       tiles: Tile[];
       players: Player[];
       playerHands: Record<string, Tile[]>;
-      usedBy: string
+      usedBy: string;
+      shields?: Record<string, Shield>;
     }) => {
       console.log(`Magic card used: ${data.card.name} (${data.card.type})`);
 
@@ -234,6 +251,11 @@ export default function GameRoomPage() {
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
       setSelectedMagicCard(null);
+
+      // Update shields if provided (for shield cards)
+      if (data.shields) {
+        setShields(data.shields);
+      }
     };
 
     const onGameOver = (data: {
@@ -534,6 +556,12 @@ export default function GameRoomPage() {
                   (selectedMagicCard.type === 'recycle' && tile.color !== 'white' && !hasHeart)
                 );
 
+                // For shield cards, highlight all tiles to indicate shield can be activated
+                const isShieldCardTarget = selectedMagicCard && selectedMagicCard.type === 'shield';
+
+                // Check if this tile's occupant is shielded
+                const isTileShielded = hasHeart && shields[tile.placedHeart!.placedBy]?.active;
+
                 return (
                 <div
                   key={tile.id}
@@ -543,9 +571,11 @@ export default function GameRoomPage() {
                       ? 'hover:bg-white/30 bg-white/20 cursor-pointer'
                       : canUseMagicCard && isMagicCardTarget
                         ? 'hover:bg-purple-400/30 bg-purple-400/20 cursor-pointer border-2 border-purple-400/50'
-                        : hasHeart
-                          ? 'cursor-not-allowed'
-                          : 'bg-white/10 cursor-not-allowed'
+                        : isShieldCardTarget
+                          ? 'hover:bg-blue-400/30 bg-blue-400/20 cursor-pointer border-2 border-blue-400/50 animate-pulse'
+                          : hasHeart
+                            ? 'cursor-not-allowed'
+                            : 'bg-white/10 cursor-not-allowed'
                   } ${
                     isOccupiedByMe
                       ? 'ring-4 ring-green-400 bg-green-900/30'
@@ -555,10 +585,12 @@ export default function GameRoomPage() {
                   }`}
                   title={`${tile.color} tile${
                     hasHeart
-                      ? ` - ${tile.placedHeart!.emoji} by ${tile.placedHeart!.placedBy === myPlayerId ? 'you' : 'opponent'} (score: ${tile.placedHeart!.score})`
-                      : canPlaceHeart
-                        ? ' - Click to place heart'
-                        : ''
+                      ? ` - ${tile.placedHeart!.emoji} by ${tile.placedHeart!.placedBy === myPlayerId ? 'you' : 'opponent'} (score: ${tile.placedHeart!.score})${isTileShielded ? ' - SHIELDED' : ''}`
+                      : isShieldCardTarget
+                        ? ' - Click any tile to activate shield'
+                        : canPlaceHeart
+                          ? ' - Click to place heart'
+                          : ''
                   }`}
                 >
                   {tile.emoji}
@@ -581,6 +613,13 @@ export default function GameRoomPage() {
                       isOccupiedByMe ? 'bg-green-400' : 'bg-red-400'
                     }`}>
                       {tile.placedHeart!.score}
+                    </div>
+                  )}
+
+                  {/* Shield icon for protected tiles */}
+                  {isTileShielded && (
+                    <div className="absolute top-0 left-0 text-blue-400 bg-white/90 rounded-full w-6 h-6 flex items-center justify-center transform -translate-x-1 -translate-y-1 shadow-lg">
+                      <FaShieldAlt size={12} title={`Shielded (${shields[tile.placedHeart!.placedBy].remainingTurns} turns remaining)`} />
                     </div>
                   )}
                 </div>
