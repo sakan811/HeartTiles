@@ -404,10 +404,10 @@ export default function GameRoomPage() {
       // Create magic card object from hand card with better type safety
       const magicCard: MagicCard = {
         id: card.id,
-        type: card.type as 'wind' | 'recycle' | 'shield',
-        emoji: card.emoji,
-        name: card.name || `${card.type.charAt(0).toUpperCase() + card.type.slice(1)} Card`,
-        description: card.description || `A ${card.type} magic card`
+        type: (card.type as 'wind' | 'recycle' | 'shield') || 'shield',
+        emoji: card.emoji || '🛡️',
+        name: card.name || `${((card.type as string)?.charAt(0)?.toUpperCase() + (card.type as string)?.slice(1)) || 'Magic'} Card`,
+        description: card.description || `A ${(card.type as string) || 'magic'} magic card`
       };
       setSelectedMagicCard(magicCard);
       setSelectedHeart(null);
@@ -489,6 +489,29 @@ export default function GameRoomPage() {
               </p>
             )}
             <p className="text-sm">Turn: {turnCount}</p>
+
+            {/* Shield Status Display */}
+            {shields && Object.keys(shields).length > 0 && (
+              <div className="mt-3 p-2 bg-blue-900/30 rounded-lg border border-blue-400/30">
+                <h4 className="text-white text-xs font-semibold mb-1">Shield Status</h4>
+                {Object.entries(shields).map(([playerId, shield]) => {
+                  const player = players.find(p => p.userId === playerId);
+                  const isMyShield = playerId === myPlayerId;
+                  const isActive = shield.remainingTurns > 0;
+
+                  if (!isActive) return null;
+
+                  return (
+                    <div key={playerId} className={`text-xs flex items-center gap-1 ${isMyShield ? 'text-green-300' : 'text-red-300'}`}>
+                      <FaShieldAlt size={10} />
+                      <span>
+                        {isMyShield ? 'Your' : `${player?.name || 'Opponent\'s'}`} Shield: {shield.remainingTurns} turns
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Score Display */}
             <div className="mt-4 p-3 bg-white/10 rounded-lg">
@@ -663,11 +686,25 @@ export default function GameRoomPage() {
                     }
 
                     // Show shield activation indicator when player has shield card selected
-                    if (isShieldCardTarget && isMyShieldActive) {
+                    if (isShieldCardTarget) {
                       return (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="text-blue-300 bg-blue-900/50 rounded-full w-8 h-8 flex items-center justify-center animate-pulse">
-                            <FaShieldAlt size={16} title={`Shield active (${myShield.remainingTurns} turns remaining)`} />
+                          <div className={`${isMyShieldActive ? 'text-green-300 bg-green-900/50' : 'text-blue-300 bg-blue-900/50'} rounded-full w-8 h-8 flex items-center justify-center animate-pulse`}>
+                            <FaShieldAlt
+                              size={16}
+                              title={isMyShieldActive ? `Shield active (${myShield.remainingTurns} turns remaining) - Click to reinforce` : 'Click any tile to activate shield protection'}
+                            />
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Show shield protection border on empty tiles if player has active shield
+                    if (!hasHeart && isMyShieldActive && isCurrentPlayer()) {
+                      return (
+                        <div className="absolute inset-0 border-2 border-blue-400/60 rounded-lg pointer-events-none animate-pulse">
+                          <div className="absolute -top-2 -right-2 bg-blue-400/90 rounded-full w-4 h-4 flex items-center justify-center">
+                            <FaShieldAlt size={8} className="text-white" />
                           </div>
                         </div>
                       );
