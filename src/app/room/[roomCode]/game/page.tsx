@@ -794,6 +794,23 @@ export default function GameRoomPage() {
           </div>
 
           <div className="flex flex-col gap-4 items-center">
+            {/* Turn Requirements Display */}
+            {isCurrentPlayer() && (
+              <div className="bg-white/10 rounded-lg p-3 max-w-md">
+                <h4 className="text-white text-sm font-semibold mb-2">Turn Requirements:</h4>
+                <div className="flex gap-4 text-xs">
+                  <div className={`flex items-center gap-1 ${deck.cards > 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                    <span className={deck.cards > 0 ? '❌' : '✅'}></span>
+                    <span>Draw Heart ({deck.cards} left)</span>
+                  </div>
+                  <div className={`flex items-center gap-1 ${magicDeck.cards > 0 ? 'text-purple-400' : 'text-gray-500'}`}>
+                    <span className={magicDeck.cards > 0 ? '❌' : '✅'}></span>
+                    <span>Draw Magic ({magicDeck.cards} left)</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-4 justify-center">
             {isCurrentPlayer() && (
               <>
@@ -810,7 +827,12 @@ export default function GameRoomPage() {
                 </button>
                 <button
                   onClick={drawMagicCard}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                  disabled={magicDeck.cards <= 0}
+                  className={`font-bold py-3 px-6 rounded-lg transition-colors ${
+                    magicDeck.cards <= 0
+                      ? "bg-gray-500 cursor-not-allowed"
+                      : "bg-purple-600 hover:bg-purple-700 text-white"
+                  }`}
                 >
                   Draw Magic Card
                 </button>

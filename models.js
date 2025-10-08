@@ -122,7 +122,7 @@ const roomSchema = new mongoose.Schema({
       color: {
         type: String,
         required: true,
-        enum: ['red', 'yellow', 'green', 'blue', 'brown', 'white']
+        enum: ['red', 'yellow', 'green', 'white']
       },
       emoji: {
         type: String,
@@ -135,7 +135,7 @@ const roomSchema = new mongoose.Schema({
         },
         color: {
           type: String,
-          enum: ['red', 'yellow', 'green', 'blue', 'brown']
+          enum: ['red', 'yellow', 'green']
         },
         emoji: String,
         placedBy: String,
@@ -162,7 +162,7 @@ const roomSchema = new mongoose.Schema({
       },
       cards: {
         type: Number,
-        default: 10,
+        default: 16,
         min: 0
       },
       type: {
@@ -178,7 +178,7 @@ const roomSchema = new mongoose.Schema({
       },
       cards: {
         type: Number,
-        default: 10,
+        default: 16,
         min: 0
       },
       type: {
@@ -197,7 +197,7 @@ const roomSchema = new mongoose.Schema({
         color: {
           type: String,
           required: true,
-          enum: ['red', 'yellow', 'green', 'blue', 'brown']
+          enum: ['red', 'yellow', 'green']
         },
         emoji: {
           type: String,
@@ -208,12 +208,57 @@ const roomSchema = new mongoose.Schema({
           required: true,
           min: 1,
           max: 3
-        }
+        },
+        type: {
+          type: String,
+          enum: ['heart', 'magic'],
+          required: true
+        },
+        name: String,
+        description: String
       }]
     },
     turnCount: {
       type: Number,
       default: 0
+    },
+    shields: {
+      type: Map,
+      of: {
+        active: {
+          type: Boolean,
+          default: false
+        },
+        remainingTurns: {
+          type: Number,
+          default: 0
+        },
+        activatedAt: {
+          type: Number,
+          default: 0
+        },
+        activatedBy: {
+          type: String,
+          default: null
+        },
+        turnActivated: {
+          type: Number,
+          default: 0
+        }
+      }
+    },
+    playerActions: {
+      type: Map,
+      of: {
+        drawnHeart: {
+          type: Boolean,
+          default: false
+        },
+        drawnMagic: {
+          type: Boolean,
+          default: false
+        }
+      }
     }
   }
 }, {

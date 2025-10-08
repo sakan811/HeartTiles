@@ -361,8 +361,8 @@ function checkAndExpireShields(room) {
   }
 
   function generateTiles() {
-    const colors = ["red", "yellow", "green", "blue", "brown"];
-    const emojis = ["🟥", "🟨", "🟩", "🟦", "🟫"];
+    const colors = ["red", "yellow", "green"];
+    const emojis = ["🟥", "🟨", "🟩"];
     const tiles = [];
 
     for (let i = 0; i < 8; i++) {
@@ -500,7 +500,7 @@ function checkAndExpireShields(room) {
             tiles: [], gameStarted: false, currentPlayer: null,
             deck: { emoji: "💌", cards: 16, type: 'hearts' },
             magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
-            playerHands: {}, shields: {}, turnCount: 0
+            playerHands: {}, shields: {}, turnCount: 0, playerActions: {}
           }
         };
         rooms.set(roomCode, room);
@@ -530,7 +530,7 @@ function checkAndExpireShields(room) {
               room.gameState = {
                 ...room.gameState,
                 gameStarted: false, currentPlayer: null, tiles: [],
-                playerHands: {}, turnCount: 0,
+                playerHands: {}, turnCount: 0, playerActions: {},
                 deck: { ...room.gameState.deck, cards: 16 }
               };
               room.players.forEach(player => player.isReady = false);
@@ -640,7 +640,9 @@ function checkAndExpireShields(room) {
 
             room.gameState.tiles = generateTiles();
             room.gameState.gameStarted = true;
+            room.gameState.deck.cards = 16;
             room.gameState.magicDeck.cards = 16;
+            room.gameState.playerActions = {};
             await saveRoom(room);
 
             room.players.forEach(player => {
@@ -915,28 +917,28 @@ function checkAndExpireShields(room) {
         return;
       }
 
-      // Check if player has drawn both heart and magic card as required by rules
-      // But allow ending turn if respective decks are empty
-      const cardDrawValidation = validateCardDrawLimit(room, userId);
-      const heartDeckEmpty = room.gameState.deck.cards <= 0;
-      const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
-
-      if (!cardDrawValidation.currentActions.drawnHeart && !heartDeckEmpty) {
-        socket.emit("room-error", "You must draw a heart card before ending your turn");
-        return;
-      }
-
-      if (!cardDrawValidation.currentActions.drawnMagic && !magicDeckEmpty) {
-        socket.emit("room-error", "You must draw a magic card before ending your turn");
-        return;
-      }
-
       if (!acquireTurnLock(roomCode, socket.id)) {
         socket.emit("room-error", "Action in progress, please wait");
         return;
       }
 
       try {
+        // Check if player has drawn both heart and magic card as required by rules
+        // But allow ending turn if respective decks are empty
+        const cardDrawValidation = validateCardDrawLimit(room, userId);
+        const heartDeckEmpty = room.gameState.deck.cards <= 0;
+        const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
+
+        if (!cardDrawValidation.currentActions.drawnHeart && !heartDeckEmpty) {
+          socket.emit("room-error", "You must draw a heart card before ending your turn");
+          return;
+        }
+
+        if (!cardDrawValidation.currentActions.drawnMagic && !magicDeckEmpty) {
+          socket.emit("room-error", "You must draw a magic card before ending your turn");
+          return;
+        }
+
         if (room.gameState.gameStarted) {
         // Reset actions for the current player whose turn is ending
         resetPlayerActions(room, room.gameState.currentPlayer.userId);
