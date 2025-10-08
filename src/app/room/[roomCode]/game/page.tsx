@@ -652,11 +652,11 @@ export default function GameRoomPage() {
                       );
                     }
 
-                    // Show opponent's shield protection on tiles with hearts
-                    if (hasHeart) {
-                      const heartOwner = tile.placedHeart!.placedBy;
-                      const opponentShield = shields[heartOwner];
-                      const isOpponentShieldActive = opponentShield && opponentShield.remainingTurns > 0 && heartOwner !== myPlayerId;
+                    // Show opponent's shield protection on ALL tiles when opponent has active shield
+                    const opponentPlayers = players.filter(p => p.userId !== myPlayerId);
+                    for (const opponent of opponentPlayers) {
+                      const opponentShield = shields[opponent.userId];
+                      const isOpponentShieldActive = opponentShield && opponentShield.remainingTurns > 0;
 
                       if (isOpponentShieldActive) {
                         return (
