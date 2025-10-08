@@ -105,8 +105,7 @@ export class WindCard extends MagicCard {
 
     const originalTileColor = tile.placedHeart.originalTileColor;
     const colorEmojis = {
-      'red': '🟥', 'yellow': '🟨', 'green': '🟩',
-      'blue': '🟦', 'brown': '🟫', 'white': '⬜'
+      'red': '🟥', 'yellow': '🟨', 'green': '🟩', 'white': '⬜'
     };
 
     // Return the action result for broadcasting

@@ -388,23 +388,26 @@ export default function GameRoomPage() {
   const selectCardFromHand = (card: Tile) => {
     if (!isCurrentPlayer()) return;
 
-    // Properly distinguish between heart cards and magic cards
-    // Heart cards have: color, value, emoji (❤️💛💚💙🤎)
-    // Magic cards have: type, name, description, emoji (💨♻️)
-    const isHeartCard = 'color' in card && 'value' in card &&
-      ['❤️', '💛', '💚', '💙', '🤎'].includes(card.emoji);
+    // Enhanced card detection logic compatible with new card classes
+    // Heart cards have: color, value, emoji (❤️💛💚) - limited to available colors
+    // Magic cards have: type, name, description, emoji (💨♻️🛡️)
+    const heartEmojis = ['❤️', '💛', '💚']; // Only the colors available in HeartCard
+    const magicEmojis = ['💨', '♻️', '🛡️'];
 
-    const isMagicCard = 'type' in card && 'name' in card &&
-      ['💨', '♻️', '🛡️'].includes(card.emoji);
+    const isHeartCard = ('color' in card && 'value' in card && heartEmojis.includes(card.emoji)) ||
+                       (card.type === 'heart' && heartEmojis.includes(card.emoji));
+
+    const isMagicCard = ('type' in card && 'name' in card && magicEmojis.includes(card.emoji)) ||
+                       (card.type && ['wind', 'recycle', 'shield'].includes(card.type));
 
     if (isMagicCard) {
-      // Create magic card object from hand card
+      // Create magic card object from hand card with better type safety
       const magicCard: MagicCard = {
         id: card.id,
         type: card.type as 'wind' | 'recycle' | 'shield',
         emoji: card.emoji,
-        name: card.name || 'Magic Card',
-        description: card.description || 'A magic card'
+        name: card.name || `${card.type.charAt(0).toUpperCase() + card.type.slice(1)} Card`,
+        description: card.description || `A ${card.type} magic card`
       };
       setSelectedMagicCard(magicCard);
       setSelectedHeart(null);
@@ -712,10 +715,13 @@ export default function GameRoomPage() {
 
                 return playerHand.map((card) => {
                   // Use the same logic as selectCardFromHand for consistency
-                  const isHeartCard = 'color' in card && 'value' in card &&
-                    ['❤️', '💛', '💚', '💙', '🤎'].includes(card.emoji);
-                  const isMagicCard = 'type' in card && 'name' in card &&
-                    ['💨', '♻️', '🛡️'].includes(card.emoji);
+                  const heartEmojis = ['❤️', '💛', '💚']; // Only available colors from HeartCard
+                  const magicEmojis = ['💨', '♻️', '🛡️'];
+
+                  const isHeartCard = ('color' in card && 'value' in card && heartEmojis.includes(card.emoji)) ||
+                                     (card.type === 'heart' && heartEmojis.includes(card.emoji));
+                  const isMagicCard = ('type' in card && 'name' in card && magicEmojis.includes(card.emoji)) ||
+                                     (card.type && ['wind', 'recycle', 'shield'].includes(card.type));
                   const isSelected = isHeartCard ? selectedHeart?.id === card.id :
                                    isMagicCard ? selectedMagicCard?.id === card.id : false;
 

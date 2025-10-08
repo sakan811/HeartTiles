@@ -4,6 +4,16 @@ import { Server } from "socket.io";
 import mongoose from 'mongoose';
 import { PlayerSession, Room, User } from './models.js';
 import { getToken } from 'next-auth/jwt';
+import {
+  HeartCard,
+  WindCard,
+  RecycleCard,
+  ShieldCard,
+  generateRandomMagicCard,
+  isHeartCard,
+  isMagicCard,
+  createCardFromData
+} from './src/lib/cards.js';
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
@@ -243,14 +253,15 @@ app.prepare().then(async () => {
     const heart = playerHand.find(card => card.id === heartId);
     if (!heart) return { valid: false, error: "Card not in player's hand" };
 
-    // Validate that the card is actually a heart card, not a magic card
-    // Heart cards have: color, value, emoji (❤️💛💚💙🤎)
-    // Magic cards have: type, name, description, emoji (💨♻️)
-    const isHeartCard = heart.color && heart.value !== undefined &&
-      ['❤️', '💛', '💚', '💙', '🤎'].includes(heart.emoji);
-
-    if (!isHeartCard) {
+    // Use the new card validation helpers
+    if (!isHeartCard(heart)) {
       return { valid: false, error: "Only heart cards can be placed on tiles" };
+    }
+
+    // Convert to HeartCard instance if it's a plain object for validation
+    let heartCard = heart;
+    if (!(heart instanceof HeartCard)) {
+      heartCard = createCardFromData(heart);
     }
 
     const tile = room.gameState.tiles.find(tile => tile.id == tileId);
@@ -258,6 +269,11 @@ app.prepare().then(async () => {
 
     // Check if tile is already occupied by a heart
     if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" };
+
+    // Use HeartCard's canTargetTile method for additional validation
+    if (!heartCard.canTargetTile(tile)) {
+      return { valid: false, error: "This heart cannot be placed on this tile" };
+    }
 
     return { valid: true };
   }
@@ -304,57 +320,17 @@ app.prepare().then(async () => {
     }
   }
 
-function isPlayerShielded(room, userId) {
-  if (!room.gameState.shields || !room.gameState.shields[userId]) {
-    return false;
-  }
-
-  const shield = room.gameState.shields[userId];
-
-  // Check if shield is still active (until end of player's next turn)
-  // Shield expires when currentPlayer has completed the number of turns specified by shield.remainingTurns
-  if (shield.remainingTurns <= 0) {
-    delete room.gameState.shields[userId];
-    return false;
-  }
-
-  return true;
-}
-
-function activatePlayerShield(room, userId) {
-  if (!room.gameState.shields) {
-    room.gameState.shields = {};
-  }
-
-  // Shield remains active until the end of the player's next turn
-  // This means it protects during: opponent's turn + player's next turn
-  // Playing a new Shield replaces the previous one
-  room.gameState.shields[userId] = {
-    active: true,
-    remainingTurns: 2, // 2 full turns: opponent's next turn + player's next turn
-    activatedAt: Date.now(),
-    activatedBy: userId,
-    turnActivated: room.gameState.turnCount
-  };
-
-  console.log(`Shield activated for ${userId} on turn ${room.gameState.turnCount}, will expire after ${room.gameState.shields[userId].remainingTurns} turns`);
-}
-
-function checkAndExpireShields(room, currentUserId) {
+function checkAndExpireShields(room) {
   if (!room.gameState.shields) return;
 
-  // Only decrease shield turns when the shield owner's turn ends
+  // Use ShieldCard's static method to check shield status
   for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    // Shield expires when the owner has completed a full turn cycle
-    // Check if current turn is after the shield activation + 2 turns
-    const turnsSinceActivation = room.gameState.turnCount - shield.turnActivated;
-
-    if (turnsSinceActivation >= 2) {
-      console.log(`Shield expired for ${userId} (active for ${turnsSinceActivation} turns)`);
+    if (!ShieldCard.isActive(shield, room.gameState.turnCount)) {
+      console.log(`Shield expired for ${userId}`);
       delete room.gameState.shields[userId];
     } else {
-      // Update remaining turns for UI display
-      shield.remainingTurns = Math.max(0, 2 - turnsSinceActivation);
+      // Update remaining turns using ShieldCard's static method
+      shield.remainingTurns = ShieldCard.getRemainingTurns(shield, room.gameState.turnCount);
     }
   }
 }
@@ -405,78 +381,24 @@ function checkAndExpireShields(room, currentUserId) {
   }
 
   function calculateScore(heart, tile) {
+    // Use HeartCard's calculateScore method if heart is a HeartCard instance
+    if (heart instanceof HeartCard) {
+      return heart.calculateScore(tile);
+    }
+    // Fallback for old format (plain objects)
     if (tile.color === "white") return heart.value;
     return heart.color === tile.color ? heart.value * 2 : 0;
   }
 
   function generateSingleHeart() {
-    const colors = ["red", "yellow", "green", "blue", "brown"];
-    const heartEmojis = ["❤️", "💛", "💚", "💙", "🤎"];
-    const randomIndex = Math.floor(Math.random() * colors.length);
-    const randomValue = Math.floor(Math.random() * 3) + 1;
-
-    return {
-      id: Date.now() + Math.random(),
-      color: colors[randomIndex],
-      emoji: heartEmojis[randomIndex],
-      value: randomValue
-    };
+    const heartCard = HeartCard.generateRandom();
+    return heartCard;
   }
 
-  function generateMagicDeck() {
-    const cards = [];
-    const baseTime = Date.now();
-    const cardTypes = [
-      { type: 'wind', emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
-      { type: 'recycle', emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' },
-      { type: 'shield', emoji: '🛡️', name: 'Shield Card', description: 'Self-activating: Protect your tiles from magic cards for 2 turns' }
-    ];
-
-    // Generate 6 Wind, 5 Recycle, 5 Shield cards for balanced gameplay
-    for (let i = 0; i < 16; i++) {
-      let cardType;
-      if (i < 6) {
-        cardType = cardTypes[0]; // Wind (6 cards)
-      } else if (i < 11) {
-        cardType = cardTypes[1]; // Recycle (5 cards)
-      } else {
-        cardType = cardTypes[2]; // Shield (5 cards)
-      }
-      cards.push({
-        id: baseTime + Math.random() + i + 1,
-        ...cardType
-      });
-    }
-    return cards;
-  }
-
+  
   function generateSingleMagicCard() {
-    const cardTypes = [
-      { type: 'wind', weight: 6, emoji: '💨', name: 'Wind Card', description: 'Remove opponent heart from a tile' },
-      { type: 'recycle', weight: 5, emoji: '♻️', name: 'Recycle Card', description: 'Change tile color to white' },
-      { type: 'shield', weight: 5, emoji: '🛡️', name: 'Shield Card', description: 'Self-activating: Protect your tiles from magic cards for 2 turns' }
-    ];
-
-    // Weighted random selection based on desired distribution (6:5:5 ratio)
-    const totalWeight = cardTypes.reduce((sum, card) => sum + card.weight, 0);
-    let random = Math.random() * totalWeight;
-
-    let selectedType = cardTypes[0];
-    for (const cardType of cardTypes) {
-      random -= cardType.weight;
-      if (random <= 0) {
-        selectedType = cardType;
-        break;
-      }
-    }
-
-    return {
-      id: Date.now() + Math.random(),
-      type: selectedType.type,
-      emoji: selectedType.emoji,
-      name: selectedType.name,
-      description: selectedType.description
-    };
+    const magicCard = generateRandomMagicCard();
+    return magicCard;
   }
 
   function selectRandomStartingPlayer(players) {
@@ -1020,7 +942,7 @@ function checkAndExpireShields(room, currentUserId) {
         resetPlayerActions(room, room.gameState.currentPlayer.userId);
 
         // Check and expire shields that should expire after this turn
-        checkAndExpireShields(room, room.gameState.currentPlayer.userId);
+        checkAndExpireShields(room);
 
         // Find the current player index
         const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId);
@@ -1199,8 +1121,14 @@ function checkAndExpireShields(room, currentUserId) {
           const card = playerHand[cardIndex];
           let actionResult = null;
 
-          // Apply card effect based on type
-          if (card.type === 'shield') {
+          // Convert plain object cards to MagicCard instances if needed
+          let magicCard = card;
+          if (!(card instanceof WindCard || card instanceof RecycleCard || card instanceof ShieldCard)) {
+            magicCard = createCardFromData(card);
+          }
+
+          // Apply card effect based on type using the new card classes
+          if (magicCard.type === 'shield') {
             // Shield cards don't need a target tile
             // Shield can only be activated for the current player
             if (room.gameState.currentPlayer.userId !== userId) {
@@ -1208,13 +1136,8 @@ function checkAndExpireShields(room, currentUserId) {
               return;
             }
 
-            activatePlayerShield(room, userId);
-            actionResult = {
-              type: 'shield',
-              activatedFor: userId,
-              remainingTurns: room.gameState.shields[userId].remainingTurns
-            };
-            console.log(`Shield card used by ${userId} - protection activated for ${room.gameState.shields[userId].remainingTurns} turns`);
+            actionResult = magicCard.executeEffect(room.gameState, userId);
+            console.log(`Shield card used by ${userId} - protection activated for ${actionResult.remainingTurns} turns`);
           } else {
             // For other magic cards, validate target tile
             const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == targetTileId);
@@ -1226,102 +1149,43 @@ function checkAndExpireShields(room, currentUserId) {
 
             const tile = room.gameState.tiles[tileIndex];
 
-            if (card.type === 'wind') {
-            // Remove opponent heart from tile and restore square format
-            if (tile.placedHeart && tile.placedHeart.placedBy !== userId) {
-              // Check if the opponent is shielded
-              const opponentId = tile.placedHeart.placedBy;
-              if (isPlayerShielded(room, opponentId)) {
-                const opponentShield = room.gameState.shields[opponentId];
-                socket.emit("room-error", `Opponent is protected by Shield (${opponentShield.remainingTurns} turns remaining)`);
-                console.log(`Wind card blocked by shield: ${userId} tried to target ${opponentId}'s heart on tile ${targetTileId}`);
+            if (magicCard.type === 'wind') {
+              // Use WindCard's canTargetTile method for validation
+              if (!magicCard.canTargetTile(tile, userId)) {
+                socket.emit("room-error", "Invalid target for Wind card");
                 return;
               }
 
-              actionResult = {
-                type: 'wind',
-                removedHeart: tile.placedHeart,
-                tileId: tile.id,
-                blocked: false
-              };
-              // Clear the placed heart from tile and restore square emoji based on original tile color
-              const getSquareEmoji = (color) => {
-                const colorEmojis = {
-                  'red': '🟥',
-                  'yellow': '🟨',
-                  'green': '🟩',
-                  'blue': '🟦',
-                  'brown': '🟫',
-                  'white': '⬜'
-                };
-                return colorEmojis[color] || '⬜';
-              };
+              // Execute the Wind card effect using the new class method
+              actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId);
 
-              // Restore original tile state, removing the heart and restoring the square emoji
-              const originalTileColor = tile.placedHeart.originalTileColor;
-              room.gameState.tiles[tileIndex] = {
-                id: tile.id,
-                color: originalTileColor,
-                emoji: getSquareEmoji(originalTileColor),
-                // Remove placedHeart completely to restore original tile state
-                placedHeart: undefined
-              };
-              console.log(`Wind card used by ${userId} to remove heart from tile ${targetTileId} and restore ${originalTileColor} square format (${getSquareEmoji(originalTileColor)})`);
-            } else {
-              socket.emit("room-error", "No opponent heart on target tile");
-              return;
-            }
-          } else if (card.type === 'recycle') {
-            // Check if tile is already occupied by a heart
-            if (tile.placedHeart) {
-              socket.emit("room-error", "Tile is already occupied");
-              return;
-            }
+              // Apply the result to the game state
+              if (actionResult) {
+                room.gameState.tiles[tileIndex] = actionResult.newTileState;
+                console.log(`Wind card used by ${userId} to remove heart from tile ${targetTileId}`);
+              } else {
+                socket.emit("room-error", "Failed to execute Wind card effect");
+                return;
+              }
+            } else if (magicCard.type === 'recycle') {
+              // Use RecycleCard's canTargetTile method for validation
+              if (!magicCard.canTargetTile(tile)) {
+                socket.emit("room-error", "Invalid target for Recycle card");
+                return;
+              }
 
-            // Check if tile is already white (no need to recycle)
-            if (tile.color === 'white') {
-              socket.emit("room-error", "Tile is already white");
-              return;
-            }
+              // Execute the Recycle card effect using the new class method
+              actionResult = magicCard.executeEffect(room.gameState, targetTileId);
 
-            // Check if any player has an active shield that would protect this tile
-            // Shield protects all player's tiles from magic cards
-            let shieldBlocker = null;
-            for (const [playerId, shield] of Object.entries(room.gameState.shields || {})) {
-              if (shield.remainingTurns > 0) {
-                // Check if this player has any hearts on the board (shield only protects tiles with player's hearts)
-                const hasPlayerHearts = room.gameState.tiles.some(t => t.placedHeart && t.placedHeart.placedBy === playerId);
-                if (hasPlayerHearts) {
-                  shieldBlocker = { userId: playerId, shield };
-                  break;
-                }
+              // Apply the result to the game state
+              if (actionResult) {
+                room.gameState.tiles[tileIndex] = actionResult.newTileState;
+                console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${actionResult.previousColor} to white`);
+              } else {
+                socket.emit("room-error", "Failed to execute Recycle card effect");
+                return;
               }
             }
-
-            if (shieldBlocker) {
-              socket.emit("room-error", `Tile is protected by Shield (${shieldBlocker.shield.remainingTurns} turns remaining)`);
-              console.log(`Recycle card blocked by shield: ${userId} tried to recycle tile ${targetTileId}, shield active for ${shieldBlocker.userId}`);
-              return;
-            }
-
-            // Change tile color to white, keeping square format
-            actionResult = {
-              type: 'recycle',
-              previousColor: tile.color,
-              newColor: 'white',
-              tileId: tile.id,
-              blocked: false
-            };
-            // Set tile to white square (no heart since we validated it's empty)
-            room.gameState.tiles[tileIndex] = {
-              id: tile.id,
-              color: 'white',
-              emoji: '⬜',
-              // No placedHeart since we validated the tile is empty
-              placedHeart: undefined
-            };
-            console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${tile.color} to white square (⬜)`);
-          }
           } // Close the else block for non-shield cards
 
           // Remove the used magic card from player's hand
