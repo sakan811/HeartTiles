@@ -279,7 +279,7 @@ describe('Shield Card Visual Indicators', () => {
         ? `Shield active (${myShield.remainingTurns} turns left) - Click to reinforce`
         : 'Click to activate shield (blocks magic cards for 3 turns)';
 
-      expect(reinforcementMessage).toContain('Shield active (3 turns left) - Click to reinforce');
+      expect(reinforcementMessage).toContain('Shield active (2 turns left) - Click to reinforce');
     });
 
     it('should show activation button with appropriate styling', () => {

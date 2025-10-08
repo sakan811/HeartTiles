@@ -79,17 +79,21 @@ describe('Server Shield Event Integration', () => {
         // Mock save function
       },
 
-      checkAndExpireShields: async (room) => {
-        // Import ShieldCard for this test
-        const { ShieldCard } = await import('../../src/lib/cards.js');
-
+      checkAndExpireShields: (room) => {
+        // This mirrors the actual server.js function
         if (!room.gameState.shields) return;
 
+        // Decrement remaining turns for all active shields at the end of each turn
         for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-          if (!ShieldCard.isActive(shield, room.gameState.turnCount)) {
-            delete room.gameState.shields[userId];
-          } else {
-            shield.remainingTurns = ShieldCard.getRemainingTurns(shield, room.gameState.turnCount);
+          if (shield.remainingTurns > 0) {
+            shield.remainingTurns--;
+            console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
+
+            // Remove shield if it has expired
+            if (shield.remainingTurns <= 0) {
+              console.log(`Shield expired for ${userId}`);
+              delete room.gameState.shields[userId];
+            }
           }
         }
       }
@@ -238,8 +242,11 @@ describe('Server Shield Event Integration', () => {
     it('should allow magic cards after shield expires', async () => {
       const { WindCard } = await import('../../src/lib/cards.js');
 
-      // Advance turns until shield expires
-      mockRoom.gameState.turnCount = 3;
+      // Advance turns until shield expires (after 3 full turns = turn 4)
+      for (let turn = 1; turn <= 3; turn++) {
+        mockRoom.gameState.turnCount = turn + 1; // Turn 2, 3, 4
+        await serverFunctions.checkAndExpireShields(mockRoom);
+      }
 
       const windCardData = mockRoom.gameState.playerHands[player2Id][0];
       const windCard = new WindCard(windCardData.id);
@@ -260,12 +267,12 @@ describe('Server Shield Event Integration', () => {
 
       expect(mockRoom.gameState.shields[player1Id]).toBeDefined();
 
-      // Simulate turn change to turn 3 (shield should expire)
-      mockRoom.gameState.turnCount = 3;
-      mockRoom.gameState.currentPlayer = { userId: player2Id, name: 'Player 2' };
-
-      // Run shield cleanup (as would happen in end-turn)
-      await serverFunctions.checkAndExpireShields(mockRoom);
+      // Simulate shield expiration after 3 full turns
+      // The shield should be decremented at the end of each turn
+      for (let turn = 1; turn <= 3; turn++) {
+        mockRoom.gameState.turnCount = turn; // Turn 1, 2, 3
+        await serverFunctions.checkAndExpireShields(mockRoom);
+      }
 
       expect(mockRoom.gameState.shields[player1Id]).toBeUndefined();
     });
@@ -277,16 +284,17 @@ describe('Server Shield Event Integration', () => {
       const shield = new ShieldCard('shield1');
       shield.executeEffect(mockRoom.gameState, player1Id);
 
-      // Turn 1: 3 turns remaining
+      // End of Turn 1: 2 turns remaining (decremented from 3)
+      mockRoom.gameState.turnCount = 1;
       await serverFunctions.checkAndExpireShields(mockRoom);
-      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(3);
+      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
 
-      // Turn 2: 1 turn remaining
+      // End of Turn 2: 1 turn remaining
       mockRoom.gameState.turnCount = 2;
       await serverFunctions.checkAndExpireShields(mockRoom);
       expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(1);
 
-      // Turn 3: Shield should be expired and removed
+      // End of Turn 3: Shield should be expired and removed
       mockRoom.gameState.turnCount = 3;
       await serverFunctions.checkAndExpireShields(mockRoom);
       expect(mockRoom.gameState.shields[player1Id]).toBeUndefined();
@@ -475,8 +483,10 @@ describe('Server Shield Event Integration', () => {
       expect(turnChangeData.shields[player1Id].remainingTurns).toBeGreaterThan(0);
 
       // Simulate shield expiration during turn change
-      mockRoom.gameState.turnCount = 3;
-      await serverFunctions.checkAndExpireShields(mockRoom);
+      for (let turn = 1; turn <= 3; turn++) {
+        mockRoom.gameState.turnCount = turn; // Turn 1, 2, 3
+        await serverFunctions.checkAndExpireShields(mockRoom);
+      }
 
       // Shield should be removed from visual state
       expect(mockRoom.gameState.shields[player1Id]).toBeUndefined();

@@ -122,27 +122,29 @@ describe('Shield Card Rules Verification', () => {
 
       // Advance to turn 2
       mockGameState.turnCount = 2;
-      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 2)).toBe(2);
+      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id])).toBe(2);
 
       // Reinforce shield
       const reinforceShield = new ShieldCard('shield2');
       const result = reinforceShield.executeEffect(mockGameState, player1Id);
 
       expect(result.reinforced).toBe(true);
-      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 2)).toBe(3);
+      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id])).toBe(3);
     });
 
     it('should handle shield expiration cleanup correctly', () => {
       const shield = new ShieldCard('shield1');
       shield.executeEffect(mockGameState, player1Id);
 
-      // Simulate shield expiration
-      mockGameState.turnCount = 4;
-
-      // Cleanup expired shields (as done in server.js)
-      for (const [userId, shield] of Object.entries(mockGameState.shields)) {
-        if (!ShieldCard.isActive(shield, mockGameState.turnCount)) {
-          delete mockGameState.shields[userId];
+      // Simulate shield expiration after 3 turn changes (as done in server.js checkAndExpireShields)
+      for (let turn = 1; turn <= 3; turn++) {
+        for (const [userId, shield] of Object.entries(mockGameState.shields)) {
+          if (shield.remainingTurns > 0) {
+            shield.remainingTurns--;
+            if (shield.remainingTurns <= 0) {
+              delete mockGameState.shields[userId];
+            }
+          }
         }
       }
 
