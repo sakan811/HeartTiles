@@ -103,3 +103,4 @@ During your turn, you can:
 4. **Game Start**: Random player selected to go first
 5. **Turn Play**: Players take turns drawing, placing, and using cards
 6. **Game End**: All tiles filled or deck empty → winner determined
+  - In case of deck empty end, the game ends after that player finishes their turn

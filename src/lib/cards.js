@@ -106,8 +106,8 @@ export class WindCard extends MagicCard {
       throw new Error(`Opponent is protected by Shield (${remainingTurns} turns remaining)`);
     }
 
-    // CRITICAL RULE: Tile color preservation - the tile color ALWAYS remains unchanged after heart removal
-    const originalTileColor = tile.color; // Use current tile color, not stored original
+    // CRITICAL RULE: Tile color preservation - restore to original tile color before heart was placed
+    const originalTileColor = tile.placedHeart.originalTileColor || tile.color;
     const colorEmojis = {
       'red': '🟥', 'yellow': '🟨', 'green': '🟩', 'white': '⬜'
     };
@@ -120,7 +120,7 @@ export class WindCard extends MagicCard {
       tileId: tile.id,
       newTileState: {
         id: tile.id,
-        color: originalTileColor, // Tile color remains unchanged
+        color: originalTileColor, // Restore to original tile color
         emoji: colorEmojis[originalTileColor] || '⬜',
         placedHeart: undefined
       }

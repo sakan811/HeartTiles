@@ -408,7 +408,7 @@ function checkAndExpireShields(room) {
     return players[Math.floor(Math.random() * players.length)];
   }
 
-  function checkGameEndConditions(room) {
+  function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
     if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null };
 
     // Condition 1: All tiles are filled (have hearts)
@@ -417,19 +417,27 @@ function checkAndExpireShields(room) {
       return { shouldEnd: true, reason: "All tiles are filled" };
     }
 
-    // Condition 2: Either deck is empty (if deck is empty, game ends)
+    // Condition 2: Any deck is empty
     const heartDeckEmpty = room.gameState.deck.cards <= 0;
     const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
-    if (heartDeckEmpty || magicDeckEmpty) {
-      const emptyDeck = heartDeckEmpty ? "Heart" : "Magic";
-      return { shouldEnd: true, reason: `${emptyDeck} deck is empty` };
+    const anyDeckEmpty = heartDeckEmpty || magicDeckEmpty;
+
+    // If grace period is allowed, don't end game immediately when deck becomes empty
+    // This allows the current player to finish their turn
+    if (anyDeckEmpty && !allowDeckEmptyGracePeriod) {
+      if (heartDeckEmpty && magicDeckEmpty) {
+        return { shouldEnd: true, reason: "Both decks are empty" };
+      } else {
+        const emptyDeck = heartDeckEmpty ? "Heart" : "Magic";
+        return { shouldEnd: true, reason: `${emptyDeck} deck is empty` };
+      }
     }
 
     return { shouldEnd: false, reason: null };
   }
 
-  async function endGame(room, roomCode, io) {
-    const gameEndResult = checkGameEndConditions(room);
+  async function endGame(room, roomCode, io, allowDeckEmptyGracePeriod = true) {
+    const gameEndResult = checkGameEndConditions(room, allowDeckEmptyGracePeriod);
     if (!gameEndResult.shouldEnd) return false;
 
     console.log(`Game ending in room ${roomCode}: ${gameEndResult.reason}`);
@@ -773,8 +781,9 @@ function checkAndExpireShields(room) {
             deck: room.gameState.deck
           });
 
-          // Check if game should end after drawing (if deck becomes empty)
-          await endGame(room, roomCode, io);
+          // Check if game should end after drawing (if deck becomes empty), but allow grace period
+          // Game should end after player finishes their turn, not immediately when deck becomes empty
+          await endGame(room, roomCode, io, true);
         }
       } finally {
         releaseTurnLock(roomCode, socket.id);
@@ -949,37 +958,43 @@ function checkAndExpireShields(room) {
         // Check and expire shields that should expire after this turn
         checkAndExpireShields(room);
 
-        // Find the current player index
-        const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId);
-        const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length;
+        // Check if game should end after player finishes their turn (no grace period for deck empty)
+        await endGame(room, roomCode, io, false);
 
-        // Switch to next player
-        room.gameState.currentPlayer = room.players[nextPlayerIndex];
-        room.gameState.turnCount++;
-        await saveRoom(room); // Save turn change
+        // Only proceed with turn change if game hasn't ended
+        if (room.gameState.gameStarted) {
+          // Find the current player index
+          const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId);
+          const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length;
 
-        console.log(`Turn ended in room ${roomCode.toUpperCase()}, new currentPlayer: ${room.gameState.currentPlayer.id}`);
+          // Switch to next player
+          room.gameState.currentPlayer = room.players[nextPlayerIndex];
+          room.gameState.turnCount++;
+          await saveRoom(room); // Save turn change
 
-        // Include player hands in the player objects for broadcasting
-          const playersWithHands = room.players.map(player => ({
-            ...player,
-            hand: room.gameState.playerHands[player.userId] || []
-          }));
+          console.log(`Turn ended in room ${roomCode.toUpperCase()}, new currentPlayer: ${room.gameState.currentPlayer.id}`);
 
-          // Broadcast turn change to all players
-          io.to(roomCode).emit("turn-changed", {
-            currentPlayer: room.gameState.currentPlayer,
-            turnCount: room.gameState.turnCount,
-            players: playersWithHands,
-            playerHands: room.gameState.playerHands,
-            deck: room.gameState.deck,
-            shields: room.gameState.shields || {}
-          });
-          console.log(`Turn change broadcasted to room ${roomCode}:`, {
-            currentPlayer: room.gameState.currentPlayer.name,
-            turnCount: room.gameState.turnCount,
-            playersCount: playersWithHands.length
-          });
+          // Include player hands in the player objects for broadcasting
+            const playersWithHands = room.players.map(player => ({
+              ...player,
+              hand: room.gameState.playerHands[player.userId] || []
+            }));
+
+            // Broadcast turn change to all players
+            io.to(roomCode).emit("turn-changed", {
+              currentPlayer: room.gameState.currentPlayer,
+              turnCount: room.gameState.turnCount,
+              players: playersWithHands,
+              playerHands: room.gameState.playerHands,
+              deck: room.gameState.deck,
+              shields: room.gameState.shields || {}
+            });
+            console.log(`Turn change broadcasted to room ${roomCode}:`, {
+              currentPlayer: room.gameState.currentPlayer.name,
+              turnCount: room.gameState.turnCount,
+              playersCount: playersWithHands.length
+            });
+          }
         }
       } finally {
         // Always release the lock
@@ -1062,8 +1077,9 @@ function checkAndExpireShields(room) {
             magicDeck: room.gameState.magicDeck
           });
 
-          // Check if game should end after drawing magic card (if deck becomes empty)
-          await endGame(room, roomCode, io);
+          // Check if game should end after drawing magic card (if deck becomes empty), but allow grace period
+          // Game should end after player finishes their turn, not immediately when deck becomes empty
+          await endGame(room, roomCode, io, true);
         } else {
           socket.emit("room-error", "No more magic cards in deck");
         }
