@@ -122,14 +122,14 @@ describe('Shield Card Rules Verification', () => {
 
       // Advance to turn 2
       mockGameState.turnCount = 2;
-      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id])).toBe(2);
+      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 2)).toBe(2);
 
       // Reinforce shield
       const reinforceShield = new ShieldCard('shield2');
       const result = reinforceShield.executeEffect(mockGameState, player1Id);
 
       expect(result.reinforced).toBe(true);
-      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id])).toBe(3);
+      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 2)).toBe(3);
     });
 
     it('should handle shield expiration cleanup correctly', () => {

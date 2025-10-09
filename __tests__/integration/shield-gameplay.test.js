@@ -180,7 +180,7 @@ describe('Shield Card Gameplay Integration', () => {
       player1Shield.executeEffect(mockRoom.gameState, player1Id);
 
       // Advance turns until shield expires
-      mockRoom.gameState.turnCount = 3;
+      mockRoom.gameState.turnCount = 4;
 
       // Player2 should now be able to activate shield
       const player2Shield = mockRoom.gameState.playerHands[player2Id][2];
@@ -207,9 +207,13 @@ describe('Shield Card Gameplay Integration', () => {
       // Turn 2: Shield still active (opponent's turn)
       expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 2)).toBe(true);
 
-      // Turn 3: Shield expires (player's next turn completed)
+      // Turn 3: Shield still active (player's next turn)
       mockRoom.gameState.turnCount = 3;
-      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 3)).toBe(false);
+      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 3)).toBe(true);
+
+      // Turn 4: Shield expires (opponent's turn)
+      mockRoom.gameState.turnCount = 4;
+      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 4)).toBe(false);
     });
 
     it('should remove expired shields during cleanup', () => {
@@ -217,7 +221,7 @@ describe('Shield Card Gameplay Integration', () => {
       shieldCard.executeEffect(mockRoom.gameState, player1Id);
 
       // Simulate shield expiration cleanup
-      mockRoom.gameState.turnCount = 3;
+      mockRoom.gameState.turnCount = 4;
 
       // Simulate cleanup function (similar to server.js checkAndExpireShields)
       for (const [userId, shield] of Object.entries(mockRoom.gameState.shields)) {

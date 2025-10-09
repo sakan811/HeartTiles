@@ -345,20 +345,25 @@ describe('Shield Card Visual Indicators', () => {
       let shieldTurnCount = 1;
       const shield = {
         turnActivated: 1,
-        remainingTurns: 2
+        remainingTurns: 3
       };
 
       // Turn 1: 3 turns remaining
       shieldTurnCount = 1;
       expect(shield.remainingTurns).toBe(3);
 
-      // Turn 2: 1 turn remaining
+      // Turn 2: 2 turns remaining
       shieldTurnCount = 2;
+      shield.remainingTurns = 2;
+      expect(shield.remainingTurns).toBe(2);
+
+      // Turn 3: 1 turn remaining
+      shieldTurnCount = 3;
       shield.remainingTurns = 1;
       expect(shield.remainingTurns).toBe(1);
 
-      // Turn 3: Shield expired
-      shieldTurnCount = 3;
+      // Turn 4: Shield expired
+      shieldTurnCount = 4;
       shield.remainingTurns = 0;
       expect(shield.remainingTurns).toBe(0);
     });

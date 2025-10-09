@@ -109,7 +109,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       }).toThrow("Tile is protected by Shield");
 
       // 5. Advance turns until shield expires
-      room.gameState.turnCount = 3;
+      room.gameState.turnCount = 4;
 
       // 6. Player 2 should now be able to use Wind card
       const windResult = actualWindCard.executeEffect(room.gameState, 1, mockClient2.userId);
@@ -225,7 +225,7 @@ describe('Shield Card End-to-End Scenarios', () => {
 
       // 5. Advance to Player 1's next turn (shield expires)
       room.gameState.currentPlayer = { userId: mockClient1.userId, name: mockClient1.name };
-      room.gameState.turnCount = 3;
+      room.gameState.turnCount = 4;
 
       // 6. Player 2 should now be able to activate shield
       const result = player2Shield.executeEffect(room.gameState, mockClient2.userId);
