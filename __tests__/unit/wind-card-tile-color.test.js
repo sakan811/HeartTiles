@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { WindCard, HeartCard, createCardFromData } from '../../src/lib/cards.js';
+import { WindCard, HeartCard, createCardFromData } from '../../src/lib/cards';
 
 describe('Wind Card - Tile Color Restoration', () => {
   let mockGameState;
