@@ -4,8 +4,9 @@ import { render, screen, act, waitFor } from '@testing-library/react'
 import { SocketProvider, useSocket } from '../../../src/contexts/SocketContext'
 
 // Mock socket.io-client
+const mockIo = vi.fn()
 vi.mock('socket.io-client', () => ({
-  io: vi.fn()
+  io: mockIo
 }))
 
 // Mock console methods to avoid noise in tests
@@ -28,8 +29,7 @@ describe('SocketContext', () => {
       connected: true
     }
 
-    const { io } = require('socket.io-client')
-    io.mockReturnValue(mockSocket)
+    mockIo.mockReturnValue(mockSocket)
 
     // Mock window object
     Object.defineProperty(window, 'location', {
@@ -57,7 +57,7 @@ describe('SocketContext', () => {
     })
 
     it('should create socket connection on mount', () => {
-      const { io } = require('socket.io-client')
+      mockIo
 
       render(
         <SocketProvider>
@@ -80,7 +80,7 @@ describe('SocketContext', () => {
       const originalWindow = global.window
       delete global.window
 
-      const { io } = require('socket.io-client')
+      mockIo
 
       render(
         <SocketProvider>
@@ -382,7 +382,7 @@ describe('SocketContext', () => {
 
   describe('Component Lifecycle', () => {
     it('should create socket only once on mount', () => {
-      const { io } = require('socket.io-client')
+      mockIo
 
       const { rerender } = render(
         <SocketProvider>
@@ -429,7 +429,7 @@ describe('SocketContext', () => {
 
   describe('Error Handling', () => {
     it('should handle socket creation errors', () => {
-      const { io } = require('socket.io-client')
+      mockIo
       io.mockImplementation(() => {
         throw new Error('Socket creation failed')
       })
@@ -541,7 +541,7 @@ describe('SocketContext', () => {
     })
 
     it('should handle multiple socket instances correctly', () => {
-      const { io } = require('socket.io-client')
+      mockIo
       const mockSocket2 = { ...mockSocket, id: 'test-socket-id-2' }
 
       io.mockReturnValueOnce(mockSocket).mockReturnValueOnce(mockSocket2)
