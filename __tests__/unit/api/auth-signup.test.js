@@ -13,7 +13,7 @@ vi.mock('next/server', () => ({
 }))
 
 // Mock the User model
-vi.mock('../../../../models', () => ({
+vi.mock('../../../models', () => ({
   User: {
     findOne: vi.fn(),
     constructor: vi.fn().mockImplementation(function() {
@@ -36,7 +36,7 @@ describe('Signup API Route Tests', () => {
   let mockRequest
   let mockJson
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
 
     mockJson = vi.fn()
@@ -45,7 +45,7 @@ describe('Signup API Route Tests', () => {
     }
 
     // Reset User constructor mock
-    const { User } = require('../../../../models')
+    const { User } = await import('../../../models')
     User.constructor.mockClear()
     User.constructor.mockImplementation(function(userData) {
       this.name = userData.name
@@ -61,7 +61,7 @@ describe('Signup API Route Tests', () => {
 
   describe('Request Validation', () => {
     it('should return 400 when name is missing', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         email: 'test@example.com',
@@ -75,7 +75,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return 400 when email is missing', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -89,7 +89,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return 400 when password is missing', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -103,7 +103,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return 400 when password is too short', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -118,7 +118,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return 400 when password is exactly 5 characters', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -133,8 +133,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should accept password of exactly 6 characters', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue(null)
       const mockSave = vi.fn().mockResolvedValue({})
@@ -158,7 +158,7 @@ describe('Signup API Route Tests', () => {
 
   describe('Database Connection', () => {
     it('should connect to database when connection state is 0', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
       const mockMongoose = {
         default: {
           connection: { readyState: 0 },
@@ -169,7 +169,7 @@ describe('Signup API Route Tests', () => {
       // Mock dynamic import
       global.import = vi.fn().mockResolvedValue(mockMongoose)
 
-      const { User } = await import('../../../../models')
+      const { User } = await import('../../../models')
       User.findOne.mockResolvedValue(null)
 
       const mockSave = vi.fn().mockResolvedValue({})
@@ -190,7 +190,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should not connect when already connected', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
       const mockMongoose = {
         default: {
           connection: { readyState: 1 },
@@ -200,7 +200,7 @@ describe('Signup API Route Tests', () => {
 
       global.import = vi.fn().mockResolvedValue(mockMongoose)
 
-      const { User } = await import('../../../../models')
+      const { User } = await import('../../../models')
       User.findOne.mockResolvedValue(null)
 
       const mockSave = vi.fn().mockResolvedValue({})
@@ -224,7 +224,7 @@ describe('Signup API Route Tests', () => {
       const originalEnv = process.env
       process.env = { ...originalEnv, MONGODB_URI: undefined }
 
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
       const mockMongoose = {
         default: {
           connection: { readyState: 0 },
@@ -234,7 +234,7 @@ describe('Signup API Route Tests', () => {
 
       global.import = vi.fn().mockResolvedValue(mockMongoose)
 
-      const { User } = await import('../../../../models')
+      const { User } = await import('../../../models')
       User.findOne.mockResolvedValue(null)
 
       const mockSave = vi.fn().mockResolvedValue({})
@@ -260,7 +260,7 @@ describe('Signup API Route Tests', () => {
       const originalEnv = process.env
       process.env = { ...originalEnv, MONGODB_URI: 'mongodb://custom:27017/test-db' }
 
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
       const mockMongoose = {
         default: {
           connection: { readyState: 0 },
@@ -270,7 +270,7 @@ describe('Signup API Route Tests', () => {
 
       global.import = vi.fn().mockResolvedValue(mockMongoose)
 
-      const { User } = await import('../../../../models')
+      const { User } = await import('../../../models')
       User.findOne.mockResolvedValue(null)
 
       const mockSave = vi.fn().mockResolvedValue({})
@@ -295,8 +295,8 @@ describe('Signup API Route Tests', () => {
 
   describe('User Creation', () => {
     it('should return 400 when user already exists', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue({
         _id: '123',
@@ -318,8 +318,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should create new user when email is unique', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue(null)
       const mockSave = vi.fn().mockResolvedValue({
@@ -355,8 +355,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle database errors gracefully', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockRejectedValue(new Error('Database connection failed'))
 
@@ -373,8 +373,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle user save errors gracefully', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue(null)
       const mockSave = vi.fn().mockRejectedValue(new Error('Save failed'))
@@ -397,8 +397,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle duplicate key error (MongoDB error code 11000)', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue(null)
       const duplicateError = { code: 11000, keyValue: { email: 'test@example.com' } }
@@ -422,8 +422,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle malformed error objects', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockRejectedValue('String error')
 
@@ -440,8 +440,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle null error objects', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockRejectedValue(null)
 
@@ -460,8 +460,8 @@ describe('Signup API Route Tests', () => {
 
   describe('Input Sanitization and Validation', () => {
     it('should handle valid email formats', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue(null)
       const mockSave = vi.fn().mockResolvedValue({})
@@ -490,8 +490,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should create user with valid names', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue(null)
       const mockSave = vi.fn().mockResolvedValue({})
@@ -524,7 +524,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle empty strings as missing fields', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         name: '',
@@ -538,7 +538,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle whitespace-only strings as missing fields', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         name: '   ',
@@ -552,7 +552,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle JSON parsing errors', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockRejectedValue(new Error('Invalid JSON'))
 
@@ -564,8 +564,8 @@ describe('Signup API Route Tests', () => {
 
   describe('Response Headers and Status Codes', () => {
     it('should return correct status code for successful signup', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue(null)
       const mockSave = vi.fn().mockResolvedValue({})
@@ -586,7 +586,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return correct status code for validation errors', async () => {
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -600,8 +600,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return correct status code for duplicate user', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockResolvedValue({
         _id: '123',
@@ -621,8 +621,8 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return correct status code for server errors', async () => {
-      const { User } = await import('../../../../models')
-      const { POST } = await import('../../../../src/app/api/auth/signup/route.js')
+      const { User } = await import('../../../models')
+      const { POST } = await import('../../../src/app/api/auth/signup/route')
 
       User.findOne.mockRejectedValue(new Error('Database error'))
 
