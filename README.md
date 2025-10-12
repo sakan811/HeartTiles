@@ -6,8 +6,7 @@ Inspired by Kitty Card Game from Love and Deepspace
 
 ## Status
 
-[![Test CI](https://github.com/sakan811/no-kitty-cards-game/actions/workflows/ci.yml/badge.svg)](https://github.com/sakan811/no-kitty-cards-game/actions/workflows/ci.yml)
-
+[![Vitest Tests](https://github.com/sakan811/HeartTiles/actions/workflows/web-app-test.yml/badge.svg)](https://github.com/sakan811/HeartTiles/actions/workflows/web-app-test.yml)
 ## Quick Start
 
 ### Prerequisites
