@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { ShieldCard } from '../src/lib/cards.js'
+import { ShieldCard } from '../src/lib/cards'
 
 // Mock console methods to reduce noise in tests
 global.console = {
