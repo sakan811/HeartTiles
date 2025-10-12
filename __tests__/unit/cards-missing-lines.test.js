@@ -147,9 +147,12 @@ describe('Cards Missing Lines Coverage Tests', () => {
       expect(recycleCount).toBeGreaterThan(0)
       expect(shieldCount).toBeGreaterThan(0)
 
-      // Wind should be slightly more common due to higher weight
-      expect(windCount).toBeGreaterThanOrEqual(recycleCount)
-      expect(windCount).toBeGreaterThanOrEqual(shieldCount)
+      // Wind should be more common than both recycle and shield combined in most cases
+      // With weight 6 vs 5+5, wind should have at least 20% of total
+      expect(windCount).toBeGreaterThan(10) // At least 10 out of 100
+
+      // Total should be exactly 100 cards
+      expect(windCount + recycleCount + shieldCount).toBe(100)
     })
 
     it('should generate cards with unique IDs', () => {

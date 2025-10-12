@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock the SocketContext
-vi.mock('../../src/contexts/SocketContext', () => ({
+vi.mock('../../src/contexts/SocketContext.js', () => ({
   useSocket: vi.fn()
 }))
 
@@ -13,7 +13,7 @@ describe('Socket Module Tests', () => {
   describe('Module Exports', () => {
     it('should export useSocket from SocketContext', () => {
       const socketModule = require('../../src/socket.ts')
-      const { useSocket } = require('../../src/contexts/SocketContext')
+      const { useSocket } = require('../../src/contexts/SocketContext.js')
 
       expect(socketModule.useSocket).toBeDefined()
       expect(typeof socketModule.useSocket).toBe('function')
@@ -22,7 +22,7 @@ describe('Socket Module Tests', () => {
 
     it('should re-export useSocket function correctly', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -40,7 +40,7 @@ describe('Socket Module Tests', () => {
         disconnect: vi.fn()
       })
 
-      const { useSocket } = require('../../src/contexts/SocketContext')
+      const { useSocket } = require('../../src/contexts/SocketContext.js')
       useSocket.mockImplementation(mockUseSocket)
 
       const socketModule = require('../../src/socket.ts')
@@ -61,7 +61,7 @@ describe('Socket Module Tests', () => {
   describe('Backward Compatibility', () => {
     it('should maintain legacy export structure', () => {
       const socketModule = require('../../src/socket.ts')
-      const socketContextModule = require('../../src/contexts/SocketContext')
+      const socketContextModule = require('../../src/contexts/SocketContext.js')
 
       // Verify that the export exists and is the same reference
       expect(socketModule.useSocket).toBe(socketContextModule.useSocket)
@@ -69,13 +69,13 @@ describe('Socket Module Tests', () => {
 
     it('should work with existing import patterns', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
       // Test both import patterns
       const importFromSocket = require('../../src/socket.ts')
-      const importFromContext = require('../../src/contexts/SocketContext')
+      const importFromContext = require('../../src/contexts/SocketContext.js')
 
       expect(importFromSocket.useSocket).toBe(importFromContext.useSocket)
       expect(typeof importFromSocket.useSocket).toBe('function')
@@ -111,7 +111,7 @@ describe('Socket Module Tests', () => {
   describe('Function Delegation', () => {
     it('should delegate all calls to SocketContext useSocket', () => {
       const mockUseSocket = vi.fn().mockReturnValue('test-result')
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -128,7 +128,7 @@ describe('Socket Module Tests', () => {
         throw testError
       })
 
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -141,7 +141,7 @@ describe('Socket Module Tests', () => {
 
     it('should maintain context of SocketContext useSocket', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -173,12 +173,12 @@ describe('Socket Module Tests', () => {
 
     it('should maintain function identity across re-exports', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
       const socketModule = require('../../src/socket.ts')
-      const socketContextModule = require('../../src/contexts/SocketContext')
+      const socketContextModule = require('../../src/contexts/SocketContext.js')
 
       // Both references should point to the same function
       expect(socketModule.useSocket === socketContextModule.useSocket).toBe(true)
@@ -187,7 +187,7 @@ describe('Socket Module Tests', () => {
 
   describe('Error Handling', () => {
     it('should handle undefined useSocket from SocketContext', () => {
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: undefined
       }))
 
@@ -199,7 +199,7 @@ describe('Socket Module Tests', () => {
     })
 
     it('should handle null useSocket from SocketContext', () => {
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: null
       }))
 
@@ -211,7 +211,7 @@ describe('Socket Module Tests', () => {
     })
 
     it('should handle non-function exports from SocketContext', () => {
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: 'not-a-function'
       }))
 
@@ -226,7 +226,7 @@ describe('Socket Module Tests', () => {
   describe('Performance', () => {
     it('should not create additional function wrappers', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -238,7 +238,7 @@ describe('Socket Module Tests', () => {
 
     it('should have minimal overhead when calling useSocket', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -267,7 +267,7 @@ describe('Socket Module Tests', () => {
       }
 
       const mockUseSocket = vi.fn().mockReturnValue(mockSocketData)
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -286,7 +286,7 @@ describe('Socket Module Tests', () => {
 
     it('should handle multiple imports in different modules', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
@@ -302,7 +302,7 @@ describe('Socket Module Tests', () => {
 
     it('should support re-export chaining', () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext', () => ({
+      vi.doMock('../../src/contexts/SocketContext.js', () => ({
         useSocket: mockUseSocket
       }))
 
