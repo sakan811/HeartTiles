@@ -75,7 +75,7 @@ describe('Shield Card End-to-End Scenarios', () => {
 
       // 2. Player 1 activates shield
       const shieldCard = room.gameState.playerHands[mockClient1.userId][0];
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+      const { ShieldCard } = await import('../../src/lib/cards');
       const actualShieldCard = new ShieldCard(shieldCard.id);
 
       const activationResult = actualShieldCard.executeEffect(room.gameState, mockClient1.userId);
@@ -86,7 +86,7 @@ describe('Shield Card End-to-End Scenarios', () => {
 
       // 3. Player 2 attempts to use Wind card (should be blocked)
       const windCard = room.gameState.playerHands[mockClient2.userId][0];
-      const { WindCard } = await import('../../src/lib/cards.js');
+      const { WindCard } = await import('../../src/lib/cards');
       const actualWindCard = new WindCard(windCard.id);
 
       expect(() => {
@@ -95,7 +95,7 @@ describe('Shield Card End-to-End Scenarios', () => {
 
       // 4. Player 2 attempts to use Recycle card (should be blocked on protected tiles)
       const recycleCard = room.gameState.playerHands[mockClient2.userId][1];
-      const { RecycleCard } = await import('../../src/lib/cards.js');
+      const { RecycleCard } = await import('../../src/lib/cards');
       const actualRecycleCard = new RecycleCard(recycleCard.id);
 
       // Try to use Recycle on tile with heart (fails basic targeting)
@@ -148,7 +148,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       mockServer.rooms.set(roomCode, room);
 
       // 1. Activate first shield
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+      const { ShieldCard } = await import('../../src/lib/cards');
       const firstShield = new ShieldCard('shield1');
       const firstResult = firstShield.executeEffect(room.gameState, mockClient1.userId);
 
@@ -163,7 +163,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       expect(room.gameState.shields[mockClient1.userId].remainingTurns).toBe(3);
 
       // 3. Verify protection is still active
-      const { WindCard } = await import('../../src/lib/cards.js');
+      const { WindCard } = await import('../../src/lib/cards');
       const windCard = new WindCard('wind1');
 
       expect(() => {
@@ -203,7 +203,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       mockServer.rooms.set(roomCode, room);
 
       // 1. Player 1 activates shield
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+      const { ShieldCard } = await import('../../src/lib/cards');
       const player1Shield = new ShieldCard('shield1');
       player1Shield.executeEffect(room.gameState, mockClient1.userId);
 
@@ -259,7 +259,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       };
 
       // Simulate server event broadcasting
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+      const { ShieldCard } = await import('../../src/lib/cards');
       const shieldCard = new ShieldCard('shield1');
       const result = shieldCard.executeEffect(room.gameState, mockClient1.userId);
 
@@ -299,7 +299,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       };
 
       // Player 1 activates shield
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+      const { ShieldCard } = await import('../../src/lib/cards');
       const player1Shield = new ShieldCard('shield1');
       player1Shield.executeEffect(room.gameState, mockClient1.userId);
 
@@ -333,7 +333,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       };
 
       // Activate shield
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+      const { ShieldCard } = await import('../../src/lib/cards');
       const shieldCard = new ShieldCard('shield1');
       shieldCard.executeEffect(room.gameState, mockClient1.userId);
 
@@ -370,7 +370,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       };
 
       // Activate shield before disconnection
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+      const { ShieldCard } = await import('../../src/lib/cards');
       const shieldCard = new ShieldCard('shield1');
       shieldCard.executeEffect(room.gameState, mockClient1.userId);
 
