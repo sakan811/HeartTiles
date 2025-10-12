@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock the SocketContext
-vi.mock('../../src/contexts/SocketContext.js', () => ({
-  useSocket: vi.fn()
+vi.mock('../../../src/contexts/SocketContext', () => ({
+  useSocket: vi.fn(),
+  SocketProvider: vi.fn(),
+  default: vi.fn()
 }))
 
 describe('Socket Module Tests', () => {
@@ -11,27 +13,27 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Module Exports', () => {
-    it('should export useSocket from SocketContext', () => {
-      const socketModule = require('../../src/socket.ts')
-      const { useSocket } = require('../../src/contexts/SocketContext.js')
+    it('should export useSocket from SocketContext', async () => {
+      const socketModule = await import('../../../src/socket')
+      const { useSocket } = await import('../../../src/contexts/SocketContext')
 
       expect(socketModule.useSocket).toBeDefined()
       expect(typeof socketModule.useSocket).toBe('function')
       expect(socketModule.useSocket).toBe(useSocket)
     })
 
-    it('should re-export useSocket function correctly', () => {
+    it('should re-export useSocket function correctly', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       expect(socketModule.useSocket).toBe(mockUseSocket)
     })
 
-    it('should maintain function signature when re-exported', () => {
+    it('should maintain function signature when re-exported', async () => {
       const mockUseSocket = vi.fn().mockReturnValue({
         socket: null,
         isConnected: false,
@@ -40,10 +42,10 @@ describe('Socket Module Tests', () => {
         disconnect: vi.fn()
       })
 
-      const { useSocket } = require('../../src/contexts/SocketContext.js')
+      const { useSocket } = await import('../../../src/contexts/SocketContext')
       useSocket.mockImplementation(mockUseSocket)
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       const result = socketModule.useSocket()
 
@@ -59,23 +61,23 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Backward Compatibility', () => {
-    it('should maintain legacy export structure', () => {
-      const socketModule = require('../../src/socket.ts')
-      const socketContextModule = require('../../src/contexts/SocketContext.js')
+    it('should maintain legacy export structure', async () => {
+      const socketModule = await import('../../../src/socket')
+      const socketContextModule = await import('../../../src/contexts/SocketContext')
 
       // Verify that the export exists and is the same reference
       expect(socketModule.useSocket).toBe(socketContextModule.useSocket)
     })
 
-    it('should work with existing import patterns', () => {
+    it('should work with existing import patterns', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
       // Test both import patterns
-      const importFromSocket = require('../../src/socket.ts')
-      const importFromContext = require('../../src/contexts/SocketContext.js')
+      const importFromSocket = await import('../../../src/socket')
+      const importFromContext = await import('../../../src/contexts/SocketContext')
 
       expect(importFromSocket.useSocket).toBe(importFromContext.useSocket)
       expect(typeof importFromSocket.useSocket).toBe('function')
@@ -83,15 +85,15 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Module Structure', () => {
-    it('should have correct module structure', () => {
-      const socketModule = require('../../src/socket.ts')
+    it('should have correct module structure', async () => {
+      const socketModule = await import('../../../src/socket')
 
       expect(Object.keys(socketModule)).toEqual(['useSocket'])
       expect(socketModule).toHaveProperty('useSocket')
     })
 
-    it('should not export anything else', () => {
-      const socketModule = require('../../src/socket.ts')
+    it('should not export anything else', async () => {
+      const socketModule = await import('../../../src/socket')
 
       // Should only export useSocket
       expect(Object.keys(socketModule)).toHaveLength(1)
@@ -100,8 +102,8 @@ describe('Socket Module Tests', () => {
       expect('SocketProvider' in socketModule).toBe(false)
     })
 
-    it('should be an ES module', () => {
-      const socketModule = require('../../src/socket.ts')
+    it('should be an ES module', async () => {
+      const socketModule = await import('../../../src/socket')
 
       expect(typeof socketModule).toBe('object')
       expect(socketModule !== null).toBe(true)
@@ -109,43 +111,43 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Function Delegation', () => {
-    it('should delegate all calls to SocketContext useSocket', () => {
+    it('should delegate all calls to SocketContext useSocket', async () => {
       const mockUseSocket = vi.fn().mockReturnValue('test-result')
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
       const result = socketModule.useSocket('arg1', 'arg2', 'arg3')
 
       expect(mockUseSocket).toHaveBeenCalledWith('arg1', 'arg2', 'arg3')
       expect(result).toBe('test-result')
     })
 
-    it('should pass through errors from SocketContext', () => {
+    it('should pass through errors from SocketContext', async () => {
       const testError = new Error('Test error from SocketContext')
       const mockUseSocket = vi.fn().mockImplementation(() => {
         throw testError
       })
 
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       expect(() => {
         socketModule.useSocket()
       }).toThrow('Test error from SocketContext')
     })
 
-    it('should maintain context of SocketContext useSocket', () => {
+    it('should maintain context of SocketContext useSocket', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       const testContext = { test: 'context' }
       socketModule.useSocket.call(testContext, 'test-arg')
@@ -155,30 +157,30 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Legacy Support', () => {
-    it('should support old import syntax', () => {
+    it('should support old import syntax', async () => {
       // This simulates how legacy code might import the function
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
       const { useSocket } = socketModule
 
       expect(typeof useSocket).toBe('function')
     })
 
-    it('should work with destructuring import', () => {
-      const socketModule = require('../../src/socket.ts')
+    it('should work with destructuring import', async () => {
+      const socketModule = await import('../../../src/socket')
 
       // Test destructuring
       const { useSocket } = socketModule
       expect(typeof useSocket).toBe('function')
     })
 
-    it('should maintain function identity across re-exports', () => {
+    it('should maintain function identity across re-exports', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
-      const socketContextModule = require('../../src/contexts/SocketContext.js')
+      const socketModule = await import('../../../src/socket')
+      const socketContextModule = await import('../../../src/contexts/SocketContext')
 
       // Both references should point to the same function
       expect(socketModule.useSocket === socketContextModule.useSocket).toBe(true)
@@ -186,36 +188,36 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Error Handling', () => {
-    it('should handle undefined useSocket from SocketContext', () => {
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+    it('should handle undefined useSocket from SocketContext', async () => {
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: undefined
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       expect(() => {
         socketModule.useSocket()
       }).toThrow()
     })
 
-    it('should handle null useSocket from SocketContext', () => {
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+    it('should handle null useSocket from SocketContext', async () => {
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: null
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       expect(() => {
         socketModule.useSocket()
       }).toThrow()
     })
 
-    it('should handle non-function exports from SocketContext', () => {
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+    it('should handle non-function exports from SocketContext', async () => {
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: 'not-a-function'
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       expect(() => {
         socketModule.useSocket()
@@ -224,25 +226,25 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Performance', () => {
-    it('should not create additional function wrappers', () => {
+    it('should not create additional function wrappers', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       // The re-exported function should be the same reference
       expect(socketModule.useSocket).toBe(mockUseSocket)
     })
 
-    it('should have minimal overhead when calling useSocket', () => {
+    it('should have minimal overhead when calling useSocket', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       const start = performance.now()
       for (let i = 0; i < 1000; i++) {
@@ -257,7 +259,7 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Integration Scenarios', () => {
-    it('should work in typical React component usage', () => {
+    it('should work in typical React component usage', async () => {
       const mockSocketData = {
         socket: { id: 'test-socket' },
         isConnected: true,
@@ -267,11 +269,11 @@ describe('Socket Module Tests', () => {
       }
 
       const mockUseSocket = vi.fn().mockReturnValue(mockSocketData)
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       // Simulate component usage
       function useSocketData() {
@@ -284,14 +286,14 @@ describe('Socket Module Tests', () => {
       expect(mockUseSocket).toHaveBeenCalled()
     })
 
-    it('should handle multiple imports in different modules', () => {
+    it('should handle multiple imports in different modules', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
-      const import1 = require('../../src/socket.ts')
-      const import2 = require('../../src/socket.ts')
+      const import1 = await import('../../../src/socket')
+      const import2 = await import('../../../src/socket')
 
       const result1 = import1.useSocket()
       const result2 = import2.useSocket()
@@ -300,14 +302,14 @@ describe('Socket Module Tests', () => {
       expect(import1.useSocket).toBe(import2.useSocket)
     })
 
-    it('should support re-export chaining', () => {
+    it('should support re-export chaining', async () => {
       const mockUseSocket = vi.fn()
-      vi.doMock('../../src/contexts/SocketContext.js', () => ({
+      vi.doMock('../../../src/contexts/SocketContext', () => ({
         useSocket: mockUseSocket
       }))
 
       // Create a chain of re-exports
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       // Re-export again (simulating another module)
       const reExportedModule = {
@@ -322,17 +324,17 @@ describe('Socket Module Tests', () => {
   })
 
   describe('Documentation and Comments', () => {
-    it('should be clearly marked as legacy export', () => {
+    it('should be clearly marked as legacy export', async () => {
       // This is more of a documentation test - in a real scenario you might
       // check if the file has appropriate comments or JSDoc
-      const socketModule = require('../../src/socket.ts')
+      const socketModule = await import('../../../src/socket')
 
       // The module should still work even though it's marked as legacy
       expect(socketModule.useSocket).toBeDefined()
       expect(typeof socketModule.useSocket).toBe('function')
     })
 
-    it('should direct users to use SocketContext instead', () => {
+    it('should direct users to use SocketContext instead', async () => {
       // This test verifies the file structure exists
       const fs = require('fs')
       const path = require('path')
