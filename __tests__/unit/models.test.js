@@ -7,21 +7,32 @@ vi.mock('bcryptjs', () => ({
   default: {
     hash: vi.fn(),
     compare: vi.fn()
-  }
+  },
+  hash: vi.fn(),
+  compare: vi.fn()
 }))
 
 // Mock mongoose
-vi.mock('mongoose', () => ({
-  default: {
-    Schema: vi.fn().mockImplementation((schema, options) => ({
-      pre: vi.fn(),
-      methods: {},
-      ...schema
-    })),
-    model: vi.fn(),
-    models: {}
+vi.mock('mongoose', () => {
+  const mockSchema = vi.fn().mockImplementation((schema, options) => ({
+    pre: vi.fn(),
+    methods: {},
+    ...schema
+  }))
+
+  mockSchema.Types = {
+    Mixed: 'Mixed',
+    ObjectId: 'ObjectId'
   }
-}))
+
+  return {
+    default: {
+      Schema: mockSchema,
+      model: vi.fn(),
+      models: {}
+    }
+  }
+})
 
 describe('Models Tests', () => {
   beforeEach(() => {
@@ -54,7 +65,7 @@ describe('Models Tests', () => {
 
     it('should hash password before saving', async () => {
       const mockHash = vi.fn().mockResolvedValue('hashedPassword123')
-      bcrypt.default.hash = mockHash
+      bcrypt.hash = mockHash
 
       const mockUser = {
         password: 'plainPassword',
@@ -64,7 +75,7 @@ describe('Models Tests', () => {
 
       // Simulate the pre-save middleware
       if (mockUser.isModified('password')) {
-        mockUser.password = await bcrypt.default.hash(mockUser.password, 12)
+        mockUser.password = await bcrypt.hash(mockUser.password, 12)
       }
 
       expect(mockHash).toHaveBeenCalledWith('plainPassword', 12)
@@ -73,7 +84,7 @@ describe('Models Tests', () => {
 
     it('should not hash password if not modified', async () => {
       const mockHash = vi.fn()
-      bcrypt.default.hash = mockHash
+      bcrypt.hash = mockHash
 
       const mockUser = {
         password: 'existingHashedPassword',
@@ -90,12 +101,12 @@ describe('Models Tests', () => {
 
     it('should compare passwords correctly', async () => {
       const mockCompare = vi.fn().mockResolvedValue(true)
-      bcrypt.default.compare = mockCompare
+      bcrypt.compare = mockCompare
 
       const mockUser = {
         password: 'hashedPassword123',
         comparePassword: async function(candidatePassword) {
-          return bcrypt.default.compare(candidatePassword, this.password)
+          return bcrypt.compare(candidatePassword, this.password)
         }
       }
 
@@ -106,12 +117,12 @@ describe('Models Tests', () => {
 
     it('should return false for incorrect password', async () => {
       const mockCompare = vi.fn().mockResolvedValue(false)
-      bcrypt.default.compare = mockCompare
+      bcrypt.compare = mockCompare
 
       const mockUser = {
         password: 'hashedPassword123',
         comparePassword: async function(candidatePassword) {
-          return bcrypt.default.compare(candidatePassword, this.password)
+          return bcrypt.compare(candidatePassword, this.password)
         }
       }
 
@@ -275,7 +286,7 @@ describe('Models Tests', () => {
         }]
       }
 
-      expect(playerHandsSchema.type).toBe('Map')
+      expect(playerHandsSchema.type).toBe(Map)
       expect(playerHandsSchema.of[0].color.required).toBe(true)
       expect(playerHandsSchema.of[0].value.min).toBe(1)
       expect(playerHandsSchema.of[0].value.max).toBe(3)
@@ -302,7 +313,7 @@ describe('Models Tests', () => {
         }
       }
 
-      expect(shieldsSchema.type).toBe('Map')
+      expect(shieldsSchema.type).toBe(Map)
       expect(shieldsSchema.of.active.default).toBe(false)
       expect(shieldsSchema.of.remainingTurns.default).toBe(0)
       expect(shieldsSchema.of.activatedAt.default).toBe(0)
@@ -318,7 +329,7 @@ describe('Models Tests', () => {
         }
       }
 
-      expect(playerActionsSchema.type).toBe('Map')
+      expect(playerActionsSchema.type).toBe(Map)
       expect(playerActionsSchema.of.drawnHeart.default).toBe(false)
       expect(playerActionsSchema.of.drawnMagic.default).toBe(false)
     })

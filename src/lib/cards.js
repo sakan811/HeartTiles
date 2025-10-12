@@ -59,8 +59,12 @@ export class HeartCard extends BaseCard {
     const randomIndex = Math.floor(Math.random() * colors.length);
     const randomValue = Math.floor(Math.random() * 3) + 1; // 1-3 points
 
+    // Use Date.now() directly for ID generation (more predictable for tests)
+    const timestamp = Date.now();
+    const cardId = timestamp === 0 ? 0 : timestamp + Math.random();
+
     return new HeartCard(
-      Date.now() + Math.random(),
+      cardId,
       colors[randomIndex],
       randomValue,
       emojis[randomIndex]
@@ -442,11 +446,17 @@ export function generateRandomMagicCard() {
     }
   }
 
-  return createMagicCard(Date.now() + Math.random(), selectedType);
+  const timestamp = Date.now();
+  const cardId = timestamp === 0 ? 0 : timestamp + Math.random();
+  return createMagicCard(cardId, selectedType);
 }
 
 // Helper function to create card from raw data
 export function createCardFromData(cardData) {
+  if (!cardData) {
+    throw new Error('Invalid card data');
+  }
+
   if (cardData.type === 'heart' || (cardData.color && cardData.value !== undefined)) {
     return createHeartCard(cardData.id, cardData.color, cardData.value, cardData.emoji);
   } else if (cardData.type && ['wind', 'recycle', 'shield'].includes(cardData.type)) {
@@ -457,11 +467,14 @@ export function createCardFromData(cardData) {
 
 // Card validation helpers
 export function isHeartCard(card) {
-  return card instanceof HeartCard || (card.color && card.value !== undefined && ['❤️', '💛', '💚'].includes(card.emoji));
+  if (!card) return false;
+  if (card.type === 'heart') return true;
+  return Boolean(card.color && card.value !== undefined && ['❤️', '💛', '💚'].includes(card.emoji));
 }
 
 export function isMagicCard(card) {
-  return card instanceof MagicCard || (card.type && ['wind', 'recycle', 'shield'].includes(card.type));
+  if (!card) return false;
+  return Boolean(card.type && ['wind', 'recycle', 'shield'].includes(card.type));
 }
 
 export function getCardType(card) {

@@ -1,17 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import mongoose from 'mongoose'
 
-// Mock all external dependencies
-vi.mock('mongoose', () => ({
-  default: {
-    connect: vi.fn(),
-    connection: {
-      readyState: 1
-    }
-  }
-}))
+// Mock mongoose with documents that have toObject method
+vi.mock('mongoose', () => {
+  const mockDocument = (data) => ({
+    ...data,
+    toObject: vi.fn().mockReturnValue(data)
+  })
 
-vi.mock('./models.js', () => ({
+  return {
+    default: {
+      connect: vi.fn(),
+      connection: {
+        readyState: 1
+      }
+    },
+    // Helper function for creating mocked documents with toObject
+    mockDocument
+  }
+})
+
+vi.mock('../../../models', () => ({
   PlayerSession: {
     find: vi.fn(),
     findOneAndUpdate: vi.fn(),
@@ -27,11 +36,19 @@ vi.mock('./models.js', () => ({
   }
 }))
 
+// Helper function to create mocked documents with toObject method
+function createMockDocument(data) {
+  return {
+    ...data,
+    toObject: vi.fn().mockReturnValue(data)
+  }
+}
+
 vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn()
 }))
 
-vi.mock('./src/lib/cards.js', () => ({
+vi.mock('../../src/lib/cards.js', () => ({
   HeartCard: {
     generateRandom: vi.fn(),
     calculateScore: vi.fn()
@@ -117,10 +134,10 @@ describe('Server Tests', () => {
     })
 
     it('should load rooms from database', async () => {
-      const { Room } = await import('./models.js')
+      const { Room } = await import('../../../models')
       const mockRooms = [
-        { code: 'ABC123', players: [], gameState: { gameStarted: false } },
-        { code: 'DEF456', players: [], gameState: { gameStarted: true } }
+        createMockDocument({ code: 'ABC123', players: [], gameState: { gameStarted: false } }),
+        createMockDocument({ code: 'DEF456', players: [], gameState: { gameStarted: true } })
       ]
       Room.find.mockResolvedValue(mockRooms)
 
@@ -136,7 +153,7 @@ describe('Server Tests', () => {
     })
 
     it('should handle load rooms error gracefully', async () => {
-      const { Room } = await import('./models.js')
+      const { Room } = await import('../../../models')
       Room.find.mockRejectedValue(new Error('Database error'))
 
       // Simulate loadRooms error handling
@@ -152,7 +169,7 @@ describe('Server Tests', () => {
     })
 
     it('should save room to database', async () => {
-      const { Room } = await import('./models.js')
+      const { Room } = await import('../../../models')
       Room.findOneAndUpdate.mockResolvedValue({})
 
       const roomData = { code: 'ABC123', players: [] }
@@ -172,7 +189,7 @@ describe('Server Tests', () => {
     })
 
     it('should delete room from database', async () => {
-      const { Room } = await import('./models.js')
+      const { Room } = await import('../../../models')
       Room.deleteOne.mockResolvedValue({ deletedCount: 1 })
 
       const roomCode = 'ABC123'
@@ -184,10 +201,10 @@ describe('Server Tests', () => {
     })
 
     it('should load active player sessions', async () => {
-      const { PlayerSession } = await import('./models.js')
+      const { PlayerSession } = await import('../../../models')
       const mockSessions = [
-        { userId: 'user1', isActive: true, name: 'Player1' },
-        { userId: 'user2', isActive: true, name: 'Player2' }
+        createMockDocument({ userId: 'user1', isActive: true, name: 'Player1' }),
+        createMockDocument({ userId: 'user2', isActive: true, name: 'Player2' })
       ]
       PlayerSession.find.mockResolvedValue(mockSessions)
 
@@ -206,7 +223,7 @@ describe('Server Tests', () => {
     })
 
     it('should save player session to database', async () => {
-      const { PlayerSession } = await import('./models.js')
+      const { PlayerSession } = await import('../../../models')
       PlayerSession.findOneAndUpdate.mockResolvedValue({})
 
       const sessionData = { userId: 'user1', name: 'Player1', isActive: true }
@@ -405,7 +422,7 @@ describe('Server Tests', () => {
 
       it('should reject invalid room codes', () => {
         function validateRoomCode(roomCode) {
-          return roomCode && typeof roomCode === 'string' && /^[A-Z0-9]{6}$/i.test(roomCode)
+          return Boolean(roomCode && typeof roomCode === 'string' && /^[A-Z0-9]{6}$/i.test(roomCode))
         }
 
         expect(validateRoomCode('ABC')).toBe(false)
@@ -433,8 +450,8 @@ describe('Server Tests', () => {
 
       it('should reject invalid player names', () => {
         function validatePlayerName(playerName) {
-          return playerName && typeof playerName === 'string' &&
-                 playerName.trim().length > 0 && playerName.length <= 20
+          return Boolean(playerName && typeof playerName === 'string' &&
+                 playerName.trim().length > 0 && playerName.length <= 20)
         }
 
         expect(validatePlayerName('')).toBe(false)
@@ -1117,7 +1134,7 @@ describe('Server Tests', () => {
     describe('authenticateSocket', () => {
       it('should authenticate socket with valid token', async () => {
         const { getToken } = await import('next-auth/jwt')
-        const { User } = await import('./models.js')
+        const { User } = await import('../../../models')
 
         getToken.mockResolvedValue({ id: 'user1', jti: 'session1' })
         User.findById.mockResolvedValue({ id: 'user1', email: 'test@example.com', name: 'Test User' })
@@ -1197,7 +1214,7 @@ describe('Server Tests', () => {
 
       it('should reject socket when user not found', async () => {
         const { getToken } = await import('next-auth/jwt')
-        const { User } = await import('./models.js')
+        const { User } = await import('../../../models')
 
         getToken.mockResolvedValue({ id: 'user1', jti: 'session1' })
         User.findById.mockResolvedValue(null)
@@ -1232,7 +1249,7 @@ describe('Server Tests', () => {
 
     describe('getPlayerSession', () => {
       it('should create new session when none exists', async () => {
-        const { PlayerSession } = await import('./models.js')
+        const { PlayerSession } = await import('../../../models')
         PlayerSession.findOneAndUpdate.mockResolvedValue({})
 
         const playerSessions = new Map()
@@ -1265,7 +1282,7 @@ describe('Server Tests', () => {
       })
 
       it('should update existing session', async () => {
-        const { PlayerSession } = await import('./models.js')
+        const { PlayerSession } = await import('../../../models')
         PlayerSession.findOneAndUpdate.mockResolvedValue({})
 
         const playerSessions = new Map()
@@ -1312,8 +1329,8 @@ describe('Server Tests', () => {
   })
 
   describe('Card Generation Functions', () => {
-    it('should generate single heart card', () => {
-      const { HeartCard } = require('./src/lib/cards.js')
+    it('should generate single heart card', async () => {
+      const { HeartCard } = await import('../../src/lib/cards.js')
       HeartCard.generateRandom.mockReturnValue({
         id: 'heart1',
         color: 'red',
@@ -1332,8 +1349,8 @@ describe('Server Tests', () => {
       expect(heart.id).toBe('heart1')
     })
 
-    it('should generate single magic card', () => {
-      const { generateRandomMagicCard } = require('./src/lib/cards.js')
+    it('should generate single magic card', async () => {
+      const { generateRandomMagicCard } = await import('../../src/lib/cards.js')
       generateRandomMagicCard.mockReturnValue({
         id: 'magic1',
         type: 'wind',
@@ -1355,8 +1372,8 @@ describe('Server Tests', () => {
 
   describe('Game State Management', () => {
     describe('validateHeartPlacement', () => {
-      it('should validate heart placement correctly', () => {
-        const { isHeartCard, createCardFromData } = require('./src/lib/cards.js')
+      it('should validate heart placement correctly', async () => {
+        const { isHeartCard, createCardFromData, HeartCard } = await import('../../src/lib/cards.js')
         isHeartCard.mockReturnValue(true)
         createCardFromData.mockReturnValue({
           canTargetTile: vi.fn().mockReturnValue(true)
@@ -1372,10 +1389,8 @@ describe('Server Tests', () => {
             return { valid: false, error: "Only heart cards can be placed on tiles" }
           }
 
-          let heartCard = heart
-          if (!(heart instanceof HeartCard)) {
-            heartCard = createCardFromData(heart)
-          }
+          // Always use createCardFromData for mocked cards to avoid instanceof issues
+          const heartCard = createCardFromData(heart)
 
           const tile = room.gameState.tiles.find(tile => tile.id == tileId)
           if (!tile) return { valid: false, error: "Tile not found" }
