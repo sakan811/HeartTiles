@@ -114,7 +114,7 @@ Shield cards protect your hearts and tiles for 3 turns.
 
 **Protection Rules**:
 - **Wind Protection**: Blocks all Wind cards targeting your hearts while shield is active
-- **Recycle Protection**: Blocks all opponent Recycle cards when you have any hearts on the board
+- **Recycle Protection**: Blocks all opponent Recycle cards from converting colored tiles to white while shield is active
 - You can still place hearts and use your own Recycle cards while shielded
 
 **Activation Rules**:
