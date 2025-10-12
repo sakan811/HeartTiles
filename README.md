@@ -17,8 +17,8 @@ Inspired by Kitty Card Game from Love and Deepspace
 ### Setup
 ```bash
 # Clone and install dependencies
-git clone https://github.com/sakan811/no-kitty-cards-game.git
-cd no-kitty-cards-game
+git clone https://github.com/sakan811/HeartTiles.git
+cd HeartTiles
 pnpm install
 
 # Start MongoDB (for development)
