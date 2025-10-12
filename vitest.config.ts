@@ -8,14 +8,15 @@ export default defineConfig({
     exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text'],
       exclude: [
         'node_modules/',
         '__tests__/',
         'coverage/',
-        '*.config.{js,ts}',
+        '*.config.{js,ts,mjs}',
         '.next/',
-        'dist/'
+        'dist/',
+        'next-env.d.ts'
       ]
     },
     setupFiles: ['./__tests__/setup.ts'],
