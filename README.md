@@ -37,94 +37,111 @@ Visit http://localhost:3000 to start playing!
 
 ### Room System
 
-Rooms are the heart of multiplayer gameplay, created automatically when players join. Each room gets a unique 6-character code using letters and numbers, making it easy to share with friends. Games are limited to exactly 2 players to keep matches strategic and engaging. When a game ends and players leave, the room cleans itself up automatically to keep the system tidy.
+Players create rooms by clicking the "Create Room" button, which generates a unique 6-character code that other players can use to join. Each room supports exactly 2 players for strategic gameplay.
+
+**Authentication**: Players must sign in to create or join rooms.
 
 ### How to Play
 
-Heart Tiles is a strategic card game where players compete for the highest score by placing colored hearts on matching tiles. The game combines thoughtful planning with tactical magic card usage to create engaging gameplay sessions.
+Heart Tiles is a strategic card game where players compete for the highest score by placing colored hearts on matching tiles while using magic cards to gain advantages.
 
-**Starting the Game**: Each player receives 3 heart cards and 2 magic cards to begin. A random player gets the first turn, and then players alternate throughout the match. The game features two decks of 16 cards each—one for hearts and one for magic cards—that players draw from during their turns.
+**Starting the Game**: Each player receives 3 heart cards and 2 magic cards. A random player gets the first turn, and players alternate turns throughout the match.
 
-**Winning**: The player with the most points wins! The game ends when either all 8 tiles are filled with hearts or when both card decks run out. If the decks run empty, the current player can finish their turn before the game concludes.
+**Winning Conditions**: The game ends when:
+1. All 8 tiles are filled with hearts
+2. BOTH the heart deck AND magic deck are empty AND the current player ends their turn
 
-### Taking Your Turn
+### Turn Structure
 
-During your turn, you'll follow a simple but strategic sequence:
+During your turn, you can perform these actions in any order:
 
-1. **Draw Cards**: You must draw 1 heart card and 1 magic card (if available)
-2. **Place Hearts**: You can place as many heart cards as you want on empty tiles
-3. **Use Magic Cards**: Activate special abilities with your magic cards
+1. **Draw Cards**: Draw 1 heart card AND 1 magic card (if decks have cards available)
+2. **Place Hearts**: Place any number of heart cards from your hand on empty tiles
+3. **Use Magic Cards**: Use any number of magic cards from your hand
 4. **End Turn**: Pass control to your opponent
 
-You can end your turn at any time, but make sure you've drawn both cards first (if the decks still have cards available).
+**Important Rules**:
+- You must draw both a heart and magic card (if available) before ending your turn
+- You can end your turn without placing cards or using magic cards
+- Each player can only draw 1 heart and 1 magic card per turn
 
 ### Scoring Points
 
-Hearts come in three colors (red ❤️, yellow 💛, and green 💚) with point values from 1-3. Scoring depends on matching colors between your heart and the tile:
+Hearts come in three colors (red ❤️, yellow 💛, and green 💚) with point values from 1-3 points:
 
-- **White Tiles ⬜**: Place any heart here and earn its face value points
-- **Color Match**: Place a matching color heart (like red ❤️ on red 🟥) and earn double points
-- **Color Mismatch**: Place a different color heart (like red ❤️ on yellow 🟨) and earn no points
-
-This simple scoring system creates interesting decisions about when to play for maximum points versus when to hold cards for better opportunities.
+- **White Tiles ⬜**: Earn the heart's face value points
+- **Color Match**: Place a matching color heart (red ❤️ on red 🟥) and earn double points
+- **Color Mismatch**: Place a different color heart (red ❤️ on yellow 🟨) and earn zero points
 
 ### Heart Placement Rules
 
-When placing hearts, remember these important rules:
-
-- Hearts can only go on empty tiles (no sharing!)
-- You can place multiple hearts during your turn
-- Each heart card can only be used once
-- You can only place hearts during your own turn
+- Hearts can only be placed on tiles that don't already have a heart
+- You can place multiple hearts during your turn if you have enough cards
+- Hearts can only be placed during your own turn
 
 ### Magic Cards
 
-Magic cards add exciting strategic depth to the game. Each type has unique effects that can turn the tide of battle:
+The game contains 16 heart cards and 16 magic cards with this distribution:
+- **Wind (💨)**: 6 cards
+- **Recycle (♻️)**: 5 cards
+- **Shield (🛡️)**: 5 cards
 
-#### Wind 💨 - The Removal Card
+#### Wind 💨 - Remove Hearts
 
-Wind cards let you remove an opponent's heart from any tile, creating openings for your own strategic plays. This powerful card can only target tiles where your opponent has placed hearts, not empty tiles.
+Wind cards remove an opponent's heart from any tile.
 
-**Important Rule**: When Wind removes a heart, the tile returns to its original color. This means if someone places a red heart on a yellow tile, removing that heart reveals the yellow tile again—not a red one.
+**Targeting Rules**:
+- Can only target tiles occupied by opponent's hearts
+- Cannot target empty tiles or your own hearts
 
-#### Recycle ♻️ - The Color Changer
+**Tile Color Rules**: When Wind removes a heart, the tile returns to its original color:
+- Red heart removed from red tile → Tile remains red (🟥)
+- Red heart removed from white tile → Tile becomes white (⬜)
+- Yellow heart removed from yellow tile → Tile remains yellow (🟨)
+- Green heart removed from green tile → Tile remains green (🟩)
 
-Recycle cards transform any colored tile (red 🟥, yellow 🟨, or green 🟩) into a white tile ⬜. This is perfect for setting up easy scoring opportunities or disrupting your opponent's plans. Recycle can only target empty colored tiles, not tiles with hearts already on them.
+#### Recycle ♻️ - Change Tile Color
 
-#### Shield 🛡️ - The Protection Card
+Recycle cards transform any empty, non-white tile into a white tile.
 
-Shield cards provide powerful protection for 3 full turns, blocking your opponent's Wind and Recycle cards from affecting your tiles. Here's how shields work:
+**Targeting Rules**:
+- Can only target empty tiles (no hearts present)
+- Can only target colored tiles (red, yellow, green) - not white tiles
 
-- **Duration**: Shields last exactly 3 turns (your turn, opponent's turn, your next turn)
-- **Protection**: Blocks opponent's Wind and Recycle cards
-- **Your Cards**: You can still place hearts and use your own Recycle cards while shielded
-- **Visual Indicators**: Green shields show for you, red shields show for your opponent
-- **Reinforcement**: You can "reinforce" your shield with another shield card to reset the 3-turn timer
+#### Shield 🛡️ - Protection
 
-**Shield Strategy**: Only one player can have an active shield at a time. If you have a shield, your opponent can't activate one until yours expires. This creates interesting timing decisions about when to play your shield card.
+Shield cards protect your hearts and tiles for 3 turns.
+
+**Protection Rules**:
+- **Wind Protection**: Blocks all Wind cards targeting your hearts while shield is active
+- **Recycle Protection**: Blocks all opponent Recycle cards when you have any hearts on the board
+- You can still place hearts and use your own Recycle cards while shielded
+
+**Activation Rules**:
+- Only one player can have an active shield at any time
+- You cannot activate a shield if your opponent has one active
+- You can use another Shield card to reset your 3-turn timer
 
 ### Game Elements
 
-**Tiles**: The game features 8 tiles that start with random colors (including white ⬜). Each tile displays colored emoji indicators and shows visual feedback when hearts are placed or shields are active.
+**Tiles**: 8 tiles with random colors (white, red, yellow, green)
 
-**Visual Feedback**: The game provides clear visual cues:
+**Visual Feedback**:
 - Green rings highlight your placed hearts
 - Red rings show opponent's hearts
-- Number badges display points earned on each heart
-- Small indicators show original tile colors after hearts are placed
-- Shield icons appear with turn counters when active
-
-**Card Distribution**: The magic deck contains exactly 6 Wind cards, 5 Recycle cards, and 5 Shield cards, creating balanced strategic options throughout each game.
+- Number badges display points earned on each heart at the upper-right of the tile
+- Shield icons show remaining turns when active at the upper-left of the tile
+- Hover highlights show valid moves during gameplay
+- Original color of tiles is indicated by a small square at the bottom-right corner
 
 ### Complete Game Flow
 
-1. **Join & Authenticate**: Players sign in and create or join rooms using 6-character codes
-2. **Get Ready**: Both players mark themselves ready to start the game
-3. **Game Begins**: The system randomly selects who goes first and deals starting cards
-4. **Strategic Play**: Players take turns drawing cards, placing hearts, and using magic cards
-5. **Victory**: When all tiles fill or decks empty, the player with the most points wins!
-
-The game's elegant balance of simple rules and strategic depth makes each match engaging and replayable. Whether you're playing defensively with shields or aggressively with Wind cards, every decision matters in the race for the highest score!
+1. **Sign In**: Players authenticate to access the game
+2. **Create/Join Room**: Use the "Create Room" button or enter a room code
+3. **Get Ready**: Both players mark themselves ready to start
+4. **Game Start**: Random starting player gets 3 hearts and 2 magic cards
+5. **Turn-Based Play**: Players alternate turns drawing cards, placing hearts, and using magic cards
+6. **Game End**: Winner is determined when tiles are filled or both decks are empty
 
 ## Development
 
