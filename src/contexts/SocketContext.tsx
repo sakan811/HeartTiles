@@ -11,7 +11,7 @@ interface SocketContextType {
   disconnect: () => void;
 }
 
-const SocketContext = createContext<SocketContextType>({
+export const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
   socketId: null,
