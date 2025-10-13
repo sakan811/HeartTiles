@@ -72,6 +72,7 @@ Hearts come in three colors (red ❤️, yellow 💛, and green 💚) with point
 - **White Tiles ⬜**: Earn the heart's face value points
 - **Color Match**: Place a matching color heart (red ❤️ on red 🟥) and earn double points
 - **Color Mismatch**: Place a different color heart (red ❤️ on yellow 🟨) and earn zero points
+- **Player Score**: Player's score is the sum of all their hearts' placed on the tiles. When a heart is removed, its points are subtracted from the player's score.
 
 ### Heart Placement Rules
 
