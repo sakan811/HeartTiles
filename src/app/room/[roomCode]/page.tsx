@@ -30,7 +30,7 @@ export default function RoomPage() {
     }
 
     // Fallback to browser session for unauthenticated users
-    const sessionKey = 'no-kitty-player-name';
+    const sessionKey = 'heart-tiles-player-name';
     let playerName = sessionStorage.getItem(sessionKey);
 
     if (!playerName) {

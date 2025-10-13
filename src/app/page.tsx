@@ -70,10 +70,10 @@ export default function Home() {
 
         <div>
           <h1 className="text-6xl font-bold text-white mb-4">
-            No Kitty Cards
+            Heart Tiles
           </h1>
           <p className="text-xl text-gray-300">
-            A card game inspired by Love and Deepspace
+            A strategic tile-based card game where players place colored hearts on tiles to score points
           </p>
         </div>
 

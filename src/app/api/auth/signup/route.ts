@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // Connect to MongoDB
     const mongoose = await import('mongoose')
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/no-kitty-cards'
+    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/heart-tiles'
 
     if (mongoose.default.connection.readyState === 0) {
       await mongoose.default.connect(MONGODB_URI)

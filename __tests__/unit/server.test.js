@@ -107,7 +107,7 @@ describe('Server Tests', () => {
       mongoose.connect.mockResolvedValue()
 
       // Simulate connectToDatabase function
-      const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/no-kitty-cards?authSource=admin'
+      const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/heart-tiles?authSource=admin'
 
       await mongoose.connect(MONGODB_URI)
 
