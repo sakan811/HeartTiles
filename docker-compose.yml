@@ -11,6 +11,13 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    # Add this healthcheck to ensure mongo is ready before other services start
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   mongo-express:
     image: mongo-express:latest
@@ -18,12 +25,14 @@ services:
     ports:
       - 8081:8081
     environment:
-      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/no-kitty-cards?authSource=admin
       ME_CONFIG_BASICAUTH_ENABLED: true
       ME_CONFIG_BASICAUTH_USERNAME: mongoexpressuser
       ME_CONFIG_BASICAUTH_PASSWORD: mongoexpresspass
     depends_on:
-      - mongo
+      mongo:
+        # This condition waits for the healthcheck to pass
+        condition: service_healthy
 
 volumes:
   mongo_data:
