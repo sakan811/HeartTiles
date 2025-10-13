@@ -3,12 +3,18 @@ import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { SessionProvider } from '../../../src/components/providers/SessionProvider'
 
-// Mock NextAuth SessionProvider
-vi.mock('next-auth/react', () => ({
-  SessionProvider: vi.fn().mockImplementation(({ children }) => (
+// Mock NextAuth SessionProvider with factory function to avoid hoisting issues
+vi.mock('next-auth/react', () => {
+  const mockSessionProvider = vi.fn().mockImplementation(({ children }) => (
     <div data-testid="nextauth-session-provider">{children}</div>
   ))
-}))
+  return {
+    SessionProvider: mockSessionProvider
+  }
+})
+
+// Get reference to the mocked function
+import { SessionProvider as MockedSessionProvider } from 'next-auth/react'
 
 describe('SessionProvider Component', () => {
   beforeEach(() => {
@@ -86,24 +92,19 @@ describe('SessionProvider Component', () => {
 
   describe('NextAuth Integration', () => {
     it('should use NextAuth SessionProvider internally', () => {
-      const { SessionProvider: NextAuthSessionProvider } = require('next-auth/react')
-
       render(
         <SessionProvider>
           <div>Test</div>
         </SessionProvider>
       )
 
-      expect(NextAuthSessionProvider).toHaveBeenCalledWith(
-        expect.objectContaining({
-          children: expect.any(Object)
-        }),
-        {}
+      expect(MockedSessionProvider).toHaveBeenCalledWith(
+        { children: expect.any(Object) },
+        undefined
       )
     })
 
     it('should pass children to NextAuth SessionProvider', () => {
-      const { SessionProvider: NextAuthSessionProvider } = require('next-auth/react')
       const testChildren = <div>Test Children</div>
 
       render(
@@ -112,24 +113,20 @@ describe('SessionProvider Component', () => {
         </SessionProvider>
       )
 
-      expect(NextAuthSessionProvider).toHaveBeenCalledWith(
-        expect.objectContaining({
-          children: testChildren
-        }),
-        {}
+      expect(MockedSessionProvider).toHaveBeenCalledWith(
+        { children: testChildren },
+        undefined
       )
     })
 
     it('should not pass any additional props to NextAuth SessionProvider', () => {
-      const { SessionProvider: NextAuthSessionProvider } = require('next-auth/react')
-
       render(
         <SessionProvider>
           <div>Test</div>
         </SessionProvider>
       )
 
-      const callArgs = NextAuthSessionProvider.mock.calls[0][0]
+      const callArgs = MockedSessionProvider.mock.calls[0][0]
       expect(Object.keys(callArgs)).toEqual(['children'])
     })
   })
@@ -232,8 +229,7 @@ describe('SessionProvider Component', () => {
         false,
         null,
         undefined,
-        [],
-        {}
+        []
       ]
 
       validChildren.forEach((children, index) => {
@@ -245,6 +241,15 @@ describe('SessionProvider Component', () => {
           )
         }).not.toThrow()
       })
+
+      // Objects are not valid React children - they should throw
+      expect(() => {
+        render(
+          <SessionProvider>
+            {{ invalid: 'object' }}
+          </SessionProvider>
+        )
+      }).toThrow()
     })
 
     it('should handle deeply nested children', () => {
@@ -274,15 +279,13 @@ describe('SessionProvider Component', () => {
 
   describe('Performance', () => {
     it('should not cause unnecessary re-renders', () => {
-      const { SessionProvider: NextAuthSessionProvider } = require('next-auth/react')
-
       render(
         <SessionProvider>
           <div>Test Content</div>
         </SessionProvider>
       )
 
-      expect(NextAuthSessionProvider).toHaveBeenCalledTimes(1)
+      expect(MockedSessionProvider).toHaveBeenCalledTimes(1)
     })
 
     it('should handle large numbers of children efficiently', () => {

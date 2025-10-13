@@ -237,10 +237,10 @@ describe('ErrorBoundary Component', () => {
         </ErrorBoundary>
       )
 
-      const errorContainer = screen.getByText('Oops! Something went wrong').closest('div')
-      expect(errorContainer).toHaveClass('text-2xl', 'font-bold', 'text-white')
+      const errorHeading = screen.getByText('Oops! Something went wrong')
+      expect(errorHeading).toHaveClass('text-2xl', 'font-bold', 'text-white')
 
-      const mainContainer = screen.getByText('😵').closest('div')
+      const mainContainer = screen.getByText('😵').closest('div').parentElement.parentElement.parentElement
       expect(mainContainer).toHaveClass(
         'min-h-screen',
         'flex',
