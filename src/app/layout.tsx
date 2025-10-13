@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "No Kitty Card Game",
+  title: "Heart Tiles",
   description: "A multiplayer card game inspired by Love and Deepspace",
 };
 
