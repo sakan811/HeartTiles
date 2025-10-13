@@ -464,48 +464,68 @@ describe('Socket.IO Events Integration Tests', () => {
       const { clients, gameData, roomCode, currentClient, otherClient } = await setupGame(port);
       testRooms.add(roomCode);
 
-      // Setup: current player places a heart, then ends turn
+      // Get the current player and their cards
       const currentPlayer = gameData.players.find(p => p.userId === gameData.currentPlayer.userId);
       const heartCard = currentPlayer.hand.find(card => card.type === 'heart');
       const emptyTile = gameData.tiles.find(tile => !tile.placedHeart);
 
-      if (heartCard && emptyTile) {
-        // Place heart
-        currentClient.emit('place-heart', {
-          roomCode,
-          tileId: emptyTile.id,
-          heartId: heartCard.id
-        });
-        await waitFor(currentClient, 'heart-placed');
+      expect(heartCard).toBeDefined();
+      expect(emptyTile).toBeDefined();
 
-        // Draw required cards
-        currentClient.emit('draw-heart', { roomCode });
-        await waitFor(currentClient, 'heart-drawn');
+      // Step 1: Current player places a heart on a tile
+      currentClient.emit('place-heart', {
+        roomCode,
+        tileId: emptyTile.id,
+        heartId: heartCard.id
+      });
+      const placeResponse = await waitFor(currentClient, 'heart-placed');
 
-        currentClient.emit('draw-magic-card', { roomCode });
-        await waitFor(currentClient, 'magic-card-drawn');
+      // Verify heart was placed
+      const placedTile = placeResponse.tiles.find(t => t.id === emptyTile.id);
+      expect(placedTile.placedHeart).toBeDefined();
+      expect(placedTile.placedHeart.placedBy).toBe(currentPlayer.userId);
 
-        // End turn
-        currentClient.emit('end-turn', { roomCode });
-        await waitFor(currentClient, 'turn-changed');
+      // Step 2: Current player draws required cards and ends turn
+      currentClient.emit('draw-heart', { roomCode });
+      await waitFor(currentClient, 'heart-drawn');
 
-        // Other player should now have turn and can use wind card
-        const turnData = await waitFor(otherClient, 'turn-changed');
-        const otherPlayer = turnData.players.find(p => p.userId === turnData.currentPlayer.userId);
-        const windCard = otherPlayer.hand.find(card => card.type === 'wind');
+      currentClient.emit('draw-magic-card', { roomCode });
+      await waitFor(currentClient, 'magic-card-drawn');
 
-        if (windCard) {
-          otherClient.emit('use-magic-card', {
-            roomCode,
-            cardId: windCard.id,
-            targetTileId: emptyTile.id
-          });
+      currentClient.emit('end-turn', { roomCode });
+      const turnResponse = await waitFor(currentClient, 'turn-changed');
 
-          const response = await waitFor(otherClient, 'magic-card-used');
-          expect(response.actionResult.type).toBe('wind');
-          expect(response.tiles.find(t => t.id === emptyTile.id).placedHeart).toBeUndefined();
-        }
-      }
+      // Step 3: Other player should now be current player
+      expect(turnResponse.currentPlayer.userId).toBe(otherClient.auth?.token?.id);
+
+      // Step 4: Set up other player with a wind card for testing
+      const otherPlayer = turnResponse.players.find(p => p.userId === turnResponse.currentPlayer.userId);
+
+      // Get the room and manually add a wind card to other player's hand for testing
+      const room = mockServer.getRoom(roomCode);
+      const windCard = createWindCard({ id: `test-wind-${Date.now()}` });
+      room.gameState.playerHands[otherPlayer.userId].push(windCard);
+
+      // Step 5: Other player uses wind card to remove the heart
+      otherClient.emit('use-magic-card', {
+        roomCode,
+        cardId: windCard.id,
+        targetTileId: emptyTile.id
+      });
+
+      const windResponse = await waitFor(otherClient, 'magic-card-used');
+
+      // Verify wind card effect
+      expect(windResponse.actionResult.type).toBe('wind');
+      expect(windResponse.actionResult.removedHeart).toBeDefined();
+      expect(windResponse.actionResult.tileId).toBe(emptyTile.id);
+
+      // Verify the heart was removed from the tile
+      const targetTileAfter = windResponse.tiles.find(t => t.id === emptyTile.id);
+      expect(targetTileAfter.placedHeart).toBeUndefined();
+
+      // Verify tile color is restored to original color
+      expect(targetTileAfter.color).toBe(placedTile.placedHeart.originalTileColor || 'white');
     });
 
     it('should handle recycle card usage correctly', async () => {
