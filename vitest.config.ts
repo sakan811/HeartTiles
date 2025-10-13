@@ -26,14 +26,8 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
     },
-    resolve: {
-      alias: {
-        '@': resolve(__dirname, './src'),
-      }
-    },
     projects: [
       {
-        name: 'node-tests',
         test: {
           include: ['__tests__/**/*.{test,spec}.{js,ts}'],
           exclude: ['**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
@@ -50,7 +44,6 @@ export default defineConfig({
         }
       },
       {
-        name: 'jsdom-tests',
         test: {
           include: ['**/*.test.jsx', '**/*.test.tsx', '**/components/**/*.test.*', '**/contexts/**/*.test.*'],
           exclude: ['node_modules'],
