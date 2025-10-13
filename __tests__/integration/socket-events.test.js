@@ -544,19 +544,9 @@ describe('Socket.IO Events Integration Tests', () => {
 
               console.log(`Test server: Prepared game start data for ${room.players.length} players`);
 
-              // Send personalized game data to each player
-              room.players.forEach(player => {
-                const personalizedData = { ...gameStartData, playerId: player.userId };
-                const playerSocket = Array.from(io.sockets.sockets.values())
-                  .find(s => s.data.userId === player.userId);
-                if (playerSocket) {
-                  console.log(`Test server: Sending game-start to ${player.name} (${player.userId})`);
-                  playerSocket.emit('game-start', personalizedData);
-                  console.log(`Test server: game-start event emitted to ${player.name} (${player.userId})`);
-                } else {
-                  console.log(`Test server: No socket found for player ${player.name} (${player.userId})`);
-                }
-              });
+              // Broadcast game-start event to the entire room instead of individual socket lookups
+              console.log(`Test server: Broadcasting game-start to room ${roomCode}`);
+              io.to(roomCode).emit('game-start', gameStartData);
               console.log(`Test server: Game started in room ${roomCode}, current player: ${room.gameState.currentPlayer.name}`);
             } else {
               console.log(`Test server: Not starting game - room has ${room.players.length} players, ${room.players.filter(p => p.isReady).length} ready`);
@@ -1139,6 +1129,7 @@ describe('Socket.IO Events Integration Tests', () => {
       expect(gameData.tiles).toHaveLength(8);
       expect(gameData.currentPlayer).toBeDefined();
       expect(gameData.turnCount).toBe(1);
+      // Note: playerId is no longer included since we're broadcasting to the entire room
     });
 
     it('should handle heart placement errors when game not started', async () => {
@@ -1536,6 +1527,13 @@ describe('Socket.IO Events Integration Tests', () => {
         });
 
         await waitFor(player1Client, 'heart-placed');
+
+        // Player 1 needs to draw required cards before ending turn
+        player1Client.emit('draw-heart', { roomCode });
+        await waitFor(player1Client, 'heart-drawn');
+
+        player1Client.emit('draw-magic-card', { roomCode });
+        await waitFor(player1Client, 'magic-card-drawn');
 
         // Player 1 ends turn
         player1Client.emit('end-turn', { roomCode });
