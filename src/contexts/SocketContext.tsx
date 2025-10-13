@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { useSession } from "next-auth/react";
 import { io, Socket } from "socket.io-client";
 
 interface SocketContextType {
@@ -32,13 +33,24 @@ interface SocketProviderProps {
 }
 
 export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
+  const { data: session, status } = useSession();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [socketId, setSocketId] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    // Reset connection state when user logs out
+    if (status === "unauthenticated") {
+      setIsConnected(false);
+      setSocketId(null);
+      setConnectionError(null);
+      setSocket(null);
+      return;
+    }
+
+    // Only connect when user is authenticated
+    if (status !== "authenticated" || typeof window === "undefined") return;
 
     const socketInstance = io(undefined, {
       transports: ["websocket", "polling"],
@@ -74,7 +86,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     return () => {
       socketInstance.disconnect();
     };
-  }, []);
+  }, [status]); // Reconnect when auth status changes
 
   const disconnect = () => {
     if (socket) {
