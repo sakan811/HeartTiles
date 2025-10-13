@@ -31,19 +31,47 @@ export default defineConfig({
         '@': resolve(__dirname, './src'),
       }
     },
-    // Use different environments for different test types - NOTE: environmentMatchGlobs is deprecated
-    // Should migrate to test.projects in future, but keeping for compatibility now
-    environmentMatchGlobs: [
-      ['**/*.test.jsx', 'jsdom'],
-      ['**/*.test.tsx', 'jsdom'],
-      ['**/components/**/*.test.*', 'jsdom'],
-      ['**/contexts/**/*.test.*', 'jsdom']
-    ],
-    environmentOptions: {
-      jsdom: {
-        url: 'http://localhost:3000'
+    projects: [
+      {
+        name: 'node-tests',
+        test: {
+          include: ['__tests__/**/*.{test,spec}.{js,ts}'],
+          exclude: ['**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
+          environment: 'node',
+          globals: true,
+          setupFiles: ['./__tests__/setup.ts'],
+          testTimeout: 10000,
+          hookTimeout: 10000
+        },
+        resolve: {
+          alias: {
+            '@': resolve(__dirname, './src'),
+          }
+        }
+      },
+      {
+        name: 'jsdom-tests',
+        test: {
+          include: ['**/*.test.jsx', '**/*.test.tsx', '**/components/**/*.test.*', '**/contexts/**/*.test.*'],
+          exclude: ['node_modules'],
+          environment: 'jsdom',
+          globals: true,
+          setupFiles: ['./__tests__/setup.ts'],
+          testTimeout: 10000,
+          hookTimeout: 10000,
+          environmentOptions: {
+            jsdom: {
+              url: 'http://localhost:3000'
+            }
+          }
+        },
+        resolve: {
+          alias: {
+            '@': resolve(__dirname, './src'),
+          }
+        }
       }
-    }
+    ]
   },
   resolve: {
     alias: {
