@@ -3,10 +3,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React, { useContext } from 'react'
 import { render, screen, act, waitFor } from '@testing-library/react'
 import { SocketProvider, useSocket, SocketContext } from '../../../src/contexts/SocketContext'
+import { SessionProvider } from 'next-auth/react'
 
 // Mock socket.io-client
 vi.mock('socket.io-client', () => ({
   io: vi.fn()
+}))
+
+// Mock next-auth/react
+vi.mock('next-auth/react', () => ({
+  useSession: vi.fn(() => ({ data: null, status: 'unauthenticated' })),
+  SessionProvider: ({ children }) => children
 }))
 
 // Mock console methods to avoid noise in tests
@@ -15,6 +22,16 @@ const originalConsoleError = console.error
 
 describe('SocketContext', () => {
   let mockSocket
+  let mockUseSession
+
+  // Test wrapper that includes both providers
+  const TestWrapper = ({ children }) => (
+    <SessionProvider>
+      <SocketProvider>
+        {children}
+      </SocketProvider>
+    </SessionProvider>
+  )
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -37,6 +54,11 @@ describe('SocketContext', () => {
 
     const { io } = await import('socket.io-client')
     io.mockReturnValue(mockSocket)
+
+    // Get the mocked useSession function
+    const { useSession } = await import('next-auth/react')
+    mockUseSession = useSession
+    mockUseSession.mockReturnValue({ data: null, status: 'unauthenticated' })
   })
 
   afterEach(() => {
@@ -49,9 +71,9 @@ describe('SocketContext', () => {
       const TestComponent = () => <div>Test Content</div>
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByText('Test Content')).toBeInTheDocument()
@@ -60,10 +82,16 @@ describe('SocketContext', () => {
     it('should create socket connection on mount', async () => {
       const { io } = await import('socket.io-client')
 
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       render(
-        <SocketProvider>
+        <TestWrapper>
           <div>Test</div>
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(io).toHaveBeenCalledWith(undefined, {
@@ -84,6 +112,9 @@ describe('SocketContext', () => {
       // Clear any previous calls from earlier tests
       io.mockClear()
 
+      // Mock unauthenticated user - socket shouldn't be created
+      mockUseSession.mockReturnValue({ data: null, status: 'unauthenticated' })
+
       // Test that the component renders without error - the window check is handled
       // internally by the component's useEffect hook
       const TestComponent = () => {
@@ -97,21 +128,27 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       // Verify the component renders correctly
-      expect(screen.getByTestId('socket-exists')).toHaveTextContent('exists')
+      expect(screen.getByTestId('socket-exists')).toHaveTextContent('null')
       expect(screen.getByTestId('is-connected')).toHaveTextContent('false')
     })
 
     it('should set up socket event listeners', () => {
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       render(
-        <SocketProvider>
+        <TestWrapper>
           <div>Test</div>
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(mockSocket.on).toHaveBeenCalledWith('connect', expect.any(Function))
@@ -120,10 +157,16 @@ describe('SocketContext', () => {
     })
 
     it('should disconnect socket on unmount', () => {
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const { unmount } = render(
-        <SocketProvider>
+        <TestWrapper>
           <div>Test</div>
-        </SocketProvider>
+        </TestWrapper>
       )
 
       unmount()
@@ -142,6 +185,12 @@ describe('SocketContext', () => {
         }
       })
 
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const TestComponent = () => {
         const { isConnected, socketId } = useSocket()
         return (
@@ -153,9 +202,9 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByTestId('connected')).toHaveTextContent('false')
@@ -179,6 +228,12 @@ describe('SocketContext', () => {
         }
       })
 
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const TestComponent = () => {
         const { isConnected, socketId } = useSocket()
         return (
@@ -190,9 +245,9 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       act(() => {
@@ -213,6 +268,12 @@ describe('SocketContext', () => {
         }
       })
 
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const TestComponent = () => {
         const { isConnected, connectionError } = useSocket()
         return (
@@ -224,9 +285,9 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       const testError = new Error('Connection failed')
@@ -242,6 +303,12 @@ describe('SocketContext', () => {
 
   describe('useSocket Hook', () => {
     it('should provide socket context values', () => {
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const TestComponent = () => {
         const { socket, isConnected, socketId, connectionError, disconnect } = useSocket()
         return (
@@ -256,9 +323,9 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByTestId('has-socket')).toHaveTextContent('true')
@@ -269,15 +336,21 @@ describe('SocketContext', () => {
     })
 
     it('should call disconnect function when invoked', () => {
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const TestComponent = () => {
         const { disconnect } = useSocket()
         return <button onClick={disconnect}>Disconnect</button>
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       const disconnectButton = screen.getByText('Disconnect')
@@ -296,7 +369,7 @@ describe('SocketContext', () => {
       // Since we can't call hooks outside components in React 19,
       // we'll test the hook's behavior by wrapping it in a component
       // that intentionally doesn't provide the context
-      const TestWrapper = () => {
+      const ErrorTestWrapper = () => {
         const { Provider } = SocketContext
         return (
           <Provider value={undefined}>
@@ -311,7 +384,7 @@ describe('SocketContext', () => {
       }
 
       expect(() => {
-        render(<TestWrapper />)
+        render(<ErrorTestWrapper />)
       }).toThrow('useSocket must be used within a SocketProvider')
 
       console.error = consoleError
@@ -327,6 +400,12 @@ describe('SocketContext', () => {
         if (event === 'disconnect') disconnectCallback = callback
       })
 
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const TestComponent = () => {
         const { isConnected, socketId } = useSocket()
         return (
@@ -340,9 +419,9 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByTestId('connection-state')).toHaveTextContent('disconnected')
@@ -372,6 +451,12 @@ describe('SocketContext', () => {
         if (event === 'connect_error') connectErrorCallback = callback
       })
 
+      // Mock authenticated user for socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       const TestComponent = () => {
         const { isConnected, connectionError } = useSocket()
         return (
@@ -384,9 +469,9 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByTestId('state')).toHaveTextContent('disconnected')
@@ -412,21 +497,29 @@ describe('SocketContext', () => {
   })
 
   describe('Component Lifecycle', () => {
+    beforeEach(() => {
+      // Mock authenticated user for lifecycle tests
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+    })
+
     it('should create socket only once on mount', async () => {
       const { io } = await import('socket.io-client')
 
       const { rerender } = render(
-        <SocketProvider>
+        <TestWrapper>
           <div>Test</div>
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(io).toHaveBeenCalledTimes(1)
 
       rerender(
-        <SocketProvider>
+        <TestWrapper>
           <div>Updated Test</div>
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(io).toHaveBeenCalledTimes(1)
@@ -434,9 +527,9 @@ describe('SocketContext', () => {
 
     it('should handle socket cleanup properly', () => {
       const { unmount } = render(
-        <SocketProvider>
+        <TestWrapper>
           <div>Test</div>
-        </SocketProvider>
+        </TestWrapper>
       )
 
       unmount()
@@ -447,9 +540,9 @@ describe('SocketContext', () => {
     it('should handle rapid mount/unmount cycles', () => {
       for (let i = 0; i < 5; i++) {
         const { unmount } = render(
-          <SocketProvider key={i}>
+          <TestWrapper key={i}>
             <div>Test {i}</div>
-          </SocketProvider>
+          </TestWrapper>
         )
         unmount()
       }
@@ -465,11 +558,17 @@ describe('SocketContext', () => {
         throw new Error('Socket creation failed')
       })
 
+      // Mock authenticated user to trigger socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       expect(() => {
         render(
-          <SocketProvider>
+          <TestWrapper>
             <div>Test</div>
-          </SocketProvider>
+          </TestWrapper>
         )
       }).toThrow('Socket creation failed')
     })
@@ -479,11 +578,17 @@ describe('SocketContext', () => {
         throw new Error('Event listener error')
       })
 
+      // Mock authenticated user to trigger socket creation
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+
       expect(() => {
         render(
-          <SocketProvider>
+          <TestWrapper>
             <div>Test</div>
-          </SocketProvider>
+          </TestWrapper>
         )
       }).toThrow('Event listener error')
     })
@@ -504,19 +609,27 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       // The component should render correctly and provide default values
       // The actual window check happens inside the SocketProvider's useEffect
-      expect(screen.getByTestId('socket-exists')).toHaveTextContent('exists')
+      // With unauthenticated user, socket should be null
+      expect(screen.getByTestId('socket-exists')).toHaveTextContent('null')
       expect(screen.getByTestId('is-connected')).toHaveTextContent('false')
     })
   })
 
   describe('Game Mechanics Validation', () => {
+    beforeEach(() => {
+      // Mock authenticated user for all game mechanics tests
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+    })
     it('should provide socket for room creation events', () => {
       let roomJoinHandler
 
@@ -541,9 +654,9 @@ describe('SocketContext', () => {
       }
 
       const { getByTestId } = render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(getByTestId('socket-ready')).toHaveTextContent('ready')
@@ -576,9 +689,9 @@ describe('SocketContext', () => {
       }
 
       const { getByTestId } = render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       act(() => {
@@ -615,9 +728,9 @@ describe('SocketContext', () => {
       }
 
       const { getByTestId } = render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       act(() => {
@@ -654,9 +767,9 @@ describe('SocketContext', () => {
       }
 
       const { getByTestId } = render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       act(() => {
@@ -693,9 +806,9 @@ describe('SocketContext', () => {
       }
 
       const { getByTestId } = render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       act(() => {
@@ -736,9 +849,9 @@ describe('SocketContext', () => {
       }
 
       const { getByTestId } = render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(getByTestId('game-state')).toHaveTextContent('no-state')
@@ -764,6 +877,14 @@ describe('SocketContext', () => {
   })
 
   describe('Integration Tests', () => {
+    beforeEach(() => {
+      // Mock authenticated user for integration tests
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+    })
+
     it('should work with nested components using useSocket', () => {
       const NestedComponent = () => {
         const { isConnected } = useSocket()
@@ -781,9 +902,9 @@ describe('SocketContext', () => {
       }
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <ParentComponent />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByTestId('parent-id')).toHaveTextContent('null')
@@ -808,10 +929,10 @@ describe('SocketContext', () => {
       })
 
       render(
-        <SocketProvider>
+        <TestWrapper>
           <ComponentA />
           <ComponentB />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByTestId('component-a')).toHaveTextContent('false')
@@ -827,11 +948,19 @@ describe('SocketContext', () => {
   })
 
   describe('Memory Management', () => {
+    beforeEach(() => {
+      // Mock authenticated user for memory management tests
+      mockUseSession.mockReturnValue({
+        data: { user: { id: 'test-user', name: 'Test User' } },
+        status: 'authenticated'
+      })
+    })
+
     it('should not create memory leaks on unmount', () => {
       const { unmount } = render(
-        <SocketProvider>
+        <TestWrapper>
           <div>Test</div>
-        </SocketProvider>
+        </TestWrapper>
       )
 
       const cleanupFunction = mockSocket.on.mock.calls.find(
@@ -857,9 +986,9 @@ describe('SocketContext', () => {
       }
 
       const { unmount } = render(
-        <SocketProvider>
+        <TestWrapper>
           <TestComponent id="1" />
-        </SocketProvider>
+        </TestWrapper>
       )
 
       expect(screen.getByTestId('socket-1')).toHaveTextContent('null')
