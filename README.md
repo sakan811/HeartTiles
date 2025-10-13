@@ -56,8 +56,8 @@ Heart Tiles is a strategic card game where players compete for the highest score
 During your turn, you can perform these actions in any order:
 
 1. **Draw Cards**: Draw 1 heart card AND 1 magic card (if decks have cards available)
-2. **Place Hearts**: Place any number of heart cards from your hand on empty tiles
-3. **Use Magic Cards**: Use any number of magic cards from your hand
+2. **Place Hearts**: Place up to 2 numbers of heart cards from your hand on empty tiles
+3. **Use Magic Cards**: Use up to 2 numbersr of magic cards from your hand
 4. **End Turn**: Pass control to your opponent
 
 **Important Rules**:

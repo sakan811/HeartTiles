@@ -61,6 +61,13 @@ interface Shield {
   activatedBy: string;
 }
 
+interface PlayerActions {
+  drawnHeart: boolean;
+  drawnMagic: boolean;
+  heartsPlaced: number;
+  magicCardsUsed: number;
+}
+
 export default function GameRoomPage() {
   const { data: session, status } = useSession();
   const [tiles, setTiles] = useState<Tile[]>([]);
@@ -76,6 +83,7 @@ export default function GameRoomPage() {
   const [myPlayerId, setMyPlayerId] = useState<string>("");
   const [currentRoom, setCurrentRoom] = useState<string>("");
   const [shields, setShields] = useState<Record<string, Shield>>({});
+  const [playerActions, setPlayerActions] = useState<Record<string, PlayerActions>>({});
   const { socket, isConnected, socketId, disconnect } = useSocket();
   const params = useParams();
   const router = useRouter();
@@ -130,6 +138,7 @@ export default function GameRoomPage() {
       turnCount?: number;
       playerId?: string;
       shields?: Record<string, Shield>;
+      playerActions?: Record<string, PlayerActions>;
     }) => {
       const gameData = Array.isArray(data) ? data[0] : data;
 
@@ -147,7 +156,8 @@ export default function GameRoomPage() {
         magicDeck: gameData.magicDeck || { emoji: "🔮", cards: 16, type: 'magic' },
         turnCount: gameData.turnCount || 0,
         playerId: gameData.playerId || null,
-        shields: gameData.shields || {}
+        shields: gameData.shields || {},
+        playerActions: gameData.playerActions || {}
       };
 
       console.log(`Game started: ${safeGameData.players.length} players, current: ${safeGameData.currentPlayer?.name}`);
@@ -166,6 +176,7 @@ export default function GameRoomPage() {
       setMagicDeck(safeGameData.magicDeck);
       setTurnCount(safeGameData.turnCount);
       setShields(safeGameData.shields);
+      setPlayerActions(safeGameData.playerActions);
     };
 
     const onTurnChanged = (data: {
@@ -175,6 +186,7 @@ export default function GameRoomPage() {
       playerHands?: Record<string, Tile[]>;
       deck?: Deck;
       shields?: Record<string, Shield>;
+      playerActions?: Record<string, PlayerActions>;
     }) => {
       console.log(`Turn changed: ${data.currentPlayer.name} (turn ${data.turnCount})`);
 
@@ -184,6 +196,7 @@ export default function GameRoomPage() {
       if (data.playerHands) setPlayerHands(data.playerHands);
       if (data.deck) setDeck(data.deck);
       if (data.shields) setShields(data.shields);
+      if (data.playerActions) setPlayerActions(data.playerActions);
     };
 
     const onHeartDrawn = (data: { players: Player[]; playerHands: Record<string, Tile[]>; deck: Deck }) => {
@@ -202,12 +215,13 @@ export default function GameRoomPage() {
       }
     };
 
-    const onHeartPlaced = (data: { tiles: Tile[]; players: Player[]; playerHands: Record<string, Tile[]> }) => {
+    const onHeartPlaced = (data: { tiles: Tile[]; players: Player[]; playerHands: Record<string, Tile[]>; playerActions?: Record<string, PlayerActions> }) => {
       console.log("Heart placed");
 
       setTiles(data.tiles);
       setPlayers(data.players);
       setPlayerHands(data.playerHands);
+      if (data.playerActions) setPlayerActions(data.playerActions);
       setSelectedHeart(null);
     };
 
@@ -244,6 +258,7 @@ export default function GameRoomPage() {
       playerHands: Record<string, Tile[]>;
       usedBy: string;
       shields?: Record<string, Shield>;
+      playerActions?: Record<string, PlayerActions>;
     }) => {
       console.log(`Magic card used: ${data.card.name} (${data.card.type})`);
 
@@ -255,6 +270,11 @@ export default function GameRoomPage() {
       // Update shields if provided (for shield cards)
       if (data.shields) {
         setShields(data.shields);
+      }
+
+      // Update player actions if provided
+      if (data.playerActions) {
+        setPlayerActions(data.playerActions);
       }
     };
 
@@ -775,12 +795,18 @@ export default function GameRoomPage() {
             {selectedHeart && (
               <p className="text-center text-yellow-400 mt-2">
                 Selected: {selectedHeart.emoji} (value: {selectedHeart.value || 1}) - Click a tile to place it
+                <span className="block text-xs text-gray-300 mt-1">
+                  Hearts placed this turn: {(playerActions[myPlayerId]?.heartsPlaced || 0)}/2
+                </span>
               </p>
             )}
             {selectedMagicCard && (
               <div className="text-center space-y-1">
                 <p className="text-purple-400">
                   Selected: {selectedMagicCard.emoji} {selectedMagicCard.name}
+                  <span className="block text-xs text-gray-300 mt-1">
+                    Magic cards used this turn: {(playerActions[myPlayerId]?.magicCardsUsed || 0)}/2
+                  </span>
                 </p>
                 <p className="text-sm text-gray-300">
                   {selectedMagicCard.type === 'shield'
@@ -837,6 +863,17 @@ export default function GameRoomPage() {
                   <div className={`flex items-center gap-1 ${magicDeck.cards > 0 ? 'text-purple-400' : 'text-gray-500'}`}>
                     <span className={magicDeck.cards > 0 ? '❌' : '✅'}></span>
                     <span>Draw Magic ({magicDeck.cards} left)</span>
+                  </div>
+                </div>
+                <div className="mt-2 pt-2 border-t border-white/20">
+                  <h5 className="text-white text-xs font-semibold mb-1">Actions Used This Turn:</h5>
+                  <div className="flex gap-4 text-xs">
+                    <div className="text-red-300">
+                      <span>Hearts Placed: {(playerActions[myPlayerId]?.heartsPlaced || 0)}/2</span>
+                    </div>
+                    <div className="text-purple-300">
+                      <span>Magic Cards Used: {(playerActions[myPlayerId]?.magicCardsUsed || 0)}/2</span>
+                    </div>
                   </div>
                 </div>
               </div>

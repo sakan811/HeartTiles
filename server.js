@@ -135,7 +135,12 @@ app.prepare().then(async () => {
       room.gameState.playerActions = {};
     }
 
-    const playerActions = room.gameState.playerActions[userId] || { drawnHeart: false, drawnMagic: false };
+    const playerActions = room.gameState.playerActions[userId] || {
+      drawnHeart: false,
+      drawnMagic: false,
+      heartsPlaced: 0,
+      magicCardsUsed: 0
+    };
 
     return { valid: true, currentActions: playerActions };
   }
@@ -146,7 +151,12 @@ app.prepare().then(async () => {
     }
 
     if (!room.gameState.playerActions[userId]) {
-      room.gameState.playerActions[userId] = { drawnHeart: false, drawnMagic: false };
+      room.gameState.playerActions[userId] = {
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      };
     }
 
     if (cardType === 'heart') {
@@ -156,11 +166,60 @@ app.prepare().then(async () => {
     }
   }
 
+  function recordHeartPlacement(room, userId) {
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+
+    if (!room.gameState.playerActions[userId]) {
+      room.gameState.playerActions[userId] = {
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      };
+    }
+
+    room.gameState.playerActions[userId].heartsPlaced = (room.gameState.playerActions[userId].heartsPlaced || 0) + 1;
+  }
+
+  function recordMagicCardUsage(room, userId) {
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+
+    if (!room.gameState.playerActions[userId]) {
+      room.gameState.playerActions[userId] = {
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      };
+    }
+
+    room.gameState.playerActions[userId].magicCardsUsed = (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1;
+  }
+
+  function canPlaceMoreHearts(room, userId) {
+    const playerActions = room.gameState.playerActions[userId] || { heartsPlaced: 0 };
+    return (playerActions.heartsPlaced || 0) < 2;
+  }
+
+  function canUseMoreMagicCards(room, userId) {
+    const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 };
+    return (playerActions.magicCardsUsed || 0) < 2;
+  }
+
   function resetPlayerActions(room, userId) {
     if (!room.gameState.playerActions) {
       room.gameState.playerActions = {};
     }
-    room.gameState.playerActions[userId] = { drawnHeart: false, drawnMagic: false };
+    room.gameState.playerActions[userId] = {
+      drawnHeart: false,
+      drawnMagic: false,
+      heartsPlaced: 0,
+      magicCardsUsed: 0
+    };
   }
 
   function validateRoomCode(roomCode) {
@@ -595,7 +654,8 @@ function checkAndExpireShields(room) {
             magicDeck: room.gameState.magicDeck,
             turnCount: room.gameState.turnCount,
             playerId: userId,
-            shields: room.gameState.shields || {}
+            shields: room.gameState.shields || {},
+            playerActions: room.gameState.playerActions || {}
           };
           io.to(socket.id).emit("game-start", gameStateData);
         }
@@ -683,7 +743,8 @@ function checkAndExpireShields(room) {
               deck: room.gameState.deck,
               magicDeck: room.gameState.magicDeck,
               turnCount: room.gameState.turnCount,
-              shields: room.gameState.shields || {}
+              shields: room.gameState.shields || {},
+              playerActions: room.gameState.playerActions || {}
             };
 
             room.players.forEach(player => {
@@ -824,6 +885,12 @@ function checkAndExpireShields(room) {
         return;
       }
 
+      // Check if player has reached their heart placement limit for this turn
+      if (!canPlaceMoreHearts(room, userId)) {
+        socket.emit("room-error", "You can only place up to 2 heart cards per turn");
+        return;
+      }
+
       if (!acquireTurnLock(roomCode, socket.id)) {
         socket.emit("room-error", "Action in progress, please wait");
         return;
@@ -874,6 +941,10 @@ function checkAndExpireShields(room) {
                   originalTileColor: tile.color // Store original tile color
                 }
               };
+
+              // Record this heart placement for turn tracking
+              recordHeartPlacement(room, userId);
+
               await saveRoom(room);
 
               const playersWithUpdatedHands = room.players.map(player => ({
@@ -885,7 +956,8 @@ function checkAndExpireShields(room) {
               io.to(roomCode).emit("heart-placed", {
                 tiles: room.gameState.tiles,
                 players: playersWithUpdatedHands,
-                playerHands: room.gameState.playerHands
+                playerHands: room.gameState.playerHands,
+                playerActions: room.gameState.playerActions || {}
               });
 
               // Check if game should end after heart placement
@@ -987,7 +1059,8 @@ function checkAndExpireShields(room) {
               players: playersWithHands,
               playerHands: room.gameState.playerHands,
               deck: room.gameState.deck,
-              shields: room.gameState.shields || {}
+              shields: room.gameState.shields || {},
+              playerActions: room.gameState.playerActions || {}
             });
             console.log(`Turn change broadcasted to room ${roomCode}:`, {
               currentPlayer: room.gameState.currentPlayer.name,
@@ -1133,6 +1206,12 @@ function checkAndExpireShields(room) {
         return;
       }
 
+      // Check if player has reached their magic card usage limit for this turn
+      if (!canUseMoreMagicCards(room, userId)) {
+        socket.emit("room-error", "You can only use up to 2 magic cards per turn");
+        return;
+      }
+
       if (!acquireTurnLock(roomCode, socket.id)) {
         socket.emit("room-error", "Action in progress, please wait");
         return;
@@ -1244,6 +1323,10 @@ function checkAndExpireShields(room) {
 
           // Remove the used magic card from player's hand
           room.gameState.playerHands[userId].splice(cardIndex, 1);
+
+          // Record this magic card usage for turn tracking
+          recordMagicCardUsage(room, userId);
+
           await saveRoom(room);
 
           // Include player hands and scores in the player objects for broadcasting
@@ -1269,7 +1352,8 @@ function checkAndExpireShields(room) {
             players: playersWithUpdatedHands,
             playerHands: room.gameState.playerHands,
             usedBy: userId,
-            shields: room.gameState.shields || {}
+            shields: room.gameState.shields || {},
+            playerActions: room.gameState.playerActions || {}
           });
 
           // Check if game should end after magic card usage (wind card could potentially clear tiles)
