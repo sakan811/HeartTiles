@@ -1,10 +1,10 @@
 import NextAuth from "next-auth"
-import CredentialsProvider from "next-auth/providers/credentials"
-import { User } from "../models"
+import Credentials from "next-auth/providers/credentials"
+import { User } from "../models.js"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    CredentialsProvider({
+    Credentials({
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },

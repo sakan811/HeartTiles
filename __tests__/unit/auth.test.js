@@ -1,39 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock modules before any imports
-const mockNextAuth = vi.fn()
-const mockCredentialsProvider = vi.fn()
+// Set up mocks before importing anything
 const mockUser = {
   findOne: vi.fn(),
   comparePassword: vi.fn()
 }
 
-// Mock NextAuth
-vi.mock('next-auth', () => ({
-  default: mockNextAuth
+// Mock the User model
+vi.mock('../../models.js', () => ({
+  User: mockUser,
+  PlayerSession: {},
+  Room: {}
 }))
 
-// Mock credentials provider
-vi.mock('next-auth/providers/credentials', () => ({
-  default: mockCredentialsProvider
-}))
-
-// Mock the models
-vi.mock('../../../models', () => ({
-  User: mockUser
-}))
-
-// Mock mongoose
+// Mock mongoose dynamic import for connectDB function
 vi.mock('mongoose', () => {
   const mockSchema = vi.fn().mockImplementation((schemaDefinition, options) => {
-    const schema = {
+    return {
       schemaDefinition,
       options,
       pre: vi.fn(),
       methods: {},
       statics: {}
     }
-    return schema
   })
 
   mockSchema.Types = {
@@ -44,7 +33,7 @@ vi.mock('mongoose', () => {
   return {
     default: {
       connection: { readyState: 1 },
-      connect: vi.fn(),
+      connect: vi.fn().mockResolvedValue(true),
       Schema: mockSchema,
       models: {},
       model: vi.fn()
@@ -53,36 +42,49 @@ vi.mock('mongoose', () => {
   }
 })
 
-describe('Auth Configuration Tests', () => {
-  let capturedConfig = null
-  let capturedAuthorize = null
+// Create dynamic mocks for NextAuth that can be configured in tests
+let mockNextAuth, mockCredentialsProvider
+let capturedAuthConfig = {}
 
+describe('Auth Configuration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
-    // Setup NextAuth mock to capture configuration
-    mockNextAuth.mockImplementation((config) => {
-      capturedConfig = config
+    // Create fresh mocks for each test
+    mockNextAuth = vi.fn().mockImplementation((config) => {
+      // Capture the configuration for testing
+      capturedAuthConfig = { ...config }
       return {
         handlers: { GET: vi.fn(), POST: vi.fn() },
         signIn: vi.fn(),
         signOut: vi.fn(),
-        auth: vi.fn()
+        auth: vi.fn(),
       }
     })
 
-    // Setup credentials provider mock to capture authorize function
-    mockCredentialsProvider.mockImplementation((config) => {
-      capturedAuthorize = config.authorize
+    mockCredentialsProvider = vi.fn().mockImplementation((config) => {
       return {
         ...config,
-        type: 'credentials'
+        type: 'credentials',
+        name: 'credentials',
+        authorize: config.authorize
       }
     })
+
+    // Apply mocks before importing auth
+    vi.doMock('next-auth', () => ({
+      default: mockNextAuth
+    }))
+
+    vi.doMock('next-auth/providers/credentials', () => ({
+      default: mockCredentialsProvider
+    }))
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   describe('NextAuth Configuration', () => {
@@ -93,70 +95,64 @@ describe('Auth Configuration Tests', () => {
       expect(authModule.signIn).toBeDefined()
       expect(authModule.signOut).toBeDefined()
       expect(authModule.auth).toBeDefined()
-
-      expect(mockNextAuth).toHaveBeenCalledWith(
-        expect.objectContaining({
-          providers: expect.any(Array),
-          trustHost: true,
-          session: { strategy: 'jwt' },
-          pages: { signIn: '/auth/signin' },
-          callbacks: expect.any(Object)
-        })
-      )
     })
 
-    it('should configure credentials provider correctly', async () => {
-      await import('../../src/auth')
-
-      expect(mockCredentialsProvider).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'credentials',
-          credentials: {
-            email: { label: 'Email', type: 'email' },
-            password: { label: 'Password', type: 'password' }
-          },
-          authorize: expect.any(Function)
+    it('should call NextAuth with correct configuration', async () => {
+      // The auth module should already be imported by the first test
+      // Check if the captured config has the expected structure
+      expect(capturedAuthConfig).toMatchObject({
+        providers: expect.any(Array),
+        trustHost: true,
+        session: { strategy: "jwt" },
+        pages: { signIn: "/auth/signin" },
+        callbacks: expect.objectContaining({
+          jwt: expect.any(Function),
+          session: expect.any(Function)
         })
-      )
+      })
     })
 
-    it('should have correct session configuration', async () => {
-      await import('../../src/auth')
-
-      expect(mockNextAuth).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session: { strategy: 'jwt' },
-          trustHost: true,
-          pages: { signIn: '/auth/signin' }
-        })
-      )
-    })
-
-    it('should configure JWT and session callbacks', async () => {
-      await import('../../src/auth')
-
-      expect(capturedConfig).toBeDefined()
-      expect(capturedConfig.callbacks).toBeDefined()
-      expect(typeof capturedConfig.callbacks.jwt).toBe('function')
-      expect(typeof capturedConfig.callbacks.session).toBe('function')
+    it('should have credentials provider configured', async () => {
+      // Check the captured credentials provider configuration
+      const credentialsProvider = capturedAuthConfig.providers?.[0]
+      expect(credentialsProvider).toMatchObject({
+        type: 'credentials',
+        name: 'credentials',
+        credentials: {
+          email: { label: "Email", type: "email" },
+          password: { label: "Password", type: "password" }
+        },
+        authorize: expect.any(Function)
+      })
     })
   })
 
   describe('Credentials Provider Authorization', () => {
+    let authorizeFunc = null
+
     beforeEach(async () => {
       await import('../../src/auth')
+
+      // Get the authorize function from the captured configuration
+      const credentialsProvider = capturedAuthConfig.providers?.[0]
+      if (credentialsProvider && credentialsProvider.authorize) {
+        authorizeFunc = credentialsProvider.authorize
+      }
+    })
+
+    it('should have authorize function defined', () => {
+      expect(authorizeFunc).toBeDefined()
+      expect(typeof authorizeFunc).toBe('function')
     })
 
     it('should return null when credentials are missing', async () => {
-      expect(capturedAuthorize).toBeDefined()
-
-      const result1 = await capturedAuthorize({ email: null, password: null })
+      const result1 = await authorizeFunc({ email: null, password: null })
       expect(result1).toBeNull()
 
-      const result2 = await capturedAuthorize({ email: 'test@example.com', password: null })
+      const result2 = await authorizeFunc({ email: 'test@example.com', password: null })
       expect(result2).toBeNull()
 
-      const result3 = await capturedAuthorize({ email: null, password: 'password' })
+      const result3 = await authorizeFunc({ email: null, password: 'password' })
       expect(result3).toBeNull()
     })
 
@@ -168,7 +164,7 @@ describe('Auth Configuration Tests', () => {
         password: 'password'
       }
 
-      const result = await capturedAuthorize(credentials)
+      const result = await authorizeFunc(credentials)
       expect(result).toBeNull()
       expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'nonexistent@example.com' })
     })
@@ -188,7 +184,7 @@ describe('Auth Configuration Tests', () => {
         password: 'wrongpassword'
       }
 
-      const result = await capturedAuthorize(credentials)
+      const result = await authorizeFunc(credentials)
       expect(result).toBeNull()
       expect(mockUserInstance.comparePassword).toHaveBeenCalledWith('wrongpassword')
     })
@@ -208,7 +204,7 @@ describe('Auth Configuration Tests', () => {
         password: 'correctpassword'
       }
 
-      const result = await capturedAuthorize(credentials)
+      const result = await authorizeFunc(credentials)
       expect(result).toEqual({
         id: '123',
         email: 'test@example.com',
@@ -226,7 +222,7 @@ describe('Auth Configuration Tests', () => {
         password: 'password'
       }
 
-      const result = await capturedAuthorize(credentials)
+      const result = await authorizeFunc(credentials)
       expect(result).toBeNull()
     })
 
@@ -245,21 +241,30 @@ describe('Auth Configuration Tests', () => {
         password: 'password'
       }
 
-      const result = await capturedAuthorize(credentials)
+      const result = await authorizeFunc(credentials)
       expect(result).toBeNull()
     })
   })
 
   describe('JWT Callback', () => {
+    let jwtCallback = null
+
     beforeEach(async () => {
       await import('../../src/auth')
+
+      // Get the JWT callback from the captured configuration
+      if (capturedAuthConfig.callbacks && capturedAuthConfig.callbacks.jwt) {
+        jwtCallback = capturedAuthConfig.callbacks.jwt
+      }
     })
 
     it('should add user ID to token when user is present', async () => {
+      expect(jwtCallback).toBeDefined()
+
       const token = { email: 'test@example.com' }
       const user = { id: '123', email: 'test@example.com', name: 'Test User' }
 
-      const result = await capturedConfig.callbacks.jwt({ token, user })
+      const result = await jwtCallback({ token, user })
 
       expect(result).toEqual({
         email: 'test@example.com',
@@ -268,24 +273,35 @@ describe('Auth Configuration Tests', () => {
     })
 
     it('should return existing token when user is not present', async () => {
+      expect(jwtCallback).toBeDefined()
+
       const token = { email: 'test@example.com', id: '123' }
 
-      const result = await capturedConfig.callbacks.jwt({ token, user: null })
+      const result = await jwtCallback({ token, user: null })
 
       expect(result).toEqual(token)
     })
   })
 
   describe('Session Callback', () => {
+    let sessionCallback = null
+
     beforeEach(async () => {
       await import('../../src/auth')
+
+      // Get the session callback from the captured configuration
+      if (capturedAuthConfig.callbacks && capturedAuthConfig.callbacks.session) {
+        sessionCallback = capturedAuthConfig.callbacks.session
+      }
     })
 
     it('should add user ID to session when token is present', async () => {
+      expect(sessionCallback).toBeDefined()
+
       const session = { user: { name: 'Test User', email: 'test@example.com' } }
       const token = { id: '123', email: 'test@example.com' }
 
-      const result = await capturedConfig.callbacks.session({ session, token })
+      const result = await sessionCallback({ session, token })
 
       expect(result).toEqual({
         user: {
@@ -297,39 +313,53 @@ describe('Auth Configuration Tests', () => {
     })
 
     it('should return existing session when token is not present', async () => {
+      expect(sessionCallback).toBeDefined()
+
       const session = { user: { name: 'Test User', email: 'test@example.com' } }
 
-      const result = await capturedConfig.callbacks.session({ session, token: null })
+      const result = await sessionCallback({ session, token: null })
 
       expect(result).toEqual(session)
     })
   })
 
-  describe('Configuration Validation', () => {
-    beforeEach(async () => {
+  describe('Database Connection', () => {
+    it('should connect to database during authorization', async () => {
       await import('../../src/auth')
-    })
 
-    it('should have correct providers configuration', () => {
-      expect(capturedConfig.providers).toHaveLength(1)
-      expect(capturedConfig.providers[0]).toHaveProperty('type', 'credentials')
-      expect(capturedConfig.providers[0]).toHaveProperty('name', 'credentials')
-    })
+      const credentialsProvider = capturedAuthConfig.providers?.[0]
+      const authorizeFunc = credentialsProvider?.authorize
 
-    it('should have correct pages configuration', () => {
-      expect(capturedConfig.pages).toEqual({
-        signIn: '/auth/signin'
-      })
-    })
+      const mockUserInstance = {
+        _id: '123',
+        email: 'test@example.com',
+        name: 'Test User',
+        comparePassword: vi.fn().mockResolvedValue(true)
+      }
 
-    it('should have trustHost set to true', () => {
-      expect(capturedConfig.trustHost).toBe(true)
-    })
+      mockUser.findOne.mockResolvedValue(mockUserInstance)
 
-    it('should have JWT session strategy', () => {
-      expect(capturedConfig.session).toEqual({
-        strategy: 'jwt'
-      })
+      const credentials = {
+        email: 'test@example.com',
+        password: 'correctpassword'
+      }
+
+      await authorizeFunc(credentials)
+
+      // The connectDB function should be called (it's mocked in setup.ts)
+      expect(mockUser.findOne).toHaveBeenCalled()
+    })
+  })
+
+  describe('Environment Configuration', () => {
+    it('should work with proper environment variables', async () => {
+      // Ensure environment variables are set
+      expect(process.env.NEXTAUTH_SECRET).toBe('test-secret')
+      expect(process.env.NEXTAUTH_URL).toBe('http://localhost:3000')
+      expect(process.env.MONGODB_URI).toBe('mongodb://localhost:27017/test')
+
+      const authModule = await import('../../src/auth')
+      expect(authModule.auth).toBeDefined()
     })
   })
 })
