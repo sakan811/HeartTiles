@@ -1289,6 +1289,17 @@ function checkAndExpireShields(room) {
                 return;
               }
 
+              // Get the heart data before executing the effect to calculate score subtraction
+              const placedHeart = tile.placedHeart;
+              if (placedHeart && placedHeart.score) {
+                // Find the player who placed the heart and subtract the points
+                const playerIndex = room.players.findIndex(p => p.userId === placedHeart.placedBy);
+                if (playerIndex !== -1) {
+                  room.players[playerIndex].score -= placedHeart.score;
+                  console.log(`Wind card: subtracted ${placedHeart.score} points from player ${placedHeart.placedBy}`);
+                }
+              }
+
               // Execute the Wind card effect using the new class method
               actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId);
 
