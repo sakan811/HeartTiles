@@ -207,7 +207,7 @@ app.prepare().then(async () => {
 
   function canUseMoreMagicCards(room, userId) {
     const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 };
-    return (playerActions.magicCardsUsed || 0) < 2;
+    return (playerActions.magicCardsUsed || 0) < 1;
   }
 
   function resetPlayerActions(room, userId) {
@@ -1208,7 +1208,7 @@ function checkAndExpireShields(room) {
 
       // Check if player has reached their magic card usage limit for this turn
       if (!canUseMoreMagicCards(room, userId)) {
-        socket.emit("room-error", "You can only use up to 2 magic cards per turn");
+        socket.emit("room-error", "You can only use up to 1 magic card per turn");
         return;
       }
 
