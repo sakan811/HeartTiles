@@ -4,29 +4,7 @@ import { ShieldCard, WindCard, RecycleCard, HeartCard } from '../../src/lib/card
  * Test helper utilities for Shield card testing
  */
 
-export interface MockGameState {
-  turnCount: number
-  tiles: Array<{
-    id: number
-    color: string
-    emoji: string
-    placedHeart?: {
-      color: string
-      value: number
-      placedBy: string
-    }
-  }>
-  shields: Record<string, any>
-  playerHands: Record<string, any[]>
-}
-
-export interface MockPlayer {
-  id: string
-  name: string
-  socketId: string
-}
-
-export function createMockGameState(turnCount: number = 1): MockGameState {
+export function createMockGameState(turnCount = 1) {
   return {
     turnCount,
     tiles: [
@@ -44,7 +22,7 @@ export function createMockGameState(turnCount: number = 1): MockGameState {
   }
 }
 
-export function createMockPlayers(): [MockPlayer, MockPlayer] {
+export function createMockPlayers() {
   return [
     { id: 'player1', name: 'Player 1', socketId: 'socket1' },
     { id: 'player2', name: 'Player 2', socketId: 'socket2' }
@@ -52,50 +30,46 @@ export function createMockPlayers(): [MockPlayer, MockPlayer] {
 }
 
 export function setupShieldProtection(
-  gameState: MockGameState,
-  playerId: string,
-  turnCount: number = 1
-): void {
+  gameState,
+  playerId,
+  turnCount = 1
+) {
   const shieldCard = new ShieldCard('test-shield')
   shieldCard.executeEffect(gameState, playerId)
   gameState.turnCount = turnCount
 }
 
 export function simulateWindCardAttack(
-  gameState: MockGameState,
-  targetTileId: number,
-  attackerId: string
-): any {
+  gameState,
+  targetTileId,
+  attackerId
+) {
   const windCard = new WindCard('test-wind')
   return windCard.executeEffect(gameState, targetTileId, attackerId)
 }
 
 export function simulateRecycleCardAttack(
-  gameState: MockGameState,
-  targetTileId: number
-): any {
+  gameState,
+  targetTileId
+) {
   const recycleCard = new RecycleCard('test-recycle')
   return recycleCard.executeEffect(gameState, targetTileId)
 }
 
-export function advanceTurns(gameState: MockGameState, turns: number): void {
+export function advanceTurns(gameState, turns) {
   gameState.turnCount += turns
 }
 
-export function isShieldActive(gameState: MockGameState, playerId: string): boolean {
+export function isShieldActive(gameState, playerId) {
   return ShieldCard.isPlayerProtected(gameState, playerId, gameState.turnCount)
 }
 
-export function getShieldRemainingTurns(gameState: MockGameState, playerId: string): number {
+export function getShieldRemainingTurns(gameState, playerId) {
   const shield = gameState.shields[playerId]
   return ShieldCard.getRemainingTurns(shield, gameState.turnCount)
 }
 
-export function createComplexGameScenario(): {
-  gameState: MockGameState
-  player1: MockPlayer
-  player2: MockPlayer
-} {
+export function createComplexGameScenario() {
   const [player1, player2] = createMockPlayers()
   const gameState = createMockGameState()
 
@@ -129,16 +103,16 @@ export function createComplexGameScenario(): {
   return { gameState, player1, player2 }
 }
 
-export function expectShieldProtectionError(fn: () => void, expectedMessage: string): void {
+export function expectShieldProtectionError(fn, expectedMessage) {
   expect(fn).toThrow(expectedMessage)
 }
 
-export function expectSuccessfulCardAction(result: any, expectedType: string): void {
+export function expectSuccessfulCardAction(result, expectedType) {
   expect(result).toBeDefined()
   expect(result.type).toBe(expectedType)
 }
 
-export function cleanupExpiredShields(gameState: MockGameState): void {
+export function cleanupExpiredShields(gameState) {
   for (const [userId, shield] of Object.entries(gameState.shields)) {
     if (!ShieldCard.isActive(shield, gameState.turnCount)) {
       delete gameState.shields[userId]
@@ -146,10 +120,10 @@ export function cleanupExpiredShields(gameState: MockGameState): void {
   }
 }
 
-export function serializeGameState(gameState: MockGameState): string {
+export function serializeGameState(gameState) {
   return JSON.stringify(gameState)
 }
 
-export function deserializeGameState(serializedState: string): MockGameState {
+export function deserializeGameState(serializedState) {
   return JSON.parse(serializedState)
 }

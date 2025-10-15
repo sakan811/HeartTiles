@@ -20,7 +20,7 @@ export default defineConfig({
         'next-env.d.ts'
       ]
     },
-    setupFiles: ['./__tests__/setup.ts'],
+    setupFiles: ['./__tests__/setup.js'],
     testTimeout: 10000,
     hookTimeout: 10000,
     alias: {
@@ -38,7 +38,7 @@ export default defineConfig({
           exclude: ['**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
           environment: 'node',
           globals: true,
-          setupFiles: ['./__tests__/setup.ts'],
+          setupFiles: ['./__tests__/setup.js'],
           testTimeout: 10000,
           hookTimeout: 10000,
           css: false
@@ -55,7 +55,7 @@ export default defineConfig({
           exclude: ['node_modules'],
           environment: 'jsdom',
           globals: true,
-          setupFiles: ['./__tests__/setup.ts'],
+          setupFiles: ['./__tests__/setup.js'],
           testTimeout: 10000,
           hookTimeout: 10000,
           environmentOptions: {

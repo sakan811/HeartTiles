@@ -1,15 +1,15 @@
 import React from 'react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import SignUpPage from '../../src/app/auth/signup/page'
+import SignUpPage from '../../src/app/auth/signup/page.js'
 
 // Mock the providers
-vi.mock('../../src/contexts/SocketContext', () => ({
-  SocketProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+vi.mock('../../src/contexts/SocketContext.js', () => ({
+  SocketProvider: ({ children }) => <>{children}</>
 }))
 
-vi.mock('../../src/components/providers/SessionProvider', () => ({
-  SessionProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+vi.mock('../../src/components/providers/SessionProvider.js', () => ({
+  SessionProvider: ({ children }) => <>{children}</>
 }))
 
 // Mock next/navigation
@@ -22,7 +22,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 // Mock fetch for API calls
-global.fetch = vi.fn() as any
+global.fetch = vi.fn()
 
 describe('Sign Up Page', () => {
   const mockPush = vi.fn()
@@ -76,7 +76,7 @@ describe('Sign Up Page', () => {
     expect(signInLink.closest('a')).toHaveAttribute('href', '/auth/signin')
   })
 
-  
+
   it('should validate required fields', async () => {
     render(<SignUpPage />)
 
@@ -139,7 +139,7 @@ describe('Sign Up Page', () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ message: 'User created successfully' })
-    } as Response)
+    })
 
     render(<SignUpPage />)
 
@@ -177,7 +177,7 @@ describe('Sign Up Page', () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ message: 'User created successfully' })
-    } as Response)
+    })
 
     render(<SignUpPage />)
 
@@ -205,7 +205,7 @@ describe('Sign Up Page', () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: 'Email already exists' })
-    } as Response)
+    })
 
     render(<SignUpPage />)
 
@@ -230,7 +230,7 @@ describe('Sign Up Page', () => {
   })
 
   it('should show loading state during submission', async () => {
-    let resolveFetch: (value: any) => void
+    let resolveFetch
     vi.mocked(fetch).mockReturnValueOnce(new Promise(resolve => {
       resolveFetch = resolve
     }))
@@ -256,7 +256,7 @@ describe('Sign Up Page', () => {
     expect(submitButton).toBeDisabled()
 
     // Resolve the fetch
-    resolveFetch!({
+    resolveFetch({
       ok: true,
       json: async () => ({ message: 'User created successfully' })
     })
@@ -313,7 +313,7 @@ describe('Sign Up Page', () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ message: 'User created successfully' })
-    } as Response)
+    })
 
     render(<SignUpPage />)
 
