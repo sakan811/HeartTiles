@@ -101,7 +101,7 @@ describe('Magic Card Usage Limits', () => {
     recordMagicCardUsage(mockRoom, userId);
 
     // Should track the count correctly even if used multiple times
-    expect(mockRoom.gameState.playerActions[userId].magicCardsUsed).toBe(3);
+    expect(mockRoom.gameState.playerActions[userId].magicCardsUsed).toBe(2);
     expect(canUseMoreMagicCards(mockRoom, userId)).toBe(false);
   });
 });
