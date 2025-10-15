@@ -508,6 +508,190 @@ describe('Cards Missing Lines Coverage Tests', () => {
     })
   })
 
+  describe('cleanupExpiredShields method (lines 349-363)', () => {
+    it('should do nothing when gameState has no shields', () => {
+      const gameState = { turnCount: 5 }
+
+      ShieldCard.cleanupExpiredShields(gameState, 5)
+
+      expect(gameState.shields).toBeUndefined()
+    })
+
+    it('should do nothing when shields is null', () => {
+      const gameState = { shields: null, turnCount: 5 }
+
+      ShieldCard.cleanupExpiredShields(gameState, 5)
+
+      expect(gameState.shields).toBeNull()
+    })
+
+    it('should do nothing when shields is empty object', () => {
+      const gameState = { shields: {}, turnCount: 5 }
+
+      ShieldCard.cleanupExpiredShields(gameState, 5)
+
+      expect(gameState.shields).toEqual({})
+    })
+
+    it('should remove expired shields based on current turn count', () => {
+      const gameState = {
+        turnCount: 5,
+        shields: {
+          player1: { activatedTurn: 3 }, // Expired (3 + 2 = 5, should be expired)
+          player2: { activatedTurn: 4 }, // Active (4 + 2 = 6, > 5)
+          player3: { activatedTurn: 2 }  // Expired (2 + 2 = 4, < 5)
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 5)
+
+      expect(gameState.shields).toEqual({
+        player2: { activatedTurn: 4 }
+      })
+      expect(gameState.shields.player1).toBeUndefined()
+      expect(gameState.shields.player3).toBeUndefined()
+    })
+
+    it('should handle shields with remainingTurns property', () => {
+      const gameState = {
+        turnCount: 3,
+        shields: {
+          player1: { remainingTurns: 0 }, // Expired
+          player2: { remainingTurns: 1 }, // Active
+          player3: { remainingTurns: 2 }  // Active
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 3)
+
+      expect(gameState.shields).toEqual({
+        player2: { remainingTurns: 1 },
+        player3: { remainingTurns: 2 }
+      })
+      expect(gameState.shields.player1).toBeUndefined()
+    })
+
+    it('should handle mixed shield formats', () => {
+      const gameState = {
+        turnCount: 4,
+        shields: {
+          player1: { activatedTurn: 3 }, // Active (3 + 2 = 5, > 4)
+          player2: { remainingTurns: 0 }, // Expired
+          player3: { activatedTurn: 2 }, // Expired (2 + 2 = 4, should be expired)
+          player4: { remainingTurns: 1 }  // Active
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 4)
+
+      expect(gameState.shields).toEqual({
+        player1: { activatedTurn: 3 },
+        player4: { remainingTurns: 1 }
+      })
+    })
+
+    it('should handle shields with both activatedTurn and remainingTurns', () => {
+      const gameState = {
+        turnCount: 6,
+        shields: {
+          player1: {
+            activatedTurn: 5,
+            remainingTurns: 1 // Should be ignored in favor of activatedTurn calculation
+          }
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 6)
+
+      // Should use activatedTurn calculation (5 + 2 = 7, > 6 = active)
+      expect(gameState.shields.player1).toBeDefined()
+    })
+
+    it('should handle shields with no activatedTurn or remainingTurns', () => {
+      const gameState = {
+        turnCount: 5,
+        shields: {
+          player1: { active: true }, // No expiration info, should be treated as expired
+          player2: { active: false } // Inactive, should be removed
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 5)
+
+      expect(gameState.shields).toEqual({})
+    })
+
+    it('should not modify other gameState properties', () => {
+      const gameState = {
+        turnCount: 5,
+        tiles: [{ id: 1, color: 'red' }],
+        currentPlayer: { id: 'player1' },
+        shields: {
+          player1: { activatedTurn: 3 }, // Expired
+          player2: { activatedTurn: 4 }  // Active
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 5)
+
+      // Should only modify shields
+      expect(gameState.turnCount).toBe(5)
+      expect(gameState.tiles).toEqual([{ id: 1, color: 'red' }])
+      expect(gameState.currentPlayer).toEqual({ id: 'player1' })
+      expect(gameState.shields).toEqual({
+        player2: { activatedTurn: 4 }
+      })
+    })
+
+    it('should handle edge case with currentTurnCount as 0', () => {
+      const gameState = {
+        turnCount: 0,
+        shields: {
+          player1: { activatedTurn: 0 }, // Active for turns 0 and 1
+          player2: { activatedTurn: -2 } // Expired (-2 + 2 = 0, <= 0)
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 0)
+
+      expect(gameState.shields).toEqual({
+        player1: { activatedTurn: 0 }
+      })
+    })
+
+    it('should handle large turn numbers correctly', () => {
+      const gameState = {
+        turnCount: 1000,
+        shields: {
+          player1: { activatedTurn: 999 }, // Active (999 + 2 = 1001, > 1000)
+          player2: { activatedTurn: 998 }, // Expired (998 + 2 = 1000, should be expired)
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 1000)
+
+      expect(gameState.shields).toEqual({
+        player1: { activatedTurn: 999 }
+      })
+    })
+
+    it('should handle shields with negative activatedTurn', () => {
+      const gameState = {
+        turnCount: 5,
+        shields: {
+          player1: { activatedTurn: -1 }, // Should be treated as expired
+          player2: { activatedTurn: 4 }   // Active
+        }
+      }
+
+      ShieldCard.cleanupExpiredShields(gameState, 5)
+
+      expect(gameState.shields).toEqual({
+        player2: { activatedTurn: 4 }
+      })
+    })
+  })
+
   describe('Edge Cases and Error Handling', () => {
     it('should handle malformed card data in createCardFromData', () => {
       const malformedData = {

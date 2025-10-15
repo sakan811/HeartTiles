@@ -266,6 +266,132 @@ describe('Models Tests', () => {
       expect(userSchemaCall[0].password).toBeDefined()
       expect(userSchemaCall[0].email).toBeDefined()
     })
+
+    it('should register pre-save middleware for password hashing', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      await import('../../models')
+
+      // Check that pre middleware was called
+      expect(mockSchema).toHaveBeenCalled()
+
+      // Get the user schema that was created
+      const userSchemaCall = mockSchema.mock.calls.find(call =>
+        call[0] && call[0].password && call[0].email
+      )
+      expect(userSchemaCall).toBeDefined()
+
+      // The pre method should have been called on the schema
+      const userSchema = userSchemaCall[0]
+      expect(userSchema.pre).toHaveBeenCalled()
+
+      // Get the pre-save middleware function from the stored schema object
+      const schemaInstance = mockSchema.mock.results[0].value
+      expect(schemaInstance._preMiddleware).toBeDefined()
+
+      const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
+      expect(preSaveMiddleware).toBeDefined()
+      expect(typeof preSaveMiddleware.callback).toBe('function')
+    })
+
+    it('should test pre-save middleware password hashing logic', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      await import('../../models')
+
+      // Get the pre-save middleware function from the stored schema object
+      const schemaInstance = mockSchema.mock.results[0].value
+      const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
+      const middlewareFunc = preSaveMiddleware.callback
+
+      // Mock next function
+      const mockNext = vi.fn()
+
+      // Create mock user context
+      const mockUser = {
+        isModified: vi.fn().mockReturnValue(true),
+        password: 'plainPassword',
+        save: vi.fn().mockResolvedValue({})
+      }
+
+      // Call the middleware function
+      await middlewareFunc.call(mockUser, mockNext)
+
+      // Verify isModified was called for password field
+      expect(mockUser.isModified).toHaveBeenCalledWith('password')
+
+      // Verify save was called after password hashing
+      expect(mockUser.save).toHaveBeenCalled()
+    })
+
+    it('should skip password hashing when password not modified', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      await import('../../models')
+
+      // Get the pre-save middleware function from the stored schema object
+      const schemaInstance = mockSchema.mock.results[0].value
+      const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
+      const middlewareFunc = preSaveMiddleware.callback
+
+      // Mock next function
+      const mockNext = vi.fn()
+
+      // Create mock user context where password is not modified
+      const mockUser = {
+        isModified: vi.fn().mockReturnValue(false),
+        password: 'existingHashedPassword',
+        save: vi.fn().mockResolvedValue({})
+      }
+
+      // Call the middleware function
+      await middlewareFunc.call(mockUser, mockNext)
+
+      // Verify isModified was called for password field
+      expect(mockUser.isModified).toHaveBeenCalledWith('password')
+
+      // Verify next was called without saving (password not modified)
+      expect(mockNext).toHaveBeenCalled()
+      expect(mockUser.save).not.toHaveBeenCalled()
+    })
+
+    it('should hash password with correct salt rounds', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      await import('../../models')
+
+      // Import bcrypt to verify it was called with correct salt rounds
+      const bcrypt = await import('bcryptjs')
+
+      // Get the pre-save middleware function from the stored schema object
+      const schemaInstance = mockSchema.mock.results[0].value
+      const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
+      const middlewareFunc = preSaveMiddleware.callback
+
+      // Mock next function
+      const mockNext = vi.fn()
+
+      // Create mock user context
+      const mockUser = {
+        isModified: vi.fn().mockReturnValue(true),
+        password: 'newPassword',
+        save: vi.fn().mockResolvedValue({})
+      }
+
+      // Call the middleware function
+      await middlewareFunc.call(mockUser, mockNext)
+
+      // Verify bcrypt was called with correct salt rounds (12)
+      expect(bcrypt.default.hash).toHaveBeenCalledWith('newPassword', 12)
+    })
   })
 
   describe('Player Session Schema', () => {

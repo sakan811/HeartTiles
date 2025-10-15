@@ -1445,3 +1445,26 @@ function checkAndExpireShields(room) {
       console.log(`> Ready on http://${hostname}:${port}`);
     });
 });
+
+// Export functions for testing
+export {
+  validateRoomCode,
+  validatePlayerName,
+  generateTiles,
+  calculateScore,
+  sanitizeInput,
+  findPlayerByUserId,
+  findPlayerByName,
+  validateRoomState,
+  validatePlayerInRoom,
+  validateTurn,
+  validateDeckState,
+  validateCardDrawLimit,
+  recordCardDraw,
+  resetPlayerActions,
+  checkGameEndConditions,
+  checkAndExpireShields,
+  getClientIP,
+  acquireTurnLock,
+  releaseTurnLock
+};

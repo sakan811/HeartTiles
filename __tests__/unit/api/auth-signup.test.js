@@ -20,6 +20,9 @@ const mockMongoose = {
 
 vi.mock('mongoose', () => mockMongoose)
 
+// Also mock the dynamic import of mongoose
+vi.mocked('mongoose', () => mockMongoose.default)
+
 // Mock the User model
 let mockUser = {
   findOne: vi.fn(),
@@ -178,6 +181,90 @@ describe('Signup API Route Tests', () => {
       expect(mockNextResponse.json).toHaveBeenCalledWith(
         { message: "User created successfully" },
         { status: 201 }
+      )
+    })
+
+    it('should not connect to MongoDB when already connected', async () => {
+      // Mock mongoose connection as already connected (readyState = 1)
+      mockMongoose.default.connection.readyState = 1
+      mockUser.findOne.mockResolvedValue(null)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      // Should not attempt to connect since already connected
+      expect(mockMongoose.default.connect).not.toHaveBeenCalled()
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { message: "User created successfully" },
+        { status: 201 }
+      )
+    })
+
+    it('should connect to MongoDB when not connected', async () => {
+      // Mock mongoose connection as disconnected (readyState = 0)
+      mockMongoose.default.connection.readyState = 0
+      mockUser.findOne.mockResolvedValue(null)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      // Should attempt to connect since not connected
+      expect(mockMongoose.default.connect).toHaveBeenCalledWith('mongodb://localhost:27017/heart-tiles')
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { message: "User created successfully" },
+        { status: 201 }
+      )
+    })
+
+    it('should use custom MONGODB_URI from environment', async () => {
+      // Mock environment variable
+      const originalEnv = process.env.MONGODB_URI
+      process.env.MONGODB_URI = 'mongodb://custom:27017/custom-db'
+
+      mockMongoose.default.connection.readyState = 0
+      mockUser.findOne.mockResolvedValue(null)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockMongoose.default.connect).toHaveBeenCalledWith('mongodb://custom:27017/custom-db')
+
+      // Restore original env
+      process.env.MONGODB_URI = originalEnv
+    })
+
+    it('should handle MongoDB connection errors', async () => {
+      mockMongoose.default.connection.readyState = 0
+      mockMongoose.default.connect.mockRejectedValue(new Error('MongoDB connection failed'))
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
       )
     })
   })

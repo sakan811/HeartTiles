@@ -26,6 +26,11 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
     },
+    css: {
+      modules: {
+        classNameStrategy: 'stable'
+      }
+    },
     projects: [
       {
         test: {
@@ -35,7 +40,8 @@ export default defineConfig({
           globals: true,
           setupFiles: ['./__tests__/setup.ts'],
           testTimeout: 10000,
-          hookTimeout: 10000
+          hookTimeout: 10000,
+          css: false
         },
         resolve: {
           alias: {
