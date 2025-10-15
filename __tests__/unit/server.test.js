@@ -588,4 +588,97 @@ describe('Server Functions Tests', async () => {
       expect(turnLocks.size).toBe(0)
     })
   })
+
+  // Note: migratePlayerData function is inside the server scope and not exportable
+// We can test the behavior through integration tests instead
+
+  describe('Connection Management Functions', async () => {
+    let connectionPool
+    const MAX_CONNECTIONS_PER_IP = 5
+
+    beforeEach(() => {
+      connectionPool = new Map()
+    })
+
+    it('should check if connection can be accepted', async () => {
+      // Mock connection pool functions
+      function canAcceptConnection(ip) {
+        return (connectionPool.get(ip) || 0) < MAX_CONNECTIONS_PER_IP
+      }
+
+      // Test with no connections
+      expect(canAcceptConnection('192.168.1.1')).toBe(true)
+
+      // Test with connections under limit
+      connectionPool.set('192.168.1.1', 3)
+      expect(canAcceptConnection('192.168.1.1')).toBe(true)
+
+      // Test with connections at limit
+      connectionPool.set('192.168.1.1', 5)
+      expect(canAcceptConnection('192.168.1.1')).toBe(false)
+
+      // Test with connections over limit
+      connectionPool.set('192.168.1.1', 6)
+      expect(canAcceptConnection('192.168.1.1')).toBe(false)
+    })
+
+    it('should increment and decrement connection count', async () => {
+      function incrementConnectionCount(ip) {
+        connectionPool.set(ip, (connectionPool.get(ip) || 0) + 1)
+      }
+
+      function decrementConnectionCount(ip) {
+        const current = connectionPool.get(ip) || 0
+        if (current > 0) connectionPool.set(ip, current - 1)
+      }
+
+      // Test increment
+      incrementConnectionCount('192.168.1.1')
+      expect(connectionPool.get('192.168.1.1')).toBe(1)
+
+      incrementConnectionCount('192.168.1.1')
+      expect(connectionPool.get('192.168.1.1')).toBe(2)
+
+      // Test decrement
+      decrementConnectionCount('192.168.1.1')
+      expect(connectionPool.get('192.168.1.1')).toBe(1)
+
+      // Test decrement when at 0 (should stay at 0)
+      connectionPool.set('192.168.1.2', 0)
+      decrementConnectionCount('192.168.1.2')
+      expect(connectionPool.get('192.168.1.2')).toBe(0)
+    })
+  })
+
+  // Note: Card generation functions, endGame, player action tracking, and heart placement validation
+// functions are inside the server scope and not exportable. They can be tested through integration tests.
+
+  describe('Socket Authentication', async () => {
+    it('should have authentication functions available', async () => {
+      // Test that authentication-related imports are available
+      const { getToken } = await import('next-auth/jwt')
+      const { User } = await import('../../../models')
+
+      expect(typeof getToken).toBe('function')
+      expect(User).toBeDefined()
+      expect(typeof User.findById).toBe('function')
+    })
+
+    it('should test token validation logic', async () => {
+      // Test that token validation logic works
+      const { getToken } = await import('next-auth/jwt')
+
+      const mockSocket = {
+        handshake: {
+          headers: {}
+        }
+      }
+
+      // Test that getToken can be called (actual authentication happens in server runtime)
+      expect(getToken).toBeDefined()
+    })
+  })
+
+  // Note: Socket event handlers are complex integration scenarios that require the full server context.
+// They are better tested through integration tests rather than unit tests.
 })

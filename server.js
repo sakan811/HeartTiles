@@ -1462,7 +1462,7 @@ app.prepare().then(async () => {
     });
 });
 
-// Export functions for testing
+// Export functions for testing (they are accessible within the same scope)
 export {
   validateRoomCode,
   validatePlayerName,
