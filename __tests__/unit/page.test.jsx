@@ -3,8 +3,8 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { useSession, signOut, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Home from '../../src/app/page.tsx'
-import { SocketProvider } from '../../src/contexts/SocketContext.tsx'
+import Home from '../../src/app/page.js'
+import { SocketProvider } from '../../src/contexts/SocketContext.js'
 
 // Mock next-auth
 vi.mock('next-auth/react', () => ({
@@ -26,12 +26,12 @@ vi.mock('next/navigation', () => ({
 }))
 
 // Mock SocketContext
-vi.mock('../../src/contexts/SocketContext.tsx', () => ({
+vi.mock('../../src/contexts/SocketContext.js', () => ({
   useSocket: vi.fn(() => ({
     socket: null,
     isConnected: false
   })),
-  SocketProvider: ({ children }: { children: React.ReactNode }) => (
+  SocketProvider: ({ children }) => (
     <div data-testid="socket-provider">{children}</div>
   )
 }))
@@ -138,7 +138,7 @@ describe('Home Page Component', () => {
 
     // Get the Join Room button (not the dialog title)
     const joinButton = screen.getAllByText('Join Room').find(el => el.tagName === 'BUTTON')
-    fireEvent.click(joinButton!)
+    fireEvent.click(joinButton)
 
     // Check that dialog opens
     expect(screen.getByText('Enter the room code to join an existing game')).toBeTruthy()

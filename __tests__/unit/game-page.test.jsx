@@ -3,9 +3,9 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import GameRoomPage from '../../src/app/room/[roomCode]/game/page'
-import { SocketProvider } from '../../src/contexts/SocketContext'
-import ErrorBoundary from '../../src/components/ErrorBoundary'
+import GameRoomPage from '../../src/app/room/[roomCode]/game/page.js'
+import { SocketProvider } from '../../src/contexts/SocketContext.js'
+import ErrorBoundary from '../../src/components/ErrorBoundary.js'
 
 // Mock next-auth/react
 vi.mock('next-auth/react', () => ({
@@ -34,7 +34,7 @@ const createMockSocket = (socketId = 'socket123') => ({
 
 const mockSocket = createMockSocket()
 
-vi.mock('../../src/socket', () => ({
+vi.mock('../../src/socket.js', () => ({
   useSocket: vi.fn(() => ({
     socket: mockSocket,
     isConnected: true,
@@ -44,26 +44,26 @@ vi.mock('../../src/socket', () => ({
 }))
 
 // Mock SocketProvider separately for rendering
-vi.mock('../../src/contexts/SocketContext', () => ({
-  SocketProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="socket-provider">{children}</div>
+vi.mock('../../src/contexts/SocketContext.js', () => ({
+  SocketProvider: ({ children }) => <div data-testid="socket-provider">{children}</div>
 }))
 
 // Mock ErrorBoundary
-vi.mock('../../src/components/ErrorBoundary', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div data-testid="error-boundary">{children}</div>
+vi.mock('../../src/components/ErrorBoundary.js', () => ({
+  default: ({ children }) => <div data-testid="error-boundary">{children}</div>
 }))
 
 // Mock react-icons/fa
 vi.mock('react-icons/fa', () => ({
-  FaShieldAlt: ({ size }: { size: number }) => <div data-testid="shield-icon" style={{ fontSize: size }} />
+  FaShieldAlt: ({ size }) => <div data-testid="shield-icon" style={{ fontSize: size }} />
 }))
 
 // Helper function to render the component with proper providers
-const renderGamePage = (sessionData = null, sessionStatus: 'loading' | 'authenticated' | 'unauthenticated' = 'unauthenticated') => {
+const renderGamePage = (sessionData = null, sessionStatus = 'unauthenticated') => {
   vi.mocked(useSession).mockReturnValue({
     data: sessionData,
     status: sessionStatus
-  } as any)
+  })
 
   return render(
     <ErrorBoundary>
@@ -93,7 +93,7 @@ describe('GameRoomPage Component (Lines 1-921)', () => {
     vi.mocked(useSession).mockReturnValue({
       data: null,
       status: 'unauthenticated'
-    } as any)
+    })
   })
 
   afterEach(() => {

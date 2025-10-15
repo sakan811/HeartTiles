@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import React from 'react'
-import { ShieldCard } from '../src/lib/cards'
+import { ShieldCard } from '../src/lib/cards.js'
 import '@testing-library/jest-dom'
 
 // Make React available globally for all tests
@@ -129,33 +129,23 @@ const originalClearInterval = global.clearInterval
 // Mock setTimeout/setInterval for consistent testing
 global.setTimeout = vi.fn((fn, delay) => {
   return originalSetTimeout(fn, delay)
-}) as any
+})
 
 global.setInterval = vi.fn((fn, interval) => {
   return originalSetInterval(fn, interval)
-}) as any
+})
 
 global.clearTimeout = vi.fn((id) => {
   return originalClearTimeout(id)
-}) as any
+})
 
 global.clearInterval = vi.fn((id) => {
   return originalClearInterval(id)
-}) as any
-
-// Setup test utilities
-declare global {
-  namespace Vi {
-    interface JestAssertion<T = any> {
-      toBeShieldCard(): T
-      toBeProtectedTile(): T
-    }
-  }
-}
+})
 
 // Custom matchers for Shield card testing
 expect.extend({
-  toBeShieldCard(received: any) {
+  toBeShieldCard(received) {
     const isShieldCard = received &&
       received.type === 'shield' &&
       received.emoji === '🛡️' &&
@@ -174,7 +164,7 @@ expect.extend({
     }
   },
 
-  toBeProtectedTile(received: any, gameState: any, turnCount: any) {
+  toBeProtectedTile(received, gameState, turnCount) {
     const isProtectedTile = received &&
       typeof received === 'object' &&
       gameState &&
@@ -258,22 +248,18 @@ afterEach(() => {
     clearInterval: global.clearInterval,
     // Mock Event constructor
     Event: class Event {
-      constructor(type: string, options?: any) {
+      constructor(type, options) {
         this.type = type
         this.bubbles = options?.bubbles || false
         this.cancelable = options?.cancelable || false
       }
-      type: string
-      bubbles: boolean
-      cancelable: boolean
-    } as any,
+    },
     // Mock CustomEvent constructor
     CustomEvent: class CustomEvent extends Event {
-      constructor(type: string, options?: any) {
+      constructor(type, options) {
         super(type, options)
         this.detail = options?.detail || null
       }
-      detail: any
-    } as any
+    }
   })
 })

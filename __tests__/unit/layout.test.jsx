@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
 import { render } from '@testing-library/react'
-import Layout from '../../src/app/layout.tsx'
+import Layout from '../../src/app/layout.js'
 
 // Mock next/font
 vi.mock('next/font/google', () => ({
@@ -20,15 +20,15 @@ vi.mock('next/font/google', () => ({
 }))
 
 // Mock SessionProvider
-vi.mock('../../src/components/providers/SessionProvider.tsx', () => ({
-  SessionProvider: ({ children }: { children: React.ReactNode }) => (
+vi.mock('../../src/components/providers/SessionProvider.js', () => ({
+  SessionProvider: ({ children }) => (
     <div data-testid="session-provider">{children}</div>
   )
 }))
 
 // Mock SocketProvider
-vi.mock('../../src/contexts/SocketContext.tsx', () => ({
-  SocketProvider: ({ children }: { children: React.ReactNode }) => (
+vi.mock('../../src/contexts/SocketContext.js', () => ({
+  SocketProvider: ({ children }) => (
     <div data-testid="socket-provider">{children}</div>
   )
 }))

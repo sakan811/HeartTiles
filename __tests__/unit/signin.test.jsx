@@ -2,7 +2,7 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { signIn } from 'next-auth/react'
-import SignInPage from '../../src/app/auth/signin/page.tsx'
+import SignInPage from '../../src/app/auth/signin/page.js'
 
 // Mock next-auth/react
 vi.mock('next-auth/react', () => ({
@@ -82,7 +82,7 @@ describe('Sign In Page', () => {
 
   it('should submit form with valid credentials', async () => {
     const mockSignIn = vi.mocked(signIn)
-    mockSignIn.mockResolvedValue({ ok: true, error: null } as any)
+    mockSignIn.mockResolvedValue({ ok: true, error: null })
 
     render(<SignInPage />)
 
@@ -107,7 +107,7 @@ describe('Sign In Page', () => {
 
   it('should show error message on sign in failure', async () => {
     const mockSignIn = vi.mocked(signIn)
-    mockSignIn.mockResolvedValue({ ok: false, error: 'Invalid credentials' } as any)
+    mockSignIn.mockResolvedValue({ ok: false, error: 'Invalid credentials' })
 
     render(<SignInPage />)
 
@@ -128,13 +128,13 @@ describe('Sign In Page', () => {
 
   it('should handle form submission with enter key', async () => {
     const mockSignIn = vi.mocked(signIn)
-    mockSignIn.mockResolvedValue({ ok: true, error: null } as any)
+    mockSignIn.mockResolvedValue({ ok: true, error: null })
 
     render(<SignInPage />)
 
     const emailInput = screen.getByLabelText(/Email/i)
     const passwordInput = screen.getByLabelText(/Password/i)
-    const form = screen.getByText('Sign in').closest('form')!
+    const form = screen.getByText('Sign in').closest('form')
 
     // Fill in credentials
     fireEvent.change(emailInput, { target: { value: 'test@example.com' } })
@@ -154,7 +154,7 @@ describe('Sign In Page', () => {
 
   it('should show loading state during submission', async () => {
     const mockSignIn = vi.mocked(signIn)
-    let resolveSignIn: (value: any) => void
+    let resolveSignIn
     mockSignIn.mockReturnValue(new Promise(resolve => {
       resolveSignIn = resolve
     }))
@@ -180,7 +180,7 @@ describe('Sign In Page', () => {
 
     // Resolve the sign in
     await act(async () => {
-      resolveSignIn!({ ok: true, error: null })
+      resolveSignIn({ ok: true, error: null })
     })
 
     expect(screen.queryByText('Signing in...')).toBeFalsy()
@@ -189,7 +189,7 @@ describe('Sign In Page', () => {
 
   it('should redirect to home after successful sign in', async () => {
     const mockSignIn = vi.mocked(signIn)
-    mockSignIn.mockResolvedValue({ ok: true, error: null } as any)
+    mockSignIn.mockResolvedValue({ ok: true, error: null })
 
     render(<SignInPage />)
 
