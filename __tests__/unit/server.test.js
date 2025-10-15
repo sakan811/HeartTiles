@@ -70,7 +70,7 @@ vi.mock('socket.io', () => ({
 // Mock process.env
 const originalEnv = process.env
 
-describe('Server Functions Tests', () => {
+describe('Server Functions Tests', async () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env = { ...originalEnv, NODE_ENV: 'test', AUTH_SECRET: 'test-secret' }
@@ -80,10 +80,10 @@ describe('Server Functions Tests', () => {
     process.env = originalEnv
   })
 
-  describe('validateRoomCode', () => {
-    it('should validate correct room codes', () => {
+  describe('validateRoomCode', async () => {
+    it('should validate correct room codes', async () => {
       // Import the actual function from server
-      const { validateRoomCode } = require('../../server.js')
+      const { validateRoomCode } = await import('../../server.js')
 
       expect(validateRoomCode('ABC123')).toBe(true)
       expect(validateRoomCode('DEF456')).toBe(true)
@@ -91,8 +91,8 @@ describe('Server Functions Tests', () => {
       expect(validateRoomCode('123456')).toBe(true)
     })
 
-    it('should reject invalid room codes', () => {
-      const { validateRoomCode } = require('../../server.js')
+    it('should reject invalid room codes', async () => {
+      const { validateRoomCode } = await import('../../server.js')
 
       expect(validateRoomCode('ABC')).toBe(false)
       expect(validateRoomCode('ABC1234')).toBe(false)
@@ -104,9 +104,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('validatePlayerName', () => {
-    it('should validate correct player names', () => {
-      const { validatePlayerName } = require('../../server.js')
+  describe('validatePlayerName', async () => {
+    it('should validate correct player names', async () => {
+      const { validatePlayerName } = await import('../../server.js')
 
       expect(validatePlayerName('Player1')).toBe(true)
       expect(validatePlayerName('Test User')).toBe(true)
@@ -114,8 +114,8 @@ describe('Server Functions Tests', () => {
       expect(validatePlayerName('ThisIsExactlyTwenty')).toBe(true)
     })
 
-    it('should reject invalid player names', () => {
-      const { validatePlayerName } = require('../../server.js')
+    it('should reject invalid player names', async () => {
+      const { validatePlayerName } = await import('../../server.js')
 
       expect(validatePlayerName('')).toBe(false)
       expect(validatePlayerName('   ')).toBe(false)
@@ -126,9 +126,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('generateTiles', () => {
-    it('should generate 8 tiles with correct structure', () => {
-      const { generateTiles } = require('../../server.js')
+  describe('generateTiles', async () => {
+    it('should generate 8 tiles with correct structure', async () => {
+      const { generateTiles } = await import('../../server.js')
 
       // Mock Math.random for predictable testing
       const originalRandom = Math.random
@@ -146,8 +146,8 @@ describe('Server Functions Tests', () => {
       Math.random = originalRandom
     })
 
-    it('should generate white tiles occasionally', () => {
-      const { generateTiles } = require('../../server.js')
+    it('should generate white tiles occasionally', async () => {
+      const { generateTiles } = await import('../../server.js')
 
       // Mock Math.random to generate white tiles (30% chance)
       const originalRandom = Math.random
@@ -163,9 +163,9 @@ describe('Server Functions Tests', () => {
   })
 
   describe('calculateScore', () => {
-    it('should calculate score for white tile', () => {
-      const { calculateScore } = require('../../server.js')
-      const { HeartCard } = require('../../src/lib/cards.js')
+    it('should calculate score for white tile', async () => {
+      const { calculateScore } = await import('../../server.js')
+      // Mock HeartCard import not needed since we're testing the server function directly
 
       // Mock HeartCard instance
       const mockHeart = { value: 2, color: 'red' }
@@ -175,8 +175,8 @@ describe('Server Functions Tests', () => {
       expect(score).toBe(2)
     })
 
-    it('should calculate double score for matching color', () => {
-      const { calculateScore } = require('../../server.js')
+    it('should calculate double score for matching color', async () => {
+      const { calculateScore } = await import('../../server.js')
       const heart = { value: 2, color: 'red' }
       const tile = { color: 'red' }
 
@@ -184,8 +184,8 @@ describe('Server Functions Tests', () => {
       expect(score).toBe(4)
     })
 
-    it('should calculate zero score for non-matching color', () => {
-      const { calculateScore } = require('../../server.js')
+    it('should calculate zero score for non-matching color', async () => {
+      const { calculateScore } = await import('../../server.js')
       const heart = { value: 2, color: 'red' }
       const tile = { color: 'yellow' }
 
@@ -194,9 +194,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('sanitizeInput', () => {
-    it('should trim and remove HTML tags', () => {
-      const { sanitizeInput } = require('../../server.js')
+  describe('sanitizeInput', async () => {
+    it('should trim and remove HTML tags', async () => {
+      const { sanitizeInput } = await import('../../server.js')
 
       expect(sanitizeInput('  hello world  ')).toBe('hello world')
       expect(sanitizeInput('<script>alert("xss")</script>')).toBe('scriptalert("xss")/script')
@@ -206,9 +206,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('findPlayerByUserId', () => {
-    it('should find player by user ID', () => {
-      const { findPlayerByUserId } = require('../../server.js')
+  describe('findPlayerByUserId', async () => {
+    it('should find player by user ID', async () => {
+      const { findPlayerByUserId } = await import('../../server.js')
       const room = {
         players: [
           { userId: 'user1', name: 'Player1' },
@@ -220,8 +220,8 @@ describe('Server Functions Tests', () => {
       expect(player).toEqual({ userId: 'user1', name: 'Player1' })
     })
 
-    it('should return undefined when player not found', () => {
-      const { findPlayerByUserId } = require('../../server.js')
+    it('should return undefined when player not found', async () => {
+      const { findPlayerByUserId } = await import('../../server.js')
       const room = {
         players: [
           { userId: 'user1', name: 'Player1' }
@@ -233,9 +233,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('findPlayerByName', () => {
-    it('should find player by name (case insensitive)', () => {
-      const { findPlayerByName } = require('../../server.js')
+  describe('findPlayerByName', async () => {
+    it('should find player by name (case insensitive)', async () => {
+      const { findPlayerByName } = await import('../../server.js')
       const room = {
         players: [
           { userId: 'user1', name: 'Player1' },
@@ -247,8 +247,8 @@ describe('Server Functions Tests', () => {
       expect(player).toEqual({ userId: 'user1', name: 'Player1' })
     })
 
-    it('should return undefined when player not found', () => {
-      const { findPlayerByName } = require('../../server.js')
+    it('should return undefined when player not found', async () => {
+      const { findPlayerByName } = await import('../../server.js')
       const room = {
         players: [
           { userId: 'user1', name: 'Player1' }
@@ -260,9 +260,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('validateRoomState', () => {
-    it('should validate correct room state', () => {
-      const { validateRoomState } = require('../../server.js')
+  describe('validateRoomState', async () => {
+    it('should validate correct room state', async () => {
+      const { validateRoomState } = await import('../../server.js')
       const room = {
         players: [],
         gameState: {
@@ -275,23 +275,23 @@ describe('Server Functions Tests', () => {
       expect(result.valid).toBe(true)
     })
 
-    it('should reject when room not found', () => {
-      const { validateRoomState } = require('../../server.js')
+    it('should reject when room not found', async () => {
+      const { validateRoomState } = await import('../../server.js')
       const result = validateRoomState(null)
       expect(result.valid).toBe(false)
       expect(result.error).toBe("Room not found")
     })
 
-    it('should reject when players state invalid', () => {
-      const { validateRoomState } = require('../../server.js')
+    it('should reject when players state invalid', async () => {
+      const { validateRoomState } = await import('../../server.js')
       const room = { players: "not an array", gameState: {} }
       const result = validateRoomState(room)
       expect(result.valid).toBe(false)
       expect(result.error).toBe("Invalid players state")
     })
 
-    it('should reject when game started but no current player', () => {
-      const { validateRoomState } = require('../../server.js')
+    it('should reject when game started but no current player', async () => {
+      const { validateRoomState } = await import('../../server.js')
       const room = {
         players: [],
         gameState: {
@@ -306,9 +306,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('validatePlayerInRoom', () => {
-    it('should validate player in room', () => {
-      const { validatePlayerInRoom } = require('../../server.js')
+  describe('validatePlayerInRoom', async () => {
+    it('should validate player in room', async () => {
+      const { validatePlayerInRoom } = await import('../../server.js')
       const room = {
         players: [
           { userId: 'user1', name: 'Player1' },
@@ -320,8 +320,8 @@ describe('Server Functions Tests', () => {
       expect(result.valid).toBe(true)
     })
 
-    it('should reject when player not in room', () => {
-      const { validatePlayerInRoom } = require('../../server.js')
+    it('should reject when player not in room', async () => {
+      const { validatePlayerInRoom } = await import('../../server.js')
       const room = {
         players: [
           { userId: 'user1', name: 'Player1' }
@@ -334,9 +334,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('validateTurn', () => {
-    it('should validate correct turn', () => {
-      const { validateTurn } = require('../../server.js')
+  describe('validateTurn', async () => {
+    it('should validate correct turn', async () => {
+      const { validateTurn } = await import('../../server.js')
       const room = {
         gameState: {
           gameStarted: true,
@@ -348,16 +348,16 @@ describe('Server Functions Tests', () => {
       expect(result.valid).toBe(true)
     })
 
-    it('should reject turn when game not started', () => {
-      const { validateTurn } = require('../../server.js')
+    it('should reject turn when game not started', async () => {
+      const { validateTurn } = await import('../../server.js')
       const room = { gameState: { gameStarted: false } }
       const result = validateTurn(room, 'user1')
       expect(result.valid).toBe(false)
       expect(result.error).toBe("Game not started")
     })
 
-    it('should reject turn when not current player', () => {
-      const { validateTurn } = require('../../server.js')
+    it('should reject turn when not current player', async () => {
+      const { validateTurn } = await import('../../server.js')
       const room = {
         gameState: {
           gameStarted: true,
@@ -371,9 +371,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('validateDeckState', () => {
-    it('should validate correct deck state', () => {
-      const { validateDeckState } = require('../../server.js')
+  describe('validateDeckState', async () => {
+    it('should validate correct deck state', async () => {
+      const { validateDeckState } = await import('../../server.js')
       const room = {
         gameState: {
           deck: { cards: 16, type: 'hearts' }
@@ -384,16 +384,16 @@ describe('Server Functions Tests', () => {
       expect(result.valid).toBe(true)
     })
 
-    it('should reject when deck missing', () => {
-      const { validateDeckState } = require('../../server.js')
+    it('should reject when deck missing', async () => {
+      const { validateDeckState } = await import('../../server.js')
       const room = { gameState: {} }
       const result = validateDeckState(room)
       expect(result.valid).toBe(false)
       expect(result.error).toBe("Invalid deck state")
     })
 
-    it('should reject when deck count invalid', () => {
-      const { validateDeckState } = require('../../server.js')
+    it('should reject when deck count invalid', async () => {
+      const { validateDeckState } = await import('../../server.js')
       const room = {
         gameState: {
           deck: { cards: -1, type: 'hearts' }
@@ -406,9 +406,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('validateCardDrawLimit and recordCardDraw', () => {
-    it('should track card draw limits correctly', () => {
-      const { validateCardDrawLimit, recordCardDraw } = require('../../server.js')
+  describe('validateCardDrawLimit and recordCardDraw', async () => {
+    it('should track card draw limits correctly', async () => {
+      const { validateCardDrawLimit, recordCardDraw } = await import('../../server.js')
       const room = { gameState: {} }
 
       // Initial state - no actions taken
@@ -431,9 +431,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('resetPlayerActions', () => {
-    it('should reset player actions', () => {
-      const { resetPlayerActions } = require('../../server.js')
+  describe('resetPlayerActions', async () => {
+    it('should reset player actions', async () => {
+      const { resetPlayerActions } = await import('../../server.js')
       const room = {
         gameState: {
           playerActions: {
@@ -450,16 +450,16 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('checkGameEndConditions', () => {
-    it('should not end game when not started', () => {
-      const { checkGameEndConditions } = require('../../server.js')
+  describe('checkGameEndConditions', async () => {
+    it('should not end game when not started', async () => {
+      const { checkGameEndConditions } = await import('../../server.js')
       const room = { gameState: { gameStarted: false } }
       const result = checkGameEndConditions(room)
       expect(result.shouldEnd).toBe(false)
     })
 
-    it('should end game when all tiles filled', () => {
-      const { checkGameEndConditions } = require('../../server.js')
+    it('should end game when all tiles filled', async () => {
+      const { checkGameEndConditions } = await import('../../server.js')
       const room = {
         gameState: {
           gameStarted: true,
@@ -475,8 +475,8 @@ describe('Server Functions Tests', () => {
       expect(result.reason).toBe("All tiles are filled")
     })
 
-    it('should end game when both decks empty and no grace period', () => {
-      const { checkGameEndConditions } = require('../../server.js')
+    it('should end game when both decks empty and no grace period', async () => {
+      const { checkGameEndConditions } = await import('../../server.js')
       const room = {
         gameState: {
           gameStarted: true,
@@ -492,9 +492,9 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('checkAndExpireShields', () => {
-    it('should decrement shield turns and remove expired shields', () => {
-      const { checkAndExpireShields } = require('../../server.js')
+  describe('checkAndExpireShields', async () => {
+    it('should decrement shield turns and remove expired shields', async () => {
+      const { checkAndExpireShields } = await import('../../server.js')
       const room = {
         gameState: {
           shields: {
@@ -511,8 +511,8 @@ describe('Server Functions Tests', () => {
       expect(room.gameState.shields.user2).toBeUndefined()
     })
 
-    it('should handle missing shields gracefully', () => {
-      const { checkAndExpireShields } = require('../../server.js')
+    it('should handle missing shields gracefully', async () => {
+      const { checkAndExpireShields } = await import('../../server.js')
       const room1 = { gameState: {} }
       const room2 = { gameState: { shields: null } }
 
@@ -523,7 +523,7 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('Connection Management', () => {
+  describe('Connection Management', async () => {
     let connectionPool
     const MAX_CONNECTIONS_PER_IP = 5
 
@@ -531,8 +531,8 @@ describe('Server Functions Tests', () => {
       connectionPool = new Map()
     })
 
-    it('should get client IP from socket', () => {
-      const { getClientIP } = require('../../server.js')
+    it('should get client IP from socket', async () => {
+      const { getClientIP } = await import('../../server.js')
       const mockSocket = {
         handshake: { address: '192.168.1.1' },
         conn: { remoteAddress: '192.168.1.2' }
@@ -542,8 +542,8 @@ describe('Server Functions Tests', () => {
       expect(ip).toBe('192.168.1.1')
     })
 
-    it('should fallback to conn.remoteAddress', () => {
-      const { getClientIP } = require('../../server.js')
+    it('should fallback to conn.remoteAddress', async () => {
+      const { getClientIP } = await import('../../server.js')
       const mockSocket = {
         handshake: {},
         conn: { remoteAddress: '192.168.1.2' }
@@ -554,14 +554,14 @@ describe('Server Functions Tests', () => {
     })
   })
 
-  describe('Turn Lock Management', () => {
+  describe('Turn Lock Management', async () => {
     let turnLocks
 
     beforeEach(() => {
       turnLocks = new Map()
     })
 
-    it('should acquire and release turn locks', () => {
+    it('should acquire and release turn locks', async () => {
       // Manually implement turn lock functions for testing
       function acquireTurnLock(roomCode, userId) {
         const lockKey = `${roomCode}_${userId}`
