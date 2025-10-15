@@ -238,7 +238,7 @@ describe('Cards Missing Lines Coverage Tests', () => {
 
       expect(card).toBeInstanceOf(HeartCard)
       expect(card.color).toBe('yellow')
-      expect(card.value).toBe(3)
+      expect(card.value).toBe(2)
       expect(card.emoji).toBe('💛')
     })
 

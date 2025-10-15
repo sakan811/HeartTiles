@@ -72,7 +72,7 @@ describe('Shield Card Gameplay Integration', () => {
       // Verify shield state
       const shield = mockRoom.gameState.shields[player1Id];
       expect(shield.active).toBe(true);
-      expect(shield.remainingTurns).toBe(3);
+      expect(shield.remainingTurns).toBe(2);
       expect(shield.protectedPlayerId).toBe(player1Id);
     });
 
@@ -89,7 +89,7 @@ describe('Shield Card Gameplay Integration', () => {
       const result = shieldCard.executeEffect(mockRoom.gameState, player1Id);
 
       expect(result.reinforced).toBe(true);
-      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(3);
+      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
     });
   });
 

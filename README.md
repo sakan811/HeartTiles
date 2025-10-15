@@ -111,7 +111,7 @@ Recycle cards transform any empty, non-white tile into a white tile.
 
 #### Shield 🛡️ - Protection
 
-Shield cards protect your hearts and tiles for 3 turns.
+Shield cards protect your hearts and tiles for 2 any-player turns.
 
 **Protection Rules**:
 - **Wind Protection**: Blocks all Wind cards targeting your hearts while shield is active
@@ -121,7 +121,7 @@ Shield cards protect your hearts and tiles for 3 turns.
 **Activation Rules**:
 - Only one player can have an active shield at any time
 - You cannot activate a shield if your opponent has one active
-- You can use another Shield card to reset your 3-turn timer
+- You can use another Shield card to reset your 2-turn timer
 
 ### Game Elements
 

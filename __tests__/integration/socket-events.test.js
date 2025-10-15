@@ -586,7 +586,7 @@ describe('Socket.IO Events Integration Tests', () => {
         const response = await waitFor(currentClient, 'magic-card-used');
         expect(response.actionResult.type).toBe('shield');
         expect(response.actionResult.activatedFor).toBe(currentPlayer.userId);
-        expect(response.actionResult.remainingTurns).toBe(3);
+        expect(response.actionResult.remainingTurns).toBe(2);
         expect(response.shields[currentPlayer.userId]).toBeDefined();
       }
     });

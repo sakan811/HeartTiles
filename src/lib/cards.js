@@ -190,7 +190,7 @@ export class RecycleCard extends MagicCard {
 // Shield magic card class
 export class ShieldCard extends MagicCard {
   constructor(id) {
-    super(id, 'shield', '🛡️', 'Shield Card', 'Self-activating: Protect your tiles and hearts from opponent\'s magic cards until end of your next turn');
+    super(id, 'shield', '🛡️', 'Shield Card', 'Self-activating: Protect your tiles and hearts from opponent\'s magic cards for 2 turns');
   }
 
   canTargetTile() {
@@ -216,7 +216,7 @@ export class ShieldCard extends MagicCard {
       // Allow reinforcement but reset the duration
       gameState.shields[playerId] = {
         active: true,
-        remainingTurns: 3, // Reset to full duration
+        remainingTurns: 2, // Reset to full duration
         activatedAt: Date.now(), // Timestamp for metadata tests
         activatedTurn: gameState.turnCount || 1, // Track activation turn for auto-calculation
         turnActivated: gameState.turnCount || 1, // Legacy property for test compatibility
@@ -229,17 +229,17 @@ export class ShieldCard extends MagicCard {
         type: 'shield',
         activatedFor: playerId,
         protectedPlayerId: playerId,
-        remainingTurns: 3, // Always show full duration on activation/reinforcement
-        message: `Shield reinforced! Protection extended for 3 more turns.`,
+        remainingTurns: 2, // Always show full duration on activation/reinforcement
+        message: `Shield reinforced! Protection extended for 2 more turns.`,
         reinforced: true
       };
     }
 
-    // Activate new shield for player (duration: 3 turns total)
-    // Shield starts at 3 and decreases by 1 at the end of each player's turn
+    // Activate new shield for player (duration: 2 turns total)
+    // Shield starts at 2 and decreases by 1 at the end of each player's turn
     gameState.shields[playerId] = {
       active: true,
-      remainingTurns: 3, // Set initial value for unit tests and manual decrements
+      remainingTurns: 2, // Set initial value for unit tests and manual decrements
       activatedAt: Date.now(), // Timestamp for metadata tests
       activatedTurn: gameState.turnCount || 1, // Track activation turn for auto-calculation
       turnActivated: gameState.turnCount || 1, // Legacy property for test compatibility
@@ -252,8 +252,8 @@ export class ShieldCard extends MagicCard {
       type: 'shield',
       activatedFor: playerId,
       protectedPlayerId: playerId,
-      remainingTurns: 3, // Always show full duration on activation
-      message: `Shield activated! Your tiles and hearts are protected for 3 turns.`,
+      remainingTurns: 2, // Always show full duration on activation
+      message: `Shield activated! Your tiles and hearts are protected for 2 turns.`,
       reinforced: false
     };
   }
@@ -271,9 +271,9 @@ export class ShieldCard extends MagicCard {
     if (shield.activatedTurn !== undefined) {
       // If currentTurnCount is provided, use turn-based calculation
       if (currentTurnCount !== undefined) {
-        // Shield lasts for 3 turns: activation turn + 2 more turns
-        // Formula: (activatedTurn + 3) - currentTurnCount
-        const expirationTurn = shield.activatedTurn + 3;
+        // Shield lasts for 2 turns: activation turn + 1 more turn
+        // Formula: (activatedTurn + 2) - currentTurnCount
+        const expirationTurn = shield.activatedTurn + 2;
         const calculatedRemaining = expirationTurn - currentTurnCount;
         return calculatedRemaining > 0;
       }
@@ -300,9 +300,9 @@ export class ShieldCard extends MagicCard {
     if (shield.activatedTurn !== undefined) {
       // If currentTurnCount is not provided, we can't calculate turn-based duration
       if (currentTurnCount !== undefined) {
-        // Shield lasts for 3 turns: activation turn + 2 more turns
-        // Formula: (activatedTurn + 3) - currentTurnCount
-        const expirationTurn = shield.activatedTurn + 3;
+        // Shield lasts for 2 turns: activation turn + 1 more turn
+        // Formula: (activatedTurn + 2) - currentTurnCount
+        const expirationTurn = shield.activatedTurn + 2;
         const calculatedRemaining = expirationTurn - currentTurnCount;
         const finalRemaining = Math.max(0, calculatedRemaining);
         return finalRemaining;

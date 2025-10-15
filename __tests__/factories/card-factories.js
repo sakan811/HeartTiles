@@ -115,7 +115,7 @@ export const createShieldCard = (overrides = {}) => {
       if (!gameState.shields) gameState.shields = {};
       gameState.shields[playerId] = {
         active: true,
-        remainingTurns: 3,
+        remainingTurns: 2,
         activatedAt: Date.now(),
         activatedTurn: gameState.turnCount || 1,
         activatedBy: playerId,
@@ -125,8 +125,8 @@ export const createShieldCard = (overrides = {}) => {
         type: 'shield',
         activatedFor: playerId,
         protectedPlayerId: playerId,
-        remainingTurns: 3,
-        message: `Shield activated! Your tiles and hearts are protected for 3 turns.`,
+        remainingTurns: 2,
+        message: `Shield activated! Your tiles and hearts are protected for 2 turns.`,
         reinforced: false
       };
     }),
@@ -134,7 +134,7 @@ export const createShieldCard = (overrides = {}) => {
       if (!shield) return false;
       if (shield.remainingTurns === 0) return false;
       if (shield.activatedTurn !== undefined && currentTurnCount !== undefined) {
-        const expirationTurn = shield.activatedTurn + 3;
+        const expirationTurn = shield.activatedTurn + 2;
         return currentTurnCount < expirationTurn;
       }
       return shield.remainingTurns > 0;

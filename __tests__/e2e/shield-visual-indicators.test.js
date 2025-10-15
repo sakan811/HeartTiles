@@ -26,7 +26,7 @@ describe('Shield Card Visual Indicators', () => {
       const mockShields = {
         [player1Id]: {
           active: true,
-          remainingTurns: 3,
+          remainingTurns: 2,
           activatedAt: Date.now(),
           activatedBy: player1Id,
           turnActivated: 1,
@@ -36,14 +36,14 @@ describe('Shield Card Visual Indicators', () => {
 
       // This test would require mocking the component state
       // In a real implementation, you'd test the rendered component
-      expect(mockShields[player1Id].remainingTurns).toBe(3);
+      expect(mockShields[player1Id].remainingTurns).toBe(2);
     });
 
     it('should display red shield icon for opponent\'s active shield', () => {
       const mockShields = {
         [player2Id]: {
           active: true,
-          remainingTurns: 3,
+          remainingTurns: 2,
           activatedAt: Date.now(),
           activatedBy: player2Id,
           turnActivated: 1,
@@ -51,7 +51,7 @@ describe('Shield Card Visual Indicators', () => {
         }
       };
 
-      expect(mockShields[player2Id].remainingTurns).toBe(3);
+      expect(mockShields[player2Id].remainingTurns).toBe(2);
     });
 
     it('should show shield icons on ALL tiles when any player has active shield', () => {
@@ -65,7 +65,7 @@ describe('Shield Card Visual Indicators', () => {
       const mockShields = {
         [player1Id]: {
           active: true,
-          remainingTurns: 3,
+          remainingTurns: 2,
           protectedPlayerId: player1Id
         }
       };
@@ -73,7 +73,7 @@ describe('Shield Card Visual Indicators', () => {
       // When player1 has active shield, ALL tiles should show shield indicator
       // This provides visual feedback to both players about the protection status
       expect(mockShields[player1Id].active).toBe(true);
-      expect(mockShields[player1Id].remainingTurns).toBe(3);
+      expect(mockShields[player1Id].remainingTurns).toBe(2);
 
       // All tiles should show shield icons when any player has active shield
       const totalTiles = mockTiles.length;
@@ -118,7 +118,7 @@ describe('Shield Card Visual Indicators', () => {
       const mockShields = {
         [player1Id]: {
           active: true,
-          remainingTurns: 3,
+          remainingTurns: 2,
           protectedPlayerId: player1Id
         }
       };
@@ -138,7 +138,7 @@ describe('Shield Card Visual Indicators', () => {
       const mockShields = {
         [player2Id]: {
           active: true,
-          remainingTurns: 3,
+          remainingTurns: 2,
           protectedPlayerId: player2Id
         }
       };
@@ -146,7 +146,7 @@ describe('Shield Card Visual Indicators', () => {
       // When opponent has active shield, ALL tiles should show shield indicator
       // This provides a visual cue to the current player that opponent is protected
       expect(mockShields[player2Id].active).toBe(true);
-      expect(mockShields[player2Id].remainingTurns).toBe(3);
+      expect(mockShields[player2Id].remainingTurns).toBe(2);
 
       // All tiles should be protected when opponent has active shield
       const totalTiles = mockTiles.length;
@@ -195,7 +195,7 @@ describe('Shield Card Visual Indicators', () => {
       const mockShields = {
         [player1Id]: {
           active: true,
-          remainingTurns: 3,
+          remainingTurns: 2,
           protectedPlayerId: player1Id
         },
         [player2Id]: {
@@ -207,7 +207,7 @@ describe('Shield Card Visual Indicators', () => {
 
       // Both shields should be displayed
       expect(Object.keys(mockShields)).toHaveLength(2);
-      expect(mockShields[player1Id].remainingTurns).toBe(3);
+      expect(mockShields[player1Id].remainingTurns).toBe(2);
       expect(mockShields[player2Id].remainingTurns).toBe(1);
     });
 
@@ -233,7 +233,7 @@ describe('Shield Card Visual Indicators', () => {
         },
         [player2Id]: {
           active: true,
-          remainingTurns: 3,
+          remainingTurns: 2,
           protectedPlayerId: player2Id
         }
       };
@@ -277,7 +277,7 @@ describe('Shield Card Visual Indicators', () => {
 
       const reinforcementMessage = myShield && myShield.remainingTurns > 0
         ? `Shield active (${myShield.remainingTurns} turns left) - Click to reinforce`
-        : 'Click to activate shield (blocks magic cards for 3 turns)';
+        : 'Click to activate shield (blocks magic cards for 2 turns)';
 
       expect(reinforcementMessage).toContain('Shield active (2 turns left) - Click to reinforce');
     });
@@ -345,12 +345,12 @@ describe('Shield Card Visual Indicators', () => {
       let shieldTurnCount = 1;
       const shield = {
         turnActivated: 1,
-        remainingTurns: 3
+        remainingTurns: 2
       };
 
-      // Turn 1: 3 turns remaining
+      // Turn 1: 2 turns remaining
       shieldTurnCount = 1;
-      expect(shield.remainingTurns).toBe(3);
+      expect(shield.remainingTurns).toBe(2);
 
       // Turn 2: 2 turns remaining
       shieldTurnCount = 2;
