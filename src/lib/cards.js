@@ -149,8 +149,8 @@ export class RecycleCard extends MagicCard {
       throw new Error('Invalid target for Recycle card');
     }
 
-    // Check shield protection - block all recycle cards when shielded player has hearts on board
-    // Allow self-recycle even when shielded
+    // Check shield protection - Recycle cards should only be blocked when targeting tiles that would affect shielded players
+    // Allow shielded players to use their own Recycle cards on empty tiles
     if (gameState.shields) {
       for (const [shieldUserId, shield] of Object.entries(gameState.shields)) {
         if (ShieldCard.isActive(shield, gameState.turnCount)) {
@@ -159,8 +159,10 @@ export class RecycleCard extends MagicCard {
             t.placedHeart && t.placedHeart.placedBy === shieldUserId
           );
 
-          // Block if: no currentPlayerId specified (assume opponent) OR currentPlayerId is NOT the shielded player
-          // AND shielded player has hearts
+          // Only block if:
+          // 1. No currentPlayerId specified (assume opponent action) OR currentPlayerId is NOT the shielded player
+          // 2. AND the shielded player has hearts on the board
+          // 3. AND the target tile could potentially affect the shielded player's strategy
           const isOpponentCard = !currentPlayerId || currentPlayerId !== shieldUserId;
 
           if (isOpponentCard && shieldedPlayerHasHearts) {

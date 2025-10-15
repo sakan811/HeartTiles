@@ -1289,6 +1289,18 @@ function checkAndExpireShields(room) {
                 return;
               }
 
+              // IMPORTANT: Check shield protection BEFORE subtracting score
+              const opponentId = tile.placedHeart.placedBy;
+              const currentTurnCount = room.gameState.turnCount || 1;
+              if (room.gameState.shields && room.gameState.shields[opponentId]) {
+                const shield = room.gameState.shields[opponentId];
+                if (ShieldCard.isActive(shield, currentTurnCount)) {
+                  const remainingTurns = ShieldCard.getRemainingTurns(shield, currentTurnCount);
+                  socket.emit("room-error", `Opponent is protected by Shield (${remainingTurns} turns remaining)`);
+                  return;
+                }
+              }
+
               // Get the heart data before executing the effect to calculate score subtraction
               const placedHeart = tile.placedHeart;
               if (placedHeart && placedHeart.score) {

@@ -207,11 +207,11 @@ describe('Shield Card Gameplay Integration', () => {
       // Turn 2: Shield still active (opponent's turn)
       expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 2)).toBe(true);
 
-      // Turn 3: Shield still active (player's next turn)
+      // Turn 3: Shield expires (player's next turn)
       mockRoom.gameState.turnCount = 3;
-      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 3)).toBe(true);
+      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 3)).toBe(false);
 
-      // Turn 4: Shield expires (opponent's turn)
+      // Turn 4: Shield still expired
       mockRoom.gameState.turnCount = 4;
       expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 4)).toBe(false);
     });

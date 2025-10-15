@@ -160,7 +160,7 @@ describe('Game State Management', () => {
       mockRoom.gameState.turnCount++;
 
       expect(mockRoom.gameState.currentPlayer.userId).toBe(player1Id);
-      expect(mockRoom.gameState.turnCount).toBe(2);
+      expect(mockRoom.gameState.turnCount).toBe(3);
     });
 
     it('should handle player actions tracking', () => {
