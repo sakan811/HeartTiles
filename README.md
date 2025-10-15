@@ -7,13 +7,16 @@ Inspired by Kitty Card Game from Love and Deepspace
 ## Status
 
 [![Vitest Tests](https://github.com/sakan811/HeartTiles/actions/workflows/web-app-test.yml/badge.svg)](https://github.com/sakan811/HeartTiles/actions/workflows/web-app-test.yml)
+
 ## Quick Start
 
 ### Prerequisites
+
 - Node.js 18+ and pnpm
 - MongoDB (local or cloud)
 
 ### Setup
+
 ```bash
 # Clone and install dependencies
 git clone https://github.com/sakan811/HeartTiles.git
@@ -31,7 +34,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-Visit http://localhost:3000 to start playing!
+Visit <http://localhost:3000> to start playing!
 
 ## Game Mechanics
 
@@ -48,6 +51,7 @@ Heart Tiles is a strategic card game where players compete for the highest score
 **Starting the Game**: Each player receives 3 heart cards and 2 magic cards. A random player gets the first turn, and players alternate turns throughout the match.
 
 **Winning Conditions**: The game ends when:
+
 1. All 8 tiles are filled with hearts
 2. BOTH the heart deck AND magic deck are empty AND the current player ends their turn
 
@@ -61,6 +65,7 @@ During your turn, you can perform these actions in any order:
 4. **End Turn**: Pass control to your opponent
 
 **Important Rules**:
+
 - You must draw both a heart and magic card (if available) before ending your turn
 - You can end your turn without placing cards or using magic cards
 - Each player can only draw 1 heart and 1 magic card per turn
@@ -83,6 +88,7 @@ Hearts come in three colors (red ❤️, yellow 💛, and green 💚) with point
 ### Magic Cards
 
 The game contains 16 heart cards and 16 magic cards with this distribution:
+
 - **Wind (💨)**: 6 cards
 - **Recycle (♻️)**: 5 cards
 - **Shield (🛡️)**: 5 cards
@@ -92,10 +98,12 @@ The game contains 16 heart cards and 16 magic cards with this distribution:
 Wind cards remove an opponent's heart from any tile.
 
 **Targeting Rules**:
+
 - Can only target tiles occupied by opponent's hearts
 - Cannot target empty tiles or your own hearts
 
 **Tile Color Rules**: When Wind removes a heart, the tile returns to its original color:
+
 - Red heart removed from red tile → Tile remains red (🟥)
 - Red heart removed from white tile → Tile becomes white (⬜)
 - Yellow heart removed from yellow tile → Tile remains yellow (🟨)
@@ -106,6 +114,7 @@ Wind cards remove an opponent's heart from any tile.
 Recycle cards transform any empty, non-white tile into a white tile.
 
 **Targeting Rules**:
+
 - Can only target empty tiles (no hearts present)
 - Can only target colored tiles (red, yellow, green) - not white tiles
 
@@ -114,11 +123,13 @@ Recycle cards transform any empty, non-white tile into a white tile.
 Shield cards protect your hearts and tiles for 2 any-player turns.
 
 **Protection Rules**:
+
 - **Wind Protection**: Blocks all Wind cards targeting your hearts while shield is active
 - **Recycle Protection**: Blocks all opponent Recycle cards from converting colored tiles to white while shield is active
-- You can still place hearts and use your own Recycle cards while shielded
+- You can still place hearts while shielded
 
 **Activation Rules**:
+
 - Only one player can have an active shield at any time
 - You cannot activate a shield if your opponent has one active
 - You can use another Shield card to reset your 2-turn timer
@@ -128,6 +139,7 @@ Shield cards protect your hearts and tiles for 2 any-player turns.
 **Tiles**: 8 tiles with random colors (white, red, yellow, green)
 
 **Visual Feedback**:
+
 - Green rings highlight your placed hearts
 - Red rings show opponent's hearts
 - Number badges display points earned on each heart at the upper-right of the tile
@@ -147,6 +159,7 @@ Shield cards protect your hearts and tiles for 2 any-player turns.
 ## Development
 
 ### Tech Stack
+
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
 - **Backend**: Node.js, Socket.IO, MongoDB, Mongoose
 - **Auth**: NextAuth with MongoDB user storage
@@ -154,6 +167,7 @@ Shield cards protect your hearts and tiles for 2 any-player turns.
 - **Docker**: MongoDB development environment
 
 ### Commands
+
 ```bash
 pnpm dev          # Development server
 pnpm build        # Production build
@@ -163,6 +177,7 @@ pnpm docker:start # Start MongoDB
 ```
 
 ### Architecture
+
 - **Server-first**: All game state lives on server
 - **Real-time**: Socket.IO for multiplayer synchronization
 - **Persistent**: MongoDB for rooms, users, and game data
