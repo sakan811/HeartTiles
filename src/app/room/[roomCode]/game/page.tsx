@@ -805,7 +805,7 @@ export default function GameRoomPage() {
                 <p className="text-purple-400">
                   Selected: {selectedMagicCard.emoji} {selectedMagicCard.name}
                   <span className="block text-xs text-gray-300 mt-1">
-                    Magic cards used this turn: {(playerActions[myPlayerId]?.magicCardsUsed || 0)}/2
+                    Magic cards used this turn: {(playerActions[myPlayerId]?.magicCardsUsed || 0)}/1
                   </span>
                 </p>
                 <p className="text-sm text-gray-300">
@@ -872,7 +872,7 @@ export default function GameRoomPage() {
                       <span>Hearts Placed: {(playerActions[myPlayerId]?.heartsPlaced || 0)}/2</span>
                     </div>
                     <div className="text-purple-300">
-                      <span>Magic Cards Used: {(playerActions[myPlayerId]?.magicCardsUsed || 0)}/2</span>
+                      <span>Magic Cards Used: {(playerActions[myPlayerId]?.magicCardsUsed || 0)}/1</span>
                     </div>
                   </div>
                 </div>
