@@ -1,6 +1,10 @@
 import { vi } from 'vitest'
+import React from 'react'
 import { ShieldCard } from '../src/lib/cards'
 import '@testing-library/jest-dom'
+
+// Make React available globally for all tests
+vi.stubGlobal('React', React)
 
 // Set up environment variables for testing
 process.env.NODE_ENV = 'test'
