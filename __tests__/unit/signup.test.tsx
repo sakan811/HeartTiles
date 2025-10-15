@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { useRouter } from 'next/navigation'
 import SignUpPage from '../../src/app/auth/signup/page.tsx'
 
 // Mock next/navigation
+const mockUseRouter = vi.fn()
+const mockUseSearchParams = vi.fn()
+
 vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(),
-  useSearchParams: vi.fn()
+  useRouter: () => mockUseRouter(),
+  useSearchParams: () => mockUseSearchParams()
 }))
 
 // Mock fetch for API calls
@@ -17,16 +19,17 @@ describe('Sign Up Page', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useRouter).mockReturnValue({
+
+    mockUseRouter.mockReturnValue({
       push: mockPush,
       refresh: vi.fn(),
       back: vi.fn(),
       forward: vi.fn(),
       replace: vi.fn(),
       prefetch: vi.fn()
-    } as any)
+    })
 
-    vi.mocked(useSearchParams).mockReturnValue({
+    mockUseSearchParams.mockReturnValue({
       get: vi.fn(),
       entries: [],
       forEach: vi.fn(),
@@ -34,7 +37,7 @@ describe('Sign Up Page', () => {
       values: [],
       has: vi.fn(),
       toString: vi.fn()
-    } as any)
+    })
 
     vi.mocked(fetch).mockClear()
   })

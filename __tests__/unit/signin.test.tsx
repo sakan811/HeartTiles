@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import SignInPage from '../../src/app/auth/signin/page.tsx'
 
 // Mock next-auth/react
@@ -11,9 +10,12 @@ vi.mock('next-auth/react', () => ({
 }))
 
 // Mock next/navigation
+const mockUseRouter = vi.fn()
+const mockUseSearchParams = vi.fn()
+
 vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(),
-  useSearchParams: vi.fn()
+  useRouter: () => mockUseRouter(),
+  useSearchParams: () => mockUseSearchParams()
 }))
 
 describe('Sign In Page', () => {
@@ -21,16 +23,17 @@ describe('Sign In Page', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useRouter).mockReturnValue({
+
+    mockUseRouter.mockReturnValue({
       push: mockPush,
       refresh: vi.fn(),
       back: vi.fn(),
       forward: vi.fn(),
       replace: vi.fn(),
       prefetch: vi.fn()
-    } as any)
+    })
 
-    vi.mocked(useSearchParams).mockReturnValue({
+    mockUseSearchParams.mockReturnValue({
       get: vi.fn(),
       entries: [],
       forEach: vi.fn(),
@@ -38,7 +41,7 @@ describe('Sign In Page', () => {
       values: [],
       has: vi.fn(),
       toString: vi.fn()
-    } as any)
+    })
   })
 
   it('should render sign in form', () => {
@@ -223,7 +226,7 @@ describe('Sign In Page', () => {
   })
 
   it('should handle redirect parameter from URL', async () => {
-    vi.mocked(useSearchParams).mockReturnValue({
+    mockUseSearchParams.mockReturnValue({
       get: (key: string) => key === 'redirect' ? '/room/ABC123' : null,
       entries: [],
       forEach: vi.fn(),
@@ -231,7 +234,7 @@ describe('Sign In Page', () => {
       values: [],
       has: vi.fn(),
       toString: vi.fn()
-    } as any)
+    })
 
     const mockSignIn = vi.mocked(signIn)
     mockSignIn.mockResolvedValue({ ok: true, error: null } as any)
