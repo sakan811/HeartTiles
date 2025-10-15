@@ -576,11 +576,53 @@ export class MockSocketServer {
       magicDeck: room.gameState.magicDeck,
       turnCount: room.gameState.turnCount,
       gameStarted: true,
-      shields: room.gameState.shields || {}
+      shields: room.gameState.shields || {},
+      playerActions: room.gameState.playerActions || {}
     };
 
+    // Send personalized game-start data to each player
+    console.log(`Mock server: Attempting to send game-start to ${room.players.length} players`);
+    console.log(`Mock server: Available sockets: ${Array.from(this.io.sockets.sockets.values()).length}`);
+
+    const allSockets = Array.from(this.io.sockets.sockets.values());
+    console.log(`Mock server: Available socket user IDs: ${allSockets.map(s => s.data.userId).join(', ')}`);
+
+    // Always broadcast to room first to ensure the event is sent
     console.log(`Mock server: Broadcasting game-start to room ${roomCode}`);
     this.io.to(roomCode).emit('game-start', gameStartData);
+
+    // Also try to send personalized data to each player
+    room.players.forEach(player => {
+      const personalizedData = {
+        ...gameStartData,
+        playerId: player.userId
+      };
+
+      console.log(`Mock server: Looking for socket for user ${player.userId} (${player.name})`);
+
+      // Try to find socket by userId first, then by matching with auth token
+      let playerSocket = allSockets.find(s => s.data.userId === player.userId);
+
+      if (!playerSocket) {
+        // Fallback: try to match by checking if socket is in the room
+        const socketsInRoom = allSockets.filter(s => s.rooms.has(roomCode));
+        console.log(`Mock server: Found ${socketsInRoom.length} sockets in room ${roomCode}`);
+        playerSocket = socketsInRoom.find(s => {
+          // Check if this socket belongs to the player by comparing auth data
+          const authUserId = s.auth?.token?.id || s.handshake?.auth?.token?.id;
+          return authUserId === player.userId;
+        });
+      }
+
+      if (playerSocket) {
+        console.log(`Mock server: Found socket for ${player.name}, emitting personalized game-start`);
+        playerSocket.emit('game-start', personalizedData);
+      } else {
+        console.log(`Mock server: No socket found for ${player.name} (${player.userId})`);
+      }
+    });
+
+    console.log(`Mock server: Broadcasting game-start to room ${roomCode}`);
   }
 
   ensurePlayerActions(room, userId) {
