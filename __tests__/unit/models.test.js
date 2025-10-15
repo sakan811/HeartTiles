@@ -316,8 +316,7 @@ describe('Models Tests', () => {
       // Create mock user context
       const mockUser = {
         isModified: vi.fn().mockReturnValue(true),
-        password: 'plainPassword',
-        save: vi.fn().mockResolvedValue({})
+        password: 'plainPassword'
       }
 
       // Call the middleware function
@@ -326,8 +325,11 @@ describe('Models Tests', () => {
       // Verify isModified was called for password field
       expect(mockUser.isModified).toHaveBeenCalledWith('password')
 
-      // Verify save was called after password hashing
-      expect(mockUser.save).toHaveBeenCalled()
+      // Verify next was called after password hashing (not save - middleware doesn't call save)
+      expect(mockNext).toHaveBeenCalled()
+
+      // Verify password was hashed and modified
+      expect(mockUser.password).toBe('hashed_plainPassword_12')
     })
 
     it('should skip password hashing when password not modified', async () => {
@@ -350,8 +352,7 @@ describe('Models Tests', () => {
       // Create mock user context where password is not modified
       const mockUser = {
         isModified: vi.fn().mockReturnValue(false),
-        password: 'existingHashedPassword',
-        save: vi.fn().mockResolvedValue({})
+        password: 'existingHashedPassword'
       }
 
       // Call the middleware function
@@ -360,9 +361,11 @@ describe('Models Tests', () => {
       // Verify isModified was called for password field
       expect(mockUser.isModified).toHaveBeenCalledWith('password')
 
-      // Verify next was called without saving (password not modified)
+      // Verify next was called (password not modified, so skip hashing)
       expect(mockNext).toHaveBeenCalled()
-      expect(mockUser.save).not.toHaveBeenCalled()
+
+      // Verify password was not changed (middleware doesn't call save)
+      expect(mockUser.password).toBe('existingHashedPassword')
     })
 
     it('should hash password with correct salt rounds', async () => {
@@ -388,8 +391,7 @@ describe('Models Tests', () => {
       // Create mock user context
       const mockUser = {
         isModified: vi.fn().mockReturnValue(true),
-        password: 'newPassword',
-        save: vi.fn().mockResolvedValue({})
+        password: 'newPassword'
       }
 
       // Call the middleware function
