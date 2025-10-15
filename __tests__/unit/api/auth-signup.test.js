@@ -220,7 +220,7 @@ describe('Signup API Route Tests', () => {
       await POST(mockRequest)
 
       // Should attempt to connect since not connected
-      expect(mockMongoose.default.connect).toHaveBeenCalledWith('mongodb://localhost:27017/heart-tiles')
+      expect(mockMongoose.default.connect).toHaveBeenCalledWith('mongodb://localhost:27017/test')
 
       expect(mockNextResponse.json).toHaveBeenCalledWith(
         { message: "User created successfully" },
