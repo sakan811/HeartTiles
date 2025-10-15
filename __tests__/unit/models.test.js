@@ -283,12 +283,12 @@ describe('Models Tests', () => {
       )
       expect(userSchemaCall).toBeDefined()
 
-      // The pre method should have been called on the schema
-      const userSchema = userSchemaCall[0]
-      expect(userSchema.pre).toHaveBeenCalled()
+      // The pre method should have been called on the schema instance
+      const schemaInstance = mockSchema.mock.results.find(result =>
+        result.value && result.value._preMiddleware
+      )?.value
 
-      // Get the pre-save middleware function from the stored schema object
-      const schemaInstance = mockSchema.mock.results[0].value
+      expect(schemaInstance).toBeDefined()
       expect(schemaInstance._preMiddleware).toBeDefined()
 
       const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
@@ -304,7 +304,9 @@ describe('Models Tests', () => {
       await import('../../models')
 
       // Get the pre-save middleware function from the stored schema object
-      const schemaInstance = mockSchema.mock.results[0].value
+      const schemaInstance = mockSchema.mock.results.find(result =>
+        result.value && result.value._preMiddleware
+      )?.value
       const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
       const middlewareFunc = preSaveMiddleware.callback
 
@@ -336,7 +338,9 @@ describe('Models Tests', () => {
       await import('../../models')
 
       // Get the pre-save middleware function from the stored schema object
-      const schemaInstance = mockSchema.mock.results[0].value
+      const schemaInstance = mockSchema.mock.results.find(result =>
+        result.value && result.value._preMiddleware
+      )?.value
       const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
       const middlewareFunc = preSaveMiddleware.callback
 
@@ -372,7 +376,9 @@ describe('Models Tests', () => {
       const bcrypt = await import('bcryptjs')
 
       // Get the pre-save middleware function from the stored schema object
-      const schemaInstance = mockSchema.mock.results[0].value
+      const schemaInstance = mockSchema.mock.results.find(result =>
+        result.value && result.value._preMiddleware
+      )?.value
       const preSaveMiddleware = schemaInstance._preMiddleware.find(mw => mw.hook === 'save')
       const middlewareFunc = preSaveMiddleware.callback
 
