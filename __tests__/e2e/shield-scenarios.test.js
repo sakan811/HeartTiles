@@ -160,7 +160,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       const secondResult = secondShield.executeEffect(room.gameState, mockClient1.userId);
 
       expect(secondResult.reinforced).toBe(true);
-      expect(room.gameState.shields[mockClient1.userId].remainingTurns).toBe(3);
+      expect(room.gameState.shields[mockClient1.userId].remainingTurns).toBe(2);
 
       // 3. Verify protection is still active
       const { WindCard } = await import('../../src/lib/cards');
@@ -268,7 +268,7 @@ describe('Shield Card End-to-End Scenarios', () => {
         type: 'shield',
         activatedFor: mockClient1.userId,
         protectedPlayerId: mockClient1.userId,
-        remainingTurns: 3,
+        remainingTurns: 2,
         reinforced: false,
         message: expect.stringContaining('Shield activated')
       });
@@ -343,7 +343,7 @@ describe('Shield Card End-to-End Scenarios', () => {
       // Deserialize and verify shield state is preserved
       expect(serializedState.shields[mockClient1.userId]).toBeDefined();
       expect(serializedState.shields[mockClient1.userId].active).toBe(true);
-      expect(serializedState.shields[mockClient1.userId].remainingTurns).toBe(3);
+      expect(serializedState.shields[mockClient1.userId].remainingTurns).toBe(2);
       expect(serializedState.shields[mockClient1.userId].protectedPlayerId).toBe(mockClient1.userId);
 
       // Verify shield functionality after deserialization

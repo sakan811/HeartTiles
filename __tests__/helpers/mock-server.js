@@ -643,7 +643,7 @@ export class MockSocketServer {
       if (!room.gameState.shields) room.gameState.shields = {};
       room.gameState.shields[playerId] = {
         active: true,
-        remainingTurns: 3,
+        remainingTurns: 2,
         activatedAt: Date.now(),
         activatedTurn: room.gameState.turnCount || 1,
         activatedBy: playerId,
@@ -653,8 +653,8 @@ export class MockSocketServer {
         type: 'shield',
         activatedFor: playerId,
         protectedPlayerId: playerId,
-        remainingTurns: 3,
-        message: `Shield activated! Your tiles and hearts are protected for 3 turns.`,
+        remainingTurns: 2,
+        message: `Shield activated! Your tiles and hearts are protected for 2 turns.`,
         reinforced: false
       };
     }

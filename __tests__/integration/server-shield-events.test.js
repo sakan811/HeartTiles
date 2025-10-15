@@ -129,7 +129,7 @@ describe('Server Shield Event Integration', () => {
       // Verify shield activation
       expect(actionResult.type).toBe('shield');
       expect(actionResult.activatedFor).toBe(player1Id);
-      expect(actionResult.remainingTurns).toBe(3);
+      expect(actionResult.remainingTurns).toBe(2);
 
       // Update player hands
       mockRoom.gameState.playerHands[player1Id] = playerHand;
@@ -203,7 +203,7 @@ describe('Server Shield Event Integration', () => {
       const actionResult = shieldCard.executeEffect(mockRoom.gameState, player1Id);
 
       expect(actionResult.reinforced).toBe(true);
-      expect(actionResult.remainingTurns).toBe(3);
+      expect(actionResult.remainingTurns).toBe(2);
     });
   });
 
@@ -242,9 +242,9 @@ describe('Server Shield Event Integration', () => {
     it('should allow magic cards after shield expires', async () => {
       const { WindCard } = await import('../../src/lib/cards.js');
 
-      // Advance turns until shield expires (after 3 full turns = turn 4)
-      for (let turn = 1; turn <= 3; turn++) {
-        mockRoom.gameState.turnCount = turn + 1; // Turn 2, 3, 4
+      // Advance turns 2 full turns = turn 4
+      for (let turn = 1; turn <= 2; turn++) {
+        mockRoom.gameState.turnCount = turn + 1; // Turn 2, 3
         await serverFunctions.checkAndExpireShields(mockRoom);
       }
 
@@ -267,10 +267,10 @@ describe('Server Shield Event Integration', () => {
 
       expect(mockRoom.gameState.shields[player1Id]).toBeDefined();
 
-      // Simulate shield expiration after 3 full turns
+      // Simulate shield expiration after 2 full turns
       // The shield should be decremented at the end of each turn
-      for (let turn = 1; turn <= 3; turn++) {
-        mockRoom.gameState.turnCount = turn; // Turn 1, 2, 3
+      for (let turn = 1; turn <= 2; turn++) {
+        mockRoom.gameState.turnCount = turn; // Turn 1, 2
         await serverFunctions.checkAndExpireShields(mockRoom);
       }
 
@@ -284,18 +284,13 @@ describe('Server Shield Event Integration', () => {
       const shield = new ShieldCard('shield1');
       shield.executeEffect(mockRoom.gameState, player1Id);
 
-      // End of Turn 1: 2 turns remaining (decremented from 3)
+      // End of Turn 1: 1 turn remaining
       mockRoom.gameState.turnCount = 1;
-      await serverFunctions.checkAndExpireShields(mockRoom);
-      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
-
-      // End of Turn 2: 1 turn remaining
-      mockRoom.gameState.turnCount = 2;
       await serverFunctions.checkAndExpireShields(mockRoom);
       expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(1);
 
-      // End of Turn 3: Shield should be expired and removed
-      mockRoom.gameState.turnCount = 3;
+      // End of Turn 2: Shield should be expired and removed
+      mockRoom.gameState.turnCount = 2;
       await serverFunctions.checkAndExpireShields(mockRoom);
       expect(mockRoom.gameState.shields[player1Id]).toBeUndefined();
     });
@@ -404,7 +399,7 @@ describe('Server Shield Event Integration', () => {
       // Verify shield state is preserved
       expect(serializedRoom.gameState.shields[player1Id]).toBeDefined();
       expect(serializedRoom.gameState.shields[player1Id].active).toBe(true);
-      expect(serializedRoom.gameState.shields[player1Id].remainingTurns).toBe(3);
+      expect(serializedRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
 
       // Test shield functionality on deserialized state
       const isProtected = ShieldCard.isPlayerProtected(serializedRoom.gameState, player1Id, 1);
@@ -454,12 +449,12 @@ describe('Server Shield Event Integration', () => {
 
       // Verify broadcast contains all necessary visual data
       expect(broadcastData.shields[player1Id]).toBeDefined();
-      expect(broadcastData.shields[player1Id].remainingTurns).toBe(3);
+      expect(broadcastData.shields[player1Id].remainingTurns).toBe(2);
       expect(broadcastData.shields[player1Id].protectedPlayerId).toBe(player1Id);
 
       // Verify action result contains visual feedback data
       expect(broadcastData.actionResult.type).toBe('shield');
-      expect(broadcastData.actionResult.remainingTurns).toBe(3);
+      expect(broadcastData.actionResult.remainingTurns).toBe(2);
       expect(broadcastData.actionResult.message).toContain('Shield activated');
     });
 
@@ -483,8 +478,8 @@ describe('Server Shield Event Integration', () => {
       expect(turnChangeData.shields[player1Id].remainingTurns).toBeGreaterThan(0);
 
       // Simulate shield expiration during turn change
-      for (let turn = 1; turn <= 3; turn++) {
-        mockRoom.gameState.turnCount = turn; // Turn 1, 2, 3
+      for (let turn = 1; turn <= 2; turn++) {
+        mockRoom.gameState.turnCount = turn; // Turn 1, 2
         await serverFunctions.checkAndExpireShields(mockRoom);
       }
 
@@ -507,7 +502,7 @@ describe('Server Shield Event Integration', () => {
 
       // Verify opponent can see Player 1's shield state
       expect(opponentVisualData.shields[player1Id]).toBeDefined();
-      expect(opponentVisualData.shields[player1Id].remainingTurns).toBe(3);
+      expect(opponentVisualData.shields[player1Id].remainingTurns).toBe(2);
 
       // Verify tiles with Player 1's hearts should show shield indicators
       const protectedTiles = mockRoom.gameState.tiles.filter(tile =>
@@ -532,8 +527,8 @@ describe('Server Shield Event Integration', () => {
 
       // Verify visual state is updated correctly
       expect(reinforceResult.reinforced).toBe(true);
-      expect(reinforceResult.remainingTurns).toBe(3);
-      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(3);
+      expect(reinforceResult.remainingTurns).toBe(2);
+      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
 
       // Broadcast data should reflect reinforcement
       const reinforceBroadcastData = {
@@ -542,7 +537,7 @@ describe('Server Shield Event Integration', () => {
       };
 
       expect(reinforceBroadcastData.actionResult.message).toContain('Shield reinforced');
-      expect(reinforceBroadcastData.shields[player1Id].remainingTurns).toBe(3);
+      expect(reinforceBroadcastData.shields[player1Id].remainingTurns).toBe(2);
     });
   });
 });

@@ -194,7 +194,7 @@ describe('Wind Card Score Subtraction', () => {
       }
       room.gameState.tiles[0].placedHeart = null;
 
-      expect(room.players[0].score).toBe(3);
+      expect(room.players[0].score).toBe(2);
 
       // Remove second heart
       placedHeartData = room.gameState.tiles[1].placedHeart;

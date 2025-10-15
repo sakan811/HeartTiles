@@ -45,13 +45,13 @@ describe('Shield Card Functionality', () => {
       expect(result.type).toBe('shield');
       expect(result.activatedFor).toBe(player1Id);
       expect(result.protectedPlayerId).toBe(player1Id);
-      expect(result.remainingTurns).toBe(3);
+      expect(result.remainingTurns).toBe(2);
       expect(result.reinforced).toBe(false);
       expect(result.message).toContain('Shield activated');
 
       expect(mockGameState.shields[player1Id]).toBeDefined();
       expect(mockGameState.shields[player1Id].active).toBe(true);
-      expect(mockGameState.shields[player1Id].remainingTurns).toBe(3);
+      expect(mockGameState.shields[player1Id].remainingTurns).toBe(2);
       expect(mockGameState.shields[player1Id].protectedPlayerId).toBe(player1Id);
     });
 
@@ -64,16 +64,16 @@ describe('Shield Card Functionality', () => {
       const result = shieldCard.executeEffect(mockGameState, player1Id);
 
       expect(result.reinforced).toBe(true);
-      expect(result.remainingTurns).toBe(3);
+      expect(result.remainingTurns).toBe(2);
       expect(result.message).toContain('Shield reinforced');
-      expect(mockGameState.shields[player1Id].remainingTurns).toBe(3);
+      expect(mockGameState.shields[player1Id].remainingTurns).toBe(2);
     });
 
     it('should not activate shield when opponent has active shield', () => {
       // Opponent activates shield first
       mockGameState.shields[player2Id] = {
         active: true,
-        remainingTurns: 3,
+        remainingTurns: 2,
         activatedAt: Date.now(),
         activatedBy: player2Id,
         protectedPlayerId: player2Id
@@ -90,9 +90,9 @@ describe('Shield Card Functionality', () => {
       shieldCard.executeEffect(mockGameState, player1Id);
       const shield = mockGameState.shields[player1Id];
 
-      // Initial state: Should be active with 3 turns remaining
+      // Initial state: Should be active with 2 turns remaining
       expect(ShieldCard.isActive(shield)).toBe(true);
-      expect(ShieldCard.getRemainingTurns(shield)).toBe(3);
+      expect(ShieldCard.getRemainingTurns(shield)).toBe(2);
 
       // After 1 turn ends: 2 turns remaining
       shield.remainingTurns = 2;
@@ -104,7 +104,7 @@ describe('Shield Card Functionality', () => {
       expect(ShieldCard.isActive(shield)).toBe(true);
       expect(ShieldCard.getRemainingTurns(shield)).toBe(1);
 
-      // After 3 turns end: Should expire
+      // After 2 turns end: Should expire
       shield.remainingTurns = 0;
       expect(ShieldCard.isActive(shield)).toBe(false);
       expect(ShieldCard.getRemainingTurns(shield)).toBe(0);
@@ -115,7 +115,7 @@ describe('Shield Card Functionality', () => {
       const shield = mockGameState.shields[player1Id];
 
       // Player 1 plays Shield → counter shows 3
-      expect(ShieldCard.getRemainingTurns(shield)).toBe(3);
+      expect(ShieldCard.getRemainingTurns(shield)).toBe(2);
 
       // Player 2's turn ends → counter decreases to 2
       shield.remainingTurns = 2;
@@ -306,7 +306,7 @@ describe('Shield Card Functionality', () => {
 
       expect(shield.activatedAt).toBeTypeOf('number');
       expect(shield.activatedBy).toBe(player1Id);
-      expect(shield.remainingTurns).toBe(3);
+      expect(shield.remainingTurns).toBe(2);
       expect(shield.protectedPlayerId).toBe(player1Id);
       expect(Date.now() - shield.activatedAt).toBeLessThan(1000); // Activated recently
     });

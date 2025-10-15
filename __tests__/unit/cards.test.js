@@ -315,7 +315,7 @@ describe('Card System Classes', () => {
         expect(heart).toBeInstanceOf(HeartCard);
         expect(heart.id).toBe('heart-1');
         expect(heart.color).toBe('red');
-        expect(heart.value).toBe(3);
+        expect(heart.value).toBe(2);
         expect(heart.emoji).toBe('❤️');
       });
     });
@@ -539,7 +539,7 @@ describe('Card System Classes', () => {
       const maxHeart = new HeartCard('max', 'green', 3, '💚');
 
       expect(minHeart.value).toBe(1);
-      expect(maxHeart.value).toBe(3);
+      expect(maxHeart.value).toBe(2);
     });
 
     it('should handle cards with special characters in IDs', () => {

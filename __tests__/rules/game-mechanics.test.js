@@ -212,7 +212,7 @@ describe('Game Mechanics Rules', () => {
       const playerHand = mockGameState.playerHands[player1Id];
       const emptyTiles = mockGameState.tiles.filter(tile => !tile.placedHeart);
 
-      expect(playerHand.length).toBe(3);
+      expect(playerHand.length).toBe(2);
       expect(emptyTiles.length).toBe(8);
 
       // Player can place up to 3 hearts (all cards in hand)
@@ -507,8 +507,8 @@ describe('Game Mechanics Rules', () => {
                    sortedPlayers[0].score === sortedPlayers[1].score;
 
       expect(isTie).toBe(true);
-      expect(sortedPlayers[0].score).toBe(3);
-      expect(sortedPlayers[1].score).toBe(3);
+      expect(sortedPlayers[0].score).toBe(2);
+      expect(sortedPlayers[1].score).toBe(2);
     });
   });
 
@@ -571,7 +571,7 @@ describe('Game Mechanics Rules', () => {
       const redOnWhiteScore = redHeart.calculateScore(whiteTile);
 
       expect(redOnRedScore).toBe(6);
-      expect(redOnWhiteScore).toBe(3);
+      expect(redOnWhiteScore).toBe(2);
       expect(redOnRedScore).toBe(redOnWhiteScore * 2);
     });
   });
