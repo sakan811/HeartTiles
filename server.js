@@ -92,6 +92,203 @@ async function savePlayerSession(sessionData) {
   }
 }
 
+// Exportable utility functions
+function validateRoomCode(roomCode) {
+  if (!roomCode || typeof roomCode !== 'string') return false;
+  return /^[A-Z0-9]{6}$/i.test(roomCode);
+}
+
+function validatePlayerName(playerName) {
+  if (!playerName || typeof playerName !== 'string') return false;
+  const trimmedName = playerName.trim();
+  return trimmedName.length > 0 && trimmedName.length <= 20;
+}
+
+function sanitizeInput(input) {
+  return typeof input === 'string' ? input.trim().replace(/[<>]/g, '') : input;
+}
+
+function findPlayerByUserId(room, userId) {
+  return room.players.find(p => p.userId === userId);
+}
+
+function findPlayerByName(room, playerName) {
+  return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+}
+
+function validateRoomState(room) {
+  if (!room) return { valid: false, error: "Room not found" };
+  if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
+  if (!room.gameState) return { valid: false, error: "Invalid game state" };
+  if (room.gameState.gameStarted && !room.gameState.currentPlayer) {
+    return { valid: false, error: "Game started but no current player" };
+  }
+  return { valid: true };
+}
+
+function validatePlayerInRoom(room, userId) {
+  const playerInRoom = room.players.find(p => p.userId === userId);
+  return playerInRoom ? { valid: true } : { valid: false, error: "Player not in room" };
+}
+
+function validateDeckState(room) {
+  if (!room.gameState.deck) return { valid: false, error: "Invalid deck state" };
+  if (typeof room.gameState.deck.cards !== 'number' || room.gameState.deck.cards < 0) {
+    return { valid: false, error: "Invalid deck count" };
+  }
+  return { valid: true };
+}
+
+function validateTurn(room, userId) {
+  if (!room?.gameState.gameStarted) return { valid: false, error: "Game not started" };
+  if (!room.gameState.currentPlayer || room.gameState.currentPlayer.userId !== userId) {
+    return { valid: false, error: "Not your turn" };
+  }
+  return { valid: true };
+}
+
+function validateCardDrawLimit(room, userId) {
+  if (!room.gameState.playerActions) {
+    room.gameState.playerActions = {};
+  }
+
+  const playerActions = room.gameState.playerActions[userId] || {
+    drawnHeart: false,
+    drawnMagic: false,
+    heartsPlaced: 0,
+    magicCardsUsed: 0
+  };
+
+  return { valid: true, currentActions: playerActions };
+}
+
+function recordCardDraw(room, userId, cardType) {
+  if (!room.gameState.playerActions) {
+    room.gameState.playerActions = {};
+  }
+
+  if (!room.gameState.playerActions[userId]) {
+    room.gameState.playerActions[userId] = {
+      drawnHeart: false,
+      drawnMagic: false,
+      heartsPlaced: 0,
+      magicCardsUsed: 0
+    };
+  }
+
+  if (cardType === 'heart') {
+    room.gameState.playerActions[userId].drawnHeart = true;
+  } else if (cardType === 'magic') {
+    room.gameState.playerActions[userId].drawnMagic = true;
+  }
+}
+
+function resetPlayerActions(room, userId) {
+  if (!room.gameState.playerActions) {
+    room.gameState.playerActions = {};
+  }
+  room.gameState.playerActions[userId] = {
+    drawnHeart: false,
+    drawnMagic: false,
+    heartsPlaced: 0,
+    magicCardsUsed: 0
+  };
+}
+
+function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
+  if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null };
+
+  // Condition 1: All tiles are filled (have hearts)
+  const allTilesFilled = room.gameState.tiles.every(tile => tile.placedHeart);
+  if (allTilesFilled) {
+    return { shouldEnd: true, reason: "All tiles are filled" };
+  }
+
+  // Condition 2: Any deck is empty
+  const heartDeckEmpty = room.gameState.deck.cards <= 0;
+  const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
+  const anyDeckEmpty = heartDeckEmpty || magicDeckEmpty;
+
+  // If grace period is allowed, don't end game immediately when deck becomes empty
+  // This allows the current player to finish their turn
+  if (anyDeckEmpty && !allowDeckEmptyGracePeriod) {
+    if (heartDeckEmpty && magicDeckEmpty) {
+      return { shouldEnd: true, reason: "Both decks are empty" };
+    } else {
+      const emptyDeck = heartDeckEmpty ? "Heart" : "Magic";
+      return { shouldEnd: true, reason: `${emptyDeck} deck is empty` };
+    }
+  }
+
+  return { shouldEnd: false, reason: null };
+}
+
+function checkAndExpireShields(room) {
+  if (!room.gameState.shields) return;
+
+  // Decrement remaining turns for all active shields at the end of each turn
+  for (const [userId, shield] of Object.entries(room.gameState.shields)) {
+    if (shield.remainingTurns > 0) {
+      shield.remainingTurns--;
+      console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
+
+      // Remove shield if it has expired
+      if (shield.remainingTurns <= 0) {
+        console.log(`Shield expired for ${userId}`);
+        delete room.gameState.shields[userId];
+      }
+    }
+  }
+}
+
+function getClientIP(socket) {
+  return socket.handshake.address || socket.conn.remoteAddress || 'unknown';
+}
+
+function generateTiles() {
+  const colors = ["red", "yellow", "green"];
+  const emojis = ["🟥", "🟨", "🟩"];
+  const tiles = [];
+
+  for (let i = 0; i < 8; i++) {
+    if (Math.random() < 0.3) {
+      tiles.push({ id: i, color: "white", emoji: "⬜" });
+    } else {
+      const randomIndex = Math.floor(Math.random() * colors.length);
+      tiles.push({
+        id: i,
+        color: colors[randomIndex],
+        emoji: emojis[randomIndex]
+      });
+    }
+  }
+  return tiles;
+}
+
+function calculateScore(heart, tile) {
+  // Check if heart has the calculateScore method (indicating it's a HeartCard instance)
+  if (typeof heart.calculateScore === 'function') {
+    return heart.calculateScore(tile);
+  }
+  // Fallback for old format (plain objects)
+  if (tile.color === "white") return heart.value;
+  return heart.color === tile.color ? heart.value * 2 : 0;
+}
+
+// Turn lock management (needs to be global for testing)
+let turnLocks = new Map();
+
+function acquireTurnLock(roomCode, userId) {
+  const lockKey = `${roomCode}_${userId}`;
+  if (turnLocks.has(lockKey)) return false;
+  turnLocks.set(lockKey, Date.now());
+  return true;
+}
+
+function releaseTurnLock(roomCode, userId) {
+  turnLocks.delete(`${roomCode}_${userId}`);
+}
+
 app.prepare().then(async () => {
   await connectToDatabase();
 
@@ -104,132 +301,15 @@ app.prepare().then(async () => {
   });
 
   const rooms = await loadRooms();
-  const turnLocks = new Map();
+  // Use the global turnLocks instead of creating a new one
+  turnLocks.clear(); // Clear any existing locks from previous runs
   const connectionPool = new Map();
   const playerSessions = await loadPlayerSessions();
   const MAX_CONNECTIONS_PER_IP = 5;
 
   console.log(`Loaded ${rooms.size} rooms, ${playerSessions.size} sessions`);
 
-  function acquireTurnLock(roomCode, userId) {
-    const lockKey = `${roomCode}_${userId}`;
-    if (turnLocks.has(lockKey)) return false;
-    turnLocks.set(lockKey, Date.now());
-    return true;
-  }
-
-  function releaseTurnLock(roomCode, userId) {
-    turnLocks.delete(`${roomCode}_${userId}`);
-  }
-
-  function validateTurn(room, userId) {
-    if (!room?.gameState.gameStarted) return { valid: false, error: "Game not started" };
-    if (!room.gameState.currentPlayer || room.gameState.currentPlayer.userId !== userId) {
-      return { valid: false, error: "Not your turn" };
-    }
-    return { valid: true };
-  }
-
-  function validateCardDrawLimit(room, userId) {
-    if (!room.gameState.playerActions) {
-      room.gameState.playerActions = {};
-    }
-
-    const playerActions = room.gameState.playerActions[userId] || {
-      drawnHeart: false,
-      drawnMagic: false,
-      heartsPlaced: 0,
-      magicCardsUsed: 0
-    };
-
-    return { valid: true, currentActions: playerActions };
-  }
-
-  function recordCardDraw(room, userId, cardType) {
-    if (!room.gameState.playerActions) {
-      room.gameState.playerActions = {};
-    }
-
-    if (!room.gameState.playerActions[userId]) {
-      room.gameState.playerActions[userId] = {
-        drawnHeart: false,
-        drawnMagic: false,
-        heartsPlaced: 0,
-        magicCardsUsed: 0
-      };
-    }
-
-    if (cardType === 'heart') {
-      room.gameState.playerActions[userId].drawnHeart = true;
-    } else if (cardType === 'magic') {
-      room.gameState.playerActions[userId].drawnMagic = true;
-    }
-  }
-
-  function recordHeartPlacement(room, userId) {
-    if (!room.gameState.playerActions) {
-      room.gameState.playerActions = {};
-    }
-
-    if (!room.gameState.playerActions[userId]) {
-      room.gameState.playerActions[userId] = {
-        drawnHeart: false,
-        drawnMagic: false,
-        heartsPlaced: 0,
-        magicCardsUsed: 0
-      };
-    }
-
-    room.gameState.playerActions[userId].heartsPlaced = (room.gameState.playerActions[userId].heartsPlaced || 0) + 1;
-  }
-
-  function recordMagicCardUsage(room, userId) {
-    if (!room.gameState.playerActions) {
-      room.gameState.playerActions = {};
-    }
-
-    if (!room.gameState.playerActions[userId]) {
-      room.gameState.playerActions[userId] = {
-        drawnHeart: false,
-        drawnMagic: false,
-        heartsPlaced: 0,
-        magicCardsUsed: 0
-      };
-    }
-
-    room.gameState.playerActions[userId].magicCardsUsed = (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1;
-  }
-
-  function canPlaceMoreHearts(room, userId) {
-    const playerActions = room.gameState.playerActions[userId] || { heartsPlaced: 0 };
-    return (playerActions.heartsPlaced || 0) < 2;
-  }
-
-  function canUseMoreMagicCards(room, userId) {
-    const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 };
-    return (playerActions.magicCardsUsed || 0) < 1;
-  }
-
-  function resetPlayerActions(room, userId) {
-    if (!room.gameState.playerActions) {
-      room.gameState.playerActions = {};
-    }
-    room.gameState.playerActions[userId] = {
-      drawnHeart: false,
-      drawnMagic: false,
-      heartsPlaced: 0,
-      magicCardsUsed: 0
-    };
-  }
-
-  function validateRoomCode(roomCode) {
-    return roomCode && typeof roomCode === 'string' && /^[A-Z0-9]{6}$/i.test(roomCode);
-  }
-
-  function validatePlayerName(playerName) {
-    return playerName && typeof playerName === 'string' &&
-           playerName.trim().length > 0 && playerName.length <= 20;
-  }
+  // These functions are now defined globally for testing
 
   async function authenticateSocket(socket, next) {
     try {
@@ -284,62 +364,7 @@ app.prepare().then(async () => {
     return session;
   }
 
-  function findPlayerByUserId(room, userId) {
-    return room.players.find(p => p.userId === userId);
-  }
-
-  function sanitizeInput(input) {
-    return typeof input === 'string' ? input.trim().replace(/[<>]/g, '') : input;
-  }
-
-  function validateRoomState(room) {
-    if (!room) return { valid: false, error: "Room not found" };
-    if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
-    if (!room.gameState) return { valid: false, error: "Invalid game state" };
-    if (room.gameState.gameStarted && !room.gameState.currentPlayer) {
-      return { valid: false, error: "Game started but no current player" };
-    }
-    return { valid: true };
-  }
-
-  function validatePlayerInRoom(room, userId) {
-    const playerInRoom = room.players.find(p => p.userId === userId);
-    return playerInRoom ? { valid: true } : { valid: false, error: "Player not in room" };
-  }
-
-  function validateHeartPlacement(room, userId, heartId, tileId) {
-    const playerHand = room.gameState.playerHands[userId] || [];
-    const heart = playerHand.find(card => card.id === heartId);
-    if (!heart) return { valid: false, error: "Card not in player's hand" };
-
-    // Use the new card validation helpers
-    if (!isHeartCard(heart)) {
-      return { valid: false, error: "Only heart cards can be placed on tiles" };
-    }
-
-    // Convert to HeartCard instance if it's a plain object for validation
-    let heartCard = heart;
-    if (!(heart instanceof HeartCard)) {
-      heartCard = createCardFromData(heart);
-    }
-
-    const tile = room.gameState.tiles.find(tile => tile.id == tileId);
-    if (!tile) return { valid: false, error: "Tile not found" };
-
-    // Check if tile is already occupied by a heart
-    if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" };
-
-    // Use HeartCard's canTargetTile method for additional validation
-    if (!heartCard.canTargetTile(tile)) {
-      return { valid: false, error: "This heart cannot be placed on this tile" };
-    }
-
-    return { valid: true };
-  }
-
-  function findPlayerByName(room, playerName) {
-    return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
-  }
+  // These functions are now defined globally for testing
 
   async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail) {
     const playerIndex = room.players.findIndex(p => p.userId === oldUserId);
@@ -379,36 +404,9 @@ app.prepare().then(async () => {
     }
   }
 
-function checkAndExpireShields(room) {
-  if (!room.gameState.shields) return;
+// These functions are now defined globally for testing
 
-  // Decrement remaining turns for all active shields at the end of each turn
-  for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    if (shield.remainingTurns > 0) {
-      shield.remainingTurns--;
-      console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
-
-      // Remove shield if it has expired
-      if (shield.remainingTurns <= 0) {
-        console.log(`Shield expired for ${userId}`);
-        delete room.gameState.shields[userId];
-      }
-    }
-  }
-}
-
-  function validateDeckState(room) {
-    if (!room.gameState.deck) return { valid: false, error: "Invalid deck state" };
-    if (typeof room.gameState.deck.cards !== 'number' || room.gameState.deck.cards < 0) {
-      return { valid: false, error: "Invalid deck count" };
-    }
-    return { valid: true };
-  }
-
-  function getClientIP(socket) {
-    return socket.handshake.address || socket.conn.remoteAddress || 'unknown';
-  }
-
+  // Helper functions that need access to closure variables
   function canAcceptConnection(ip) {
     return (connectionPool.get(ip) || 0) < MAX_CONNECTIONS_PER_IP;
   }
@@ -422,42 +420,11 @@ function checkAndExpireShields(room) {
     if (current > 0) connectionPool.set(ip, current - 1);
   }
 
-  function generateTiles() {
-    const colors = ["red", "yellow", "green"];
-    const emojis = ["🟥", "🟨", "🟩"];
-    const tiles = [];
-
-    for (let i = 0; i < 8; i++) {
-      if (Math.random() < 0.3) {
-        tiles.push({ id: i, color: "white", emoji: "⬜" });
-      } else {
-        const randomIndex = Math.floor(Math.random() * colors.length);
-        tiles.push({
-          id: i,
-          color: colors[randomIndex],
-          emoji: emojis[randomIndex]
-        });
-      }
-    }
-    return tiles;
-  }
-
-  function calculateScore(heart, tile) {
-    // Use HeartCard's calculateScore method if heart is a HeartCard instance
-    if (heart instanceof HeartCard) {
-      return heart.calculateScore(tile);
-    }
-    // Fallback for old format (plain objects)
-    if (tile.color === "white") return heart.value;
-    return heart.color === tile.color ? heart.value * 2 : 0;
-  }
-
   function generateSingleHeart() {
     const heartCard = HeartCard.generateRandom();
     return heartCard;
   }
 
-  
   function generateSingleMagicCard() {
     const magicCard = generateRandomMagicCard();
     return magicCard;
@@ -465,34 +432,6 @@ function checkAndExpireShields(room) {
 
   function selectRandomStartingPlayer(players) {
     return players[Math.floor(Math.random() * players.length)];
-  }
-
-  function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
-    if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null };
-
-    // Condition 1: All tiles are filled (have hearts)
-    const allTilesFilled = room.gameState.tiles.every(tile => tile.placedHeart);
-    if (allTilesFilled) {
-      return { shouldEnd: true, reason: "All tiles are filled" };
-    }
-
-    // Condition 2: Any deck is empty
-    const heartDeckEmpty = room.gameState.deck.cards <= 0;
-    const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
-    const anyDeckEmpty = heartDeckEmpty || magicDeckEmpty;
-
-    // If grace period is allowed, don't end game immediately when deck becomes empty
-    // This allows the current player to finish their turn
-    if (anyDeckEmpty && !allowDeckEmptyGracePeriod) {
-      if (heartDeckEmpty && magicDeckEmpty) {
-        return { shouldEnd: true, reason: "Both decks are empty" };
-      } else {
-        const emptyDeck = heartDeckEmpty ? "Heart" : "Magic";
-        return { shouldEnd: true, reason: `${emptyDeck} deck is empty` };
-      }
-    }
-
-    return { shouldEnd: false, reason: null };
   }
 
   async function endGame(room, roomCode, io, allowDeckEmptyGracePeriod = true) {
@@ -532,6 +471,83 @@ function checkAndExpireShields(room) {
 
     return true;
   }
+
+  // Additional helper functions
+  function recordHeartPlacement(room, userId) {
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+
+    if (!room.gameState.playerActions[userId]) {
+      room.gameState.playerActions[userId] = {
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      };
+    }
+
+    room.gameState.playerActions[userId].heartsPlaced = (room.gameState.playerActions[userId].heartsPlaced || 0) + 1;
+  }
+
+  function recordMagicCardUsage(room, userId) {
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+
+    if (!room.gameState.playerActions[userId]) {
+      room.gameState.playerActions[userId] = {
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      };
+    }
+
+    room.gameState.playerActions[userId].magicCardsUsed = (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1;
+  }
+
+  function canPlaceMoreHearts(room, userId) {
+    const playerActions = room.gameState.playerActions[userId] || { heartsPlaced: 0 };
+    return (playerActions.heartsPlaced || 0) < 2;
+  }
+
+  function canUseMoreMagicCards(room, userId) {
+    const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 };
+    return (playerActions.magicCardsUsed || 0) < 1;
+  }
+
+  function validateHeartPlacement(room, userId, heartId, tileId) {
+    const playerHand = room.gameState.playerHands[userId] || [];
+    const heart = playerHand.find(card => card.id === heartId);
+    if (!heart) return { valid: false, error: "Card not in player's hand" };
+
+    // Use the new card validation helpers
+    if (!isHeartCard(heart)) {
+      return { valid: false, error: "Only heart cards can be placed on tiles" };
+    }
+
+    // Convert to HeartCard instance if it's a plain object for validation
+    let heartCard = heart;
+    if (!(heart instanceof HeartCard)) {
+      heartCard = createCardFromData(heart);
+    }
+
+    const tile = room.gameState.tiles.find(tile => tile.id == tileId);
+    if (!tile) return { valid: false, error: "Tile not found" };
+
+    // Check if tile is already occupied by a heart
+    if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" };
+
+    // Use HeartCard's canTargetTile method for additional validation
+    if (!heartCard.canTargetTile(tile)) {
+      return { valid: false, error: "This heart cannot be placed on this tile" };
+    }
+
+    return { valid: true };
+  }
+
+  // endGame function is defined above
 
   // Use authentication middleware
   io.use(authenticateSocket);
