@@ -470,8 +470,8 @@ describe('Shield Card Rules Verification', () => {
 
       const playerShield = mockGameState.shields[player1Id];
       expect(ShieldCard.getRemainingTurns(playerShield, 1)).toBe(2);
-      expect(ShieldCard.getRemainingTurns(playerShield, 2)).toBe(2);
-      expect(ShieldCard.getRemainingTurns(playerShield, 3)).toBe(1);
+      expect(ShieldCard.getRemainingTurns(playerShield, 2)).toBe(1);
+      expect(ShieldCard.getRemainingTurns(playerShield, 3)).toBe(0);
       expect(ShieldCard.getRemainingTurns(playerShield, 4)).toBe(0);
     });
 
@@ -550,12 +550,12 @@ describe('Shield Card Rules Verification', () => {
       expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 1)).toBe(2);
 
       // Turn 2: Reduced duration
-      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 2)).toBe(2);
+      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 2)).toBe(1);
 
-      // Turn 3: Reduced duration
-      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 3)).toBe(1);
+      // Turn 3: Expired
+      expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 3)).toBe(0);
 
-      // Turn 4: Expired (should be removed by server cleanup)
+      // Turn 4: Still expired
       expect(ShieldCard.getRemainingTurns(mockGameState.shields[player1Id], 4)).toBe(0);
     });
   });

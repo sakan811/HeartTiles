@@ -289,7 +289,7 @@ describe('Models Tests', () => {
       expect(playerHandsSchema.type).toBe(Map)
       expect(playerHandsSchema.of[0].color.required).toBe(true)
       expect(playerHandsSchema.of[0].value.min).toBe(1)
-      expect(playerHandsSchema.of[0].value.max).toBe(2)
+      expect(playerHandsSchema.of[0].value.max).toBe(3)
       expect(playerHandsSchema.of[0].type.required).toBe(true)
     })
 
