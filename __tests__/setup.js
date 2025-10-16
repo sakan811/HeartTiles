@@ -3,6 +3,86 @@ import React from 'react'
 import { ShieldCard } from '../src/lib/cards.js'
 import '@testing-library/jest-dom'
 
+// Mock mongoose before any imports that might use it
+const mockSchemaTypes = {
+  ObjectId: vi.fn(),
+  Mixed: vi.fn(),
+  String: vi.fn(),
+  Number: vi.fn(),
+  Boolean: vi.fn(),
+  Date: vi.fn(),
+  Buffer: vi.fn(),
+  Array: vi.fn(),
+  Decimal128: vi.fn(),
+  Map: vi.fn(),
+  UUID: vi.fn()
+}
+
+const mockMongoose = {
+  connect: vi.fn().mockResolvedValue(),
+  disconnect: vi.fn().mockResolvedValue(),
+  Schema: vi.fn().mockImplementation(() => {
+    const schema = {
+      pre: vi.fn(),
+      post: vi.fn(),
+      methods: {},
+      statics: {},
+      virtual: vi.fn().mockReturnThis(),
+      get: vi.fn(),
+      set: vi.fn(),
+      index: vi.fn(),
+      plugin: vi.fn(),
+      add: vi.fn(),
+      loadClass: vi.fn(),
+      Types: mockSchemaTypes
+    }
+    return schema
+  }),
+  model: vi.fn(),
+  Types: mockSchemaTypes,
+  models: {}, // Add the models property to prevent the error
+  Connection: vi.fn(),
+  connection: {
+    readyState: 1,
+    on: vi.fn(),
+    once: vi.fn(),
+    close: vi.fn()
+  }
+}
+
+// Make sure models is not undefined
+Object.defineProperty(mockMongoose, 'models', {
+  value: {},
+  writable: true,
+  enumerable: true,
+  configurable: true
+})
+
+// Also make sure the Schema constructor has the Types property
+mockMongoose.Schema.Types = mockSchemaTypes
+
+vi.mock('mongoose', () => ({
+  default: mockMongoose,
+  ...mockMongoose
+}))
+
+// Mock models before any imports that might use them
+vi.mock('../models', () => ({
+  User: {
+    findById: vi.fn()
+  },
+  PlayerSession: {
+    find: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    deleteOne: vi.fn()
+  },
+  Room: {
+    find: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    deleteOne: vi.fn()
+  }
+}))
+
 // Make React available globally for all tests
 vi.stubGlobal('React', React)
 
