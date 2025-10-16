@@ -289,8 +289,10 @@ function releaseTurnLock(roomCode, userId) {
   turnLocks.delete(`${roomCode}_${userId}`);
 }
 
-app.prepare().then(async () => {
-  await connectToDatabase();
+// Prevent server from starting during tests
+if (process.env.NODE_ENV !== 'test') {
+  app.prepare().then(async () => {
+    await connectToDatabase();
 
   const httpServer = createServer(handler);
   const io = new Server(httpServer, {
@@ -1452,15 +1454,16 @@ app.prepare().then(async () => {
     });
   });
 
-  httpServer
-    .once("error", (err) => {
-      console.error(err);
-      process.exit(1);
-    })
-    .listen(port, () => {
-      console.log(`> Ready on http://${hostname}:${port}`);
-    });
-});
+    httpServer
+      .once("error", (err) => {
+        console.error(err);
+        process.exit(1);
+      })
+      .listen(port, () => {
+        console.log(`> Ready on http://${hostname}:${port}`);
+      });
+  });
+}
 
 // Export functions for testing (they are accessible within the same scope)
 export {
