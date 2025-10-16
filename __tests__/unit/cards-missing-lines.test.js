@@ -174,8 +174,10 @@ describe('Cards Missing Lines Coverage Tests', () => {
 
       const card = generateRandomMagicCard()
 
-      expect(card.id).toBeGreaterThanOrEqual(mockTime)
-      expect(card.id).toBeLessThan(mockTime + 1)
+      // IDs are now strings with timestamp format: "timestamp-randomSuffix"
+      expect(typeof card.id).toBe('string')
+      expect(card.id).toContain(mockTime.toString())
+      expect(card.id).toMatch(/^\d+-[a-z0-9]+$/)
 
       Date.now = originalDateNow
     })
@@ -736,10 +738,12 @@ describe('Cards Missing Lines Coverage Tests', () => {
       // Test Date.now returning 0
       Date.now = vi.fn().mockReturnValue(0)
       const heartCard = HeartCard.generateRandom()
-      expect(heartCard.id).toBe(0)
+      expect(heartCard.id).toMatch(/^0-[a-z0-9]+$/)
+      expect(typeof heartCard.id).toBe('string')
 
       const magicCard = generateRandomMagicCard()
-      expect(magicCard.id).toBe(0)
+      expect(magicCard.id).toMatch(/^0-[a-z0-9]+$/)
+      expect(typeof magicCard.id).toBe('string')
 
       Date.now = originalDateNow
     })
