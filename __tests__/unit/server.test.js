@@ -38,36 +38,42 @@ vi.mock('../../src/lib/cards.js', () => ({
   createCardFromData: vi.fn()
 }))
 
-// Mock Next.js server
-vi.mock('next', () => ({
-  default: vi.fn().mockImplementation(() => ({
+// Mock Next.js server app preparation to prevent actual server startup
+vi.mock('next', () => {
+  const mockApp = {
     prepare: vi.fn().mockResolvedValue(),
     getRequestHandler: vi.fn(),
     dev: false,
     hostname: 'localhost',
     port: 3000
-  }))
-}))
+  }
 
-// Mock HTTP server
-vi.mock('node:http', () => ({
-  createServer: vi.fn().mockReturnValue({
+  return {
+    default: vi.fn().mockImplementation(() => mockApp)
+  }
+})
+
+// Mock HTTP server with proper listen method to prevent unhandled errors
+vi.mock('node:http', () => {
+  const mockServer = {
     once: vi.fn(),
+    on: vi.fn(),
+    close: vi.fn(),
+    emit: vi.fn(),
+    address: vi.fn().mockReturnValue({ port: 3000 }),
     listen: vi.fn().mockImplementation((portOrOptions, callback) => {
+      // Simulate successful server start
       if (typeof callback === 'function') {
         setTimeout(callback, 0) // Async callback to prevent blocking
       }
-      return {
-        address: () => ({ port: typeof portOrOptions === 'object' ? 3000 : portOrOptions || 3000 }),
-        close: vi.fn(),
-        on: vi.fn(),
-        emit: vi.fn()
-      }
-    }),
-    on: vi.fn(),
-    close: vi.fn()
-  })
-}))
+      return mockServer
+    })
+  }
+
+  return {
+    createServer: vi.fn().mockReturnValue(mockServer)
+  }
+})
 
 // Mock Socket.IO
 vi.mock('socket.io', () => ({
