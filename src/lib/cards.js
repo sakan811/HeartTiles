@@ -59,9 +59,10 @@ export class HeartCard extends BaseCard {
     const randomIndex = Math.floor(Math.random() * colors.length);
     const randomValue = Math.floor(Math.random() * 3) + 1; // 1-3 points
 
-    // Use Date.now() directly for ID generation (more predictable for tests)
+    // Use high-precision timestamp + random to ensure unique IDs
     const timestamp = Date.now();
-    const cardId = timestamp === 0 ? 0 : timestamp + Math.random();
+    const randomSuffix = Math.random().toString(36).substr(2, 9);
+    const cardId = timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
 
     return new HeartCard(
       cardId,
@@ -448,8 +449,10 @@ export function generateRandomMagicCard() {
     }
   }
 
+  // Use high-precision timestamp + random to ensure unique IDs
   const timestamp = Date.now();
-  const cardId = timestamp === 0 ? 0 : timestamp + Math.random();
+  const randomSuffix = Math.random().toString(36).substr(2, 9);
+  const cardId = timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
   return createMagicCard(cardId, selectedType);
 }
 
