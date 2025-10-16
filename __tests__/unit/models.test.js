@@ -247,6 +247,134 @@ describe('Models Tests', () => {
       expect(User.comparePassword).toBeDefined()
     })
 
+    it('should test comparePassword method exists and is functional', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      const { User } = await import('../../models')
+
+      // Verify that the comparePassword method exists on the User model
+      expect(typeof User.comparePassword).toBe('function')
+      expect(User.comparePassword).toBeDefined()
+    })
+
+    it('should test comparePassword method integration with bcrypt', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      const { User } = await import('../../models')
+      const bcrypt = await import('bcryptjs')
+
+      // Test that the comparePassword method exists and calls bcrypt
+      expect(typeof User.comparePassword).toBe('function')
+
+      // Create a simple user object to test the method
+      const testUser = {
+        password: 'hashed_any_password_12',
+        comparePassword: User.comparePassword
+      }
+
+      // Call the method - we don't need to test the exact bcrypt behavior here
+      // since that's covered in the bcrypt-specific tests
+      await expect(testUser.comparePassword('anyPassword')).resolves.toBeDefined()
+
+      // Verify bcrypt.compare was called (showing integration)
+      expect(bcrypt.default.compare).toHaveBeenCalled()
+    })
+
+    it('should test comparePassword method with non-matching passwords', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      const { User } = await import('../../models')
+      const bcrypt = await import('bcryptjs')
+
+      const hashedPassword = 'hashed_testPassword_12'
+
+      // Create a test user
+      const testUser = {
+        password: hashedPassword,
+        comparePassword: User.comparePassword
+      }
+
+      // Mock bcrypt compare to return false for non-matching password
+      bcrypt.default.compare.mockImplementation((candidate, hash) => {
+        return Promise.resolve(hash === hashedPassword && candidate === 'correctPassword')
+      })
+
+      // Test with wrong password
+      const result = await testUser.comparePassword('wrongPassword')
+      expect(result).toBe(false)
+
+      // Verify bcrypt.compare was called
+      expect(bcrypt.default.compare).toHaveBeenCalled()
+    })
+
+    it('should test comparePassword method error handling', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      const { User } = await import('../../models')
+      const bcrypt = await import('bcryptjs')
+
+      const hashedPassword = 'hashed_testPassword_12'
+
+      // Create a test user
+      const testUser = {
+        password: hashedPassword,
+        comparePassword: User.comparePassword
+      }
+
+      // Mock bcrypt compare to throw an error
+      bcrypt.default.compare.mockRejectedValueOnce(new Error('bcrypt comparison failed'))
+
+      // Test error handling
+      await expect(testUser.comparePassword('testPassword')).rejects.toThrow('bcrypt comparison failed')
+
+      // Verify bcrypt.compare was called
+      expect(bcrypt.default.compare).toHaveBeenCalled()
+    })
+
+    it('should test comparePassword method with various password scenarios', async () => {
+      // Clear modules to ensure fresh import
+      vi.resetModules()
+
+      // Import models to trigger schema creation
+      const { User } = await import('../../models')
+      const bcrypt = await import('bcryptjs')
+
+      // Create a test user
+      const testUser = {
+        password: 'hashed_test_password_12',
+        comparePassword: User.comparePassword
+      }
+
+      // Test different password inputs - we're testing that the method accepts different inputs
+      // and calls bcrypt appropriately, not the exact bcrypt behavior
+      const testInputs = [
+        'simplePassword',
+        'ComplexPassword123!@#',
+        '',
+        'veryLongPasswordWithSpecialCharacters!@#$%^&*()_+-=[]{}|;:,.<>?'
+      ]
+
+      for (const input of testInputs) {
+        // Clear previous calls
+        bcrypt.default.compare.mockClear()
+
+        // Call comparePassword with different inputs
+        await expect(testUser.comparePassword(input)).resolves.toBeDefined()
+
+        // Verify bcrypt.compare was called for each input with the correct candidate password
+        expect(bcrypt.default.compare).toHaveBeenCalledTimes(1)
+        expect(bcrypt.default.compare).toHaveBeenCalledWith(input, expect.anything())
+      }
+    })
+
     it('should test pre-save middleware behavior', async () => {
       // Clear modules to ensure fresh import
       vi.resetModules()
