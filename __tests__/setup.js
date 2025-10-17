@@ -66,22 +66,8 @@ vi.mock('mongoose', () => ({
   ...mockMongoose
 }))
 
-// Mock models before any imports that might use them
-vi.mock('../models', () => ({
-  User: {
-    findById: vi.fn()
-  },
-  PlayerSession: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
-  },
-  Room: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
-  }
-}))
+// Note: Removed global models mock to allow actual models.js execution for coverage
+// Individual tests will mock models as needed
 
 // Make React available globally for all tests
 vi.stubGlobal('React', React)

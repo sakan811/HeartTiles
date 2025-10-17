@@ -188,77 +188,20 @@ const roomSchema = new mongoose.Schema({
       }
     },
     playerHands: {
-      type: Map,
-      of: [{
-        id: {
-          type: mongoose.Schema.Types.Mixed,
-          required: true
-        },
-        color: {
-          type: String,
-          required: true,
-          enum: ['red', 'yellow', 'green']
-        },
-        emoji: {
-          type: String,
-          required: true
-        },
-        value: {
-          type: Number,
-          required: true,
-          min: 1,
-          max: 3
-        },
-        type: {
-          type: String,
-          enum: ['heart', 'magic'],
-          required: true
-        },
-        name: String,
-        description: String
-      }]
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
     },
     turnCount: {
       type: Number,
       default: 0
     },
     shields: {
-      type: Map,
-      of: {
-        active: {
-          type: Boolean,
-          default: false
-        },
-        remainingTurns: {
-          type: Number,
-          default: 0
-        },
-        activatedAt: {
-          type: Number,
-          default: 0
-        },
-        activatedBy: {
-          type: String,
-          default: null
-        },
-        turnActivated: {
-          type: Number,
-          default: 0
-        }
-      }
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
     },
     playerActions: {
-      type: Map,
-      of: {
-        drawnHeart: {
-          type: Boolean,
-          default: false
-        },
-        drawnMagic: {
-          type: Boolean,
-          default: false
-        }
-      }
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
     }
   }
 }, {

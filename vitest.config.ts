@@ -33,9 +33,10 @@ export default defineConfig({
     },
     projects: [
       {
+        name: 'unit',
         test: {
-          include: ['__tests__/**/*.{test,spec}.{js,ts}'],
-          exclude: ['**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
+          include: ['__tests__/unit/**/*.{test,spec}.{js,ts}'],
+          exclude: ['**/integration/**', '**/e2e/**', '**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
           environment: 'node',
           globals: true,
           setupFiles: ['./__tests__/setup.js'],
@@ -50,9 +51,30 @@ export default defineConfig({
         }
       },
       {
+        name: 'integration',
+        test: {
+          include: ['__tests__/integration/**/*.{test,spec}.{js,ts}'],
+          exclude: ['**/unit/**', '**/e2e/**', '**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
+          environment: 'node',
+          globals: true,
+          setupFiles: ['./__tests__/integration/setup.js'],
+          testTimeout: 15000,
+          hookTimeout: 15000,
+          css: false,
+          // Skip integration tests if MongoDB is not available
+          bail: 0
+        },
+        resolve: {
+          alias: {
+            '@': resolve(__dirname, './src'),
+          }
+        }
+      },
+      {
+        name: 'components',
         test: {
           include: ['**/*.test.jsx', '**/*.test.tsx', '**/components/**/*.test.*', '**/contexts/**/*.test.*'],
-          exclude: ['node_modules'],
+          exclude: ['node_modules', '**/integration/**', '**/unit/**'],
           environment: 'jsdom',
           globals: true,
           setupFiles: ['./__tests__/setup.js'],

@@ -68,8 +68,12 @@ export class MockSocketServer {
     });
     this.clientSockets = [];
 
-    // Close server
+    // Close server - use the correct method for Socket.IO v4+
     if (this.io) {
+      // Disconnect all sockets and close the server
+      this.io.sockets.sockets.forEach(socket => {
+        socket.disconnect(true);
+      });
       this.io.close();
     }
     if (this.httpServer) {
