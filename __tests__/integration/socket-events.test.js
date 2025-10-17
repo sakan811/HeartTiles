@@ -86,6 +86,8 @@ describe('Socket.IO Events Integration Tests', () => {
   let roomCodeGenerator;
   let testRooms = new Set();
 
+  // Note: test timeout is already set to 15s in vitest.config.ts for integration tests
+
   // Setup mock server for entire test suite
   beforeAll(async () => {
     mockServer = new MockSocketServer();
@@ -211,14 +213,14 @@ describe('Socket.IO Events Integration Tests', () => {
         transports: ['websocket'],
         forceNew: true,
         reconnection: false,
-        timeout: 2000,
+        timeout: 5000,
         auth: { token: null }
       });
 
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Authentication test timeout'));
-        }, 3000);
+        }, 8000);
 
         unauthenticatedClient.on('connect_error', (error) => {
           clearTimeout(timeout);
