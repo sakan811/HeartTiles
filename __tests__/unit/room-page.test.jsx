@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved } from '@testing-library/react'
 import { useRouter, useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import RoomPage from '../../src/app/room/[roomCode]/page.js'
@@ -38,10 +38,22 @@ vi.mock('socket.io-client', () => ({
 const eventHandlers = {}
 const mockSocket = {
   on: vi.fn((event, handler) => {
-    eventHandlers[event] = handler
+    if (!eventHandlers[event]) {
+      eventHandlers[event] = []
+    }
+    eventHandlers[event].push(handler)
+    return vi.fn() // Return cleanup function
   }),
   off: vi.fn((event, handler) => {
-    delete eventHandlers[event]
+    if (eventHandlers[event]) {
+      const index = eventHandlers[event].indexOf(handler)
+      if (index > -1) {
+        eventHandlers[event].splice(index, 1)
+      }
+      if (eventHandlers[event].length === 0) {
+        delete eventHandlers[event]
+      }
+    }
   }),
   emit: vi.fn(),
   disconnect: vi.fn(),
@@ -49,6 +61,14 @@ const mockSocket = {
   connected: true,
   // Helper to get event handlers for testing
   _getHandler: (event) => eventHandlers[event],
+  // Helper to trigger events directly
+  _triggerEvent: (event, data) => {
+    if (eventHandlers[event]) {
+      eventHandlers[event].forEach(handler => {
+        handler(data)
+      })
+    }
+  },
 }
 
 vi.mock('../../src/contexts/SocketContext.js', () => ({
@@ -250,15 +270,12 @@ describe('RoomPage Component', () => {
       renderRoomPage()
 
       // Simulate successful room join to show the player
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
-      const mockData = {
+      mockSocket._triggerEvent('room-joined', {
         players: [{ userId: 'user1', name: 'Test User', isReady: false }],
         playerId: 'user1',
-      }
+      })
 
-      roomJoinedHandler(mockData)
-
+      // Use findBy instead of waitFor with getBy
       expect(screen.getByText('T')).toBeInTheDocument() // First letter of 'Test User'
     })
 
@@ -273,7 +290,7 @@ describe('RoomPage Component', () => {
       // Should generate Player_ with socket ID suffix
       expect(sessionStorage.setItem).toHaveBeenCalledWith(
         'heart-tiles-player-name',
-        expect.stringMatching(/Player_[a-f0-9]{6}/)
+        'Player_ket-id' // Based on our mock socket.id 'test-socket-id' slice(-6)
       )
     })
 
@@ -283,6 +300,7 @@ describe('RoomPage Component', () => {
       renderRoomPage()
 
       expect(sessionStorage.getItem).toHaveBeenCalledWith('heart-tiles-player-name')
+      expect(sessionStorage.setItem).not.toHaveBeenCalled()
     })
   })
 
@@ -293,9 +311,7 @@ describe('RoomPage Component', () => {
       const copyButton = screen.getByTitle('Copy room code')
       fireEvent.click(copyButton)
 
-      await waitFor(() => {
-        expect(navigator.clipboard.writeText).toHaveBeenCalledWith(mockRoomCode)
-      })
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(mockRoomCode)
     })
   })
 
@@ -316,9 +332,8 @@ describe('RoomPage Component', () => {
       fireEvent.click(leaveButton)
 
       // Wait for the timeout
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/')
-      }, { timeout: 150 })
+      await new Promise(resolve => setTimeout(resolve, 150))
+      expect(mockPush).toHaveBeenCalledWith('/')
     })
   })
 
@@ -356,15 +371,8 @@ describe('RoomPage Component', () => {
       })
     })
 
-    it('should handle room-joined event', async () => {
+    it('should handle room-joined event', () => {
       renderRoomPage()
-
-      // Get the room-joined event handler
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
-      // Verify handler exists
-      expect(roomJoinedHandler).toBeDefined()
-      expect(typeof roomJoinedHandler).toBe('function')
 
       const mockData = {
         players: [
@@ -374,20 +382,16 @@ describe('RoomPage Component', () => {
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      // Trigger the room-joined event
+      mockSocket._triggerEvent('room-joined', mockData)
 
-      // Wait for React state to update
-      await waitFor(() => {
-        expect(screen.getByText('Player 1')).toBeInTheDocument()
-        expect(screen.getByText('Player 2')).toBeInTheDocument()
-        expect(screen.getByText('Players: 2/2')).toBeInTheDocument()
-      })
+      expect(screen.getByText('Player 1')).toBeInTheDocument()
+      expect(screen.getByText('Player 2')).toBeInTheDocument()
+      expect(screen.getByText('Players: 2/2')).toBeInTheDocument()
     })
 
     it('should handle player-joined event', () => {
       renderRoomPage()
-
-      const playerJoinedHandler = mockSocket._getHandler('player-joined')
 
       const mockData = {
         players: [
@@ -396,7 +400,7 @@ describe('RoomPage Component', () => {
         ],
       }
 
-      playerJoinedHandler(mockData)
+      mockSocket._triggerEvent('player-joined', mockData)
 
       expect(screen.getByText('Player 1')).toBeInTheDocument()
       expect(screen.getByText('Player 2')).toBeInTheDocument()
@@ -405,13 +409,11 @@ describe('RoomPage Component', () => {
     it('should handle player-left event', () => {
       renderRoomPage()
 
-      const playerLeftHandler = mockSocket._getHandler('player-left')
-
       const mockData = {
         players: [{ userId: 'user1', name: 'Player 1', isReady: false }],
       }
 
-      playerLeftHandler(mockData)
+      mockSocket._triggerEvent('player-left', mockData)
 
       expect(screen.getByText('Player 1')).toBeInTheDocument()
       expect(screen.queryByText('Player 2')).not.toBeInTheDocument()
@@ -420,8 +422,6 @@ describe('RoomPage Component', () => {
     it('should handle player-ready event', () => {
       renderRoomPage()
 
-      const playerReadyHandler = mockSocket._getHandler('player-ready')
-
       const mockData = {
         players: [
           { userId: 'user1', name: 'Player 1', isReady: true },
@@ -429,7 +429,7 @@ describe('RoomPage Component', () => {
         ],
       }
 
-      playerReadyHandler(mockData)
+      mockSocket._triggerEvent('player-ready', mockData)
 
       expect(screen.getByText('✓ Ready')).toBeInTheDocument()
     })
@@ -437,30 +437,25 @@ describe('RoomPage Component', () => {
     it('should handle game-start event', () => {
       renderRoomPage()
 
-      const gameStartHandler = mockSocket._getHandler('game-start')
-
-      gameStartHandler()
+      mockSocket._triggerEvent('game-start')
 
       expect(mockPush).toHaveBeenCalledWith(`/room/${mockRoomCode}/game`)
     })
 
-    it('should handle room-error event', () => {
+    it('should handle room-error event', async () => {
       renderRoomPage()
 
-      const roomErrorHandler = mockSocket._getHandler('room-error')
-
       const errorMessage = 'Room is full'
-      roomErrorHandler(errorMessage)
+      mockSocket._triggerEvent('room-error', errorMessage)
 
-      expect(screen.getByText(errorMessage)).toBeInTheDocument()
+      const errorElement = await screen.findByText(errorMessage)
+      expect(errorElement).toBeInTheDocument()
     })
   })
 
   describe('Player Display', () => {
     it('should display "You" label for current player', () => {
       renderRoomPage()
-
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
 
       const mockData = {
         players: [
@@ -470,7 +465,7 @@ describe('RoomPage Component', () => {
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       expect(screen.getByText('You')).toBeInTheDocument()
     })
@@ -478,14 +473,12 @@ describe('RoomPage Component', () => {
     it('should display player avatar with first letter of name', () => {
       renderRoomPage()
 
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
       const mockData = {
         players: [{ userId: 'user1', name: 'Alice', isReady: false }],
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       expect(screen.getByText('A')).toBeInTheDocument()
     })
@@ -493,13 +486,11 @@ describe('RoomPage Component', () => {
     it('should show green ring around ready players', () => {
       renderRoomPage()
 
-      const playerReadyHandler = mockSocket._getHandler('player-ready')
-
       const mockData = {
         players: [{ userId: 'user1', name: 'Alice', isReady: true }],
       }
 
-      playerReadyHandler(mockData)
+      mockSocket._triggerEvent('player-ready', mockData)
 
       const playerCard = screen.getByText('Alice').closest('.bg-white\\/10')
       expect(playerCard).toHaveClass('ring-2', 'ring-green-500')
@@ -510,8 +501,6 @@ describe('RoomPage Component', () => {
     it('should show Ready button when current player is not ready', () => {
       renderRoomPage()
 
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
       const mockData = {
         players: [
           { userId: 'user1', name: 'Player 1', isReady: false },
@@ -520,7 +509,7 @@ describe('RoomPage Component', () => {
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       const readyButton = screen.getByText('Ready')
       expect(readyButton).toBeInTheDocument()
@@ -530,8 +519,6 @@ describe('RoomPage Component', () => {
     it('should show Cancel Ready button when current player is ready', () => {
       renderRoomPage()
 
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
       const mockData = {
         players: [
           { userId: 'user1', name: 'Player 1', isReady: true },
@@ -540,7 +527,7 @@ describe('RoomPage Component', () => {
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       const cancelButton = screen.getByText('Cancel Ready')
       expect(cancelButton).toBeInTheDocument()
@@ -548,8 +535,6 @@ describe('RoomPage Component', () => {
 
     it('should emit player-ready event when Ready button is clicked', () => {
       renderRoomPage()
-
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
 
       const mockData = {
         players: [
@@ -559,7 +544,7 @@ describe('RoomPage Component', () => {
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       const readyButton = screen.getByText('Ready')
       fireEvent.click(readyButton)
@@ -570,14 +555,12 @@ describe('RoomPage Component', () => {
     it('should disable Ready button when there are not 2 players', () => {
       renderRoomPage()
 
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
       const mockData = {
         players: [{ userId: 'user1', name: 'Player 1', isReady: false }],
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       const readyButton = screen.getByText('Ready')
       expect(readyButton).toBeDisabled()
@@ -589,21 +572,17 @@ describe('RoomPage Component', () => {
     it('should show "Need 1 more player" when there is 1 player', () => {
       renderRoomPage()
 
-      const playerJoinedHandler = mockSocket._getHandler('player-joined')
-
       const mockData = {
         players: [{ userId: 'user1', name: 'Player 1', isReady: false }],
       }
 
-      playerJoinedHandler(mockData)
+      mockSocket._triggerEvent('player-joined', mockData)
 
       expect(screen.getByText('Need 1 more player to start!')).toBeInTheDocument()
     })
 
     it('should show "Both players joined" when there are 2 players', () => {
       renderRoomPage()
-
-      const playerJoinedHandler = mockSocket._getHandler('player-joined')
 
       const mockData = {
         players: [
@@ -612,7 +591,7 @@ describe('RoomPage Component', () => {
         ],
       }
 
-      playerJoinedHandler(mockData)
+      mockSocket._triggerEvent('player-joined', mockData)
 
       expect(screen.getByText('Both players joined! Ready when everyone is ready...')).toBeInTheDocument()
     })
@@ -620,14 +599,12 @@ describe('RoomPage Component', () => {
     it('should show "No players in room yet" when joined but no players', () => {
       renderRoomPage()
 
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
       const mockData = {
         players: [],
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       expect(screen.getByText('No players in room yet')).toBeInTheDocument()
     })
@@ -667,50 +644,46 @@ describe('RoomPage Component', () => {
     it('should hide joining room message when hasJoined is true', () => {
       renderRoomPage()
 
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
       const mockData = {
         players: [{ userId: 'user1', name: 'Player 1', isReady: false }],
         playerId: 'user1',
       }
 
-      roomJoinedHandler(mockData)
+      mockSocket._triggerEvent('room-joined', mockData)
 
       expect(screen.queryByText('Joining room...')).not.toBeInTheDocument()
     })
   })
 
   describe('Error Handling', () => {
-    it('should display error message when room-error event is received', () => {
+    it('should display error message when room-error event is received', async () => {
       renderRoomPage()
 
-      const roomErrorHandler = mockSocket._getHandler('room-error')
-
       const errorMessage = 'Room not found'
-      roomErrorHandler(errorMessage)
+      mockSocket._triggerEvent('room-error', errorMessage)
 
-      const errorElement = screen.getByText(errorMessage)
+      const errorElement = await screen.findByText(errorMessage)
       expect(errorElement).toBeInTheDocument()
       expect(errorElement).toHaveClass('bg-red-500/20', 'border', 'border-red-500', 'text-red-200')
     })
 
-    it('should clear error message when successfully joining room', () => {
+    it('should clear error message when successfully joining room', async () => {
       renderRoomPage()
 
       // First set an error
-      const roomErrorHandler = mockSocket._getHandler('room-error')
+      mockSocket._triggerEvent('room-error', 'Some error')
 
-      roomErrorHandler('Some error')
-      expect(screen.getByText('Some error')).toBeInTheDocument()
+      const errorElement = await screen.findByText('Some error')
+      expect(errorElement).toBeInTheDocument()
 
       // Then successfully join room
-      const roomJoinedHandler = mockSocket._getHandler('room-joined')
-
-      roomJoinedHandler({
+      mockSocket._triggerEvent('room-joined', {
         players: [{ userId: 'user1', name: 'Player 1', isReady: false }],
         playerId: 'user1',
       })
 
+      // Wait for error to be removed
+      await new Promise(resolve => setTimeout(resolve, 100))
       expect(screen.queryByText('Some error')).not.toBeInTheDocument()
     })
   })
