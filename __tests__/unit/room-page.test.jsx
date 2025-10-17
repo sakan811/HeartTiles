@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved, act } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { useRouter, useParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import RoomPage from '../../src/app/room/[roomCode]/page.js'
@@ -299,12 +299,27 @@ describe('RoomPage Component', () => {
     })
 
     it('should use existing player name from sessionStorage', () => {
-      sessionStorage.getItem.mockReturnValue('ExistingPlayer')
+      const mockGetItem = vi.fn().mockReturnValue('ExistingPlayer')
+      const mockSetItem = vi.fn()
+
+      // Override the global sessionStorage mock for this specific test
+      vi.stubGlobal('sessionStorage', {
+        getItem: mockGetItem,
+        setItem: mockSetItem,
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+      })
+
+      // Mock session without user name to force sessionStorage usage
+      vi.mocked(useSession).mockReturnValue({
+        data: { user: {} }, // No name property
+        status: 'authenticated',
+      })
 
       renderRoomPage()
 
-      expect(sessionStorage.getItem).toHaveBeenCalledWith('heart-tiles-player-name')
-      expect(sessionStorage.setItem).not.toHaveBeenCalled()
+      expect(mockGetItem).toHaveBeenCalledWith('heart-tiles-player-name')
+      expect(mockSetItem).not.toHaveBeenCalled()
     })
   })
 
@@ -414,7 +429,7 @@ describe('RoomPage Component', () => {
 
     it('should handle player-left event', async () => {
       renderRoomPage()
-      
+
       act(() => {
         mockSocket._triggerEvent('room-joined', {
             players: [
@@ -436,9 +451,11 @@ describe('RoomPage Component', () => {
       })
 
       expect(await screen.findByText('Player 1')).toBeInTheDocument()
-      await waitFor(() => {
-        expect(screen.queryByText('Player 2')).not.toBeInTheDocument()
-      })
+      expect(await screen.findByText('Players: 1/2')).toBeInTheDocument()
+
+      // Wait for Player 2 to be removed from the DOM
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(screen.queryByText('Player 2')).not.toBeInTheDocument()
     })
 
     it('should handle player-ready event', async () => {
@@ -470,7 +487,8 @@ describe('RoomPage Component', () => {
       renderRoomPage()
 
       const errorMessage = 'Room is full'
-      act(() => {
+
+      await act(async () => {
         mockSocket._triggerEvent('room-error', errorMessage)
       })
 
@@ -524,7 +542,7 @@ describe('RoomPage Component', () => {
         mockSocket._triggerEvent('player-ready', mockData)
       })
 
-      const playerCard = (await screen.findByText('Alice')).closest('.bg-white\/10')
+      const playerCard = (await screen.findByText('Alice')).closest('[class*="bg-white"]')
       expect(playerCard).toHaveClass('ring-2', 'ring-green-500')
     })
   })
@@ -690,6 +708,9 @@ describe('RoomPage Component', () => {
     it('should hide joining room message when hasJoined is true', async () => {
       renderRoomPage()
 
+      // Verify the joining message is initially present
+      expect(screen.getByText('Joining room...')).toBeInTheDocument()
+
       const mockData = {
         players: [{ userId: 'user1', name: 'Player 1', isReady: false }],
         playerId: 'user1',
@@ -699,7 +720,9 @@ describe('RoomPage Component', () => {
         mockSocket._triggerEvent('room-joined', mockData)
       })
 
-      await waitForElementToBeRemoved(() => screen.queryByText('Joining room...'))
+      // Wait for the joining message to disappear
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(screen.queryByText('Joining room...')).not.toBeInTheDocument()
     })
   })
 
@@ -708,7 +731,8 @@ describe('RoomPage Component', () => {
       renderRoomPage()
 
       const errorMessage = 'Room not found'
-      act(() => {
+
+      await act(async () => {
         mockSocket._triggerEvent('room-error', errorMessage)
       })
 
@@ -721,7 +745,7 @@ describe('RoomPage Component', () => {
       renderRoomPage()
 
       // First set an error
-      act(() => {
+      await act(async () => {
         mockSocket._triggerEvent('room-error', 'Some error')
       })
 
@@ -729,14 +753,16 @@ describe('RoomPage Component', () => {
       expect(errorElement).toBeInTheDocument()
 
       // Then successfully join room
-      act(() => {
+      await act(async () => {
         mockSocket._triggerEvent('room-joined', {
           players: [{ userId: 'user1', name: 'Player 1', isReady: false }],
           playerId: 'user1',
         })
       })
 
-      await waitForElementToBeRemoved(() => screen.queryByText('Some error'))
+      // Wait for the error message to disappear
+      await new Promise(resolve => setTimeout(resolve, 100))
+      expect(screen.queryByText('Some error')).not.toBeInTheDocument()
     })
   })
 
@@ -747,7 +773,8 @@ describe('RoomPage Component', () => {
       const mainContainer = container.querySelector('.font-sans.min-h-screen.flex.items-center.justify-center')
       expect(mainContainer).toBeInTheDocument()
 
-      const cardElement = container.querySelector('.bg-white\/10.backdrop-blur-sm.rounded-2xl.p-8')
+      // Use more flexible selectors since jsdom may not handle modern Tailwind syntax well
+      const cardElement = container.querySelector('[class*="bg-white"][class*="backdrop-blur"][class*="rounded"][class*="p-8"]')
       expect(cardElement).toBeInTheDocument()
     })
 
