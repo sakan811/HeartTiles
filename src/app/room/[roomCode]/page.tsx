@@ -109,7 +109,7 @@ export default function RoomPage() {
       const playerName = getPlayerName();
       console.log("Joining room:", roomCode, "as:", playerName);
       socket?.emit("join-room", { roomCode, playerName });
-      setHasJoined(true); // Prevent duplicate joins
+      // Don't set hasJoined here - let the room-joined event handle it
     }
   }, [isConnected, socketId, roomCode, hasJoined, socket, session, getPlayerName]);
 
@@ -164,7 +164,11 @@ export default function RoomPage() {
           </div>
 
           <div className="flex items-center justify-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}></div>
+            <div
+              role="status"
+              className={`w-3 h-3 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}
+              aria-label={isConnected ? "Connected" : "Connecting..."}
+            ></div>
             <span className="text-gray-300">
               {isConnected ? "Connected" : "Connecting..."}
             </span>
