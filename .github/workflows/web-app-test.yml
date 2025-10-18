@@ -43,6 +43,20 @@ jobs:
           mongodb-version: 'latest'
           mongodb-db: 'heart-tiles-test'
           mongodb-port: 27017
+          mongodb-username: 'root'
+          mongodb-password: 'example'
+
+      - name: Wait for MongoDB to be ready
+        run: |
+          echo "Waiting for MongoDB to be ready..."
+          for i in {1..30}; do
+            if nc -z localhost 27017; then
+              echo "MongoDB is ready"
+              break
+            fi
+            echo "Attempt $i/30: MongoDB not ready, waiting 1 second..."
+            sleep 1
+          done
 
       - name: Install dependencies
         run: pnpm install
@@ -50,7 +64,7 @@ jobs:
       - name: Run tests
         run: pnpm run test
         env:
-          MONGODB_URI: mongodb://localhost:27017/heart-tiles-test
+          MONGODB_URI: mongodb://root:example@localhost:27017/heart-tiles-test?authSource=admin
           NEXTAUTH_SECRET: test-secret
           NEXTAUTH_URL: http://localhost:3000
           NODE_ENV: test
