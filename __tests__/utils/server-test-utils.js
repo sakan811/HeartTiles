@@ -16,13 +16,47 @@ import { getToken } from 'next-auth/jwt';
 // Database connection functions
 export async function connectToDatabase() {
   const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/heart-tiles-test?authSource=admin';
-  try {
-    // Always try to connect - mongoose handles existing connections
-    await mongoose.connect(MONGODB_URI);
-    console.log('Connected to test MongoDB');
-  } catch (err) {
-    console.error('MongoDB connection failed:', err);
-    throw err;
+
+  // Enhanced connection options for CI environment
+  const connectionOptions = {
+    serverSelectionTimeoutMS: 30000, // Increase timeout to 30s for CI
+    bufferTimeoutMS: 30000, // Increase buffer timeout to 30s
+    maxPoolSize: 10, // Connection pooling
+    retryWrites: true, // Enable retry writes
+    // Additional options for CI reliability
+    connectTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
+    // Use only supported Mongoose options
+    bufferCommands: false, // Disable command buffering
+  };
+
+  // Retry logic for CI environment
+  const maxRetries = process.env.NODE_ENV === 'test' ? 3 : 1;
+  const retryDelay = 2000; // 2 seconds between retries
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Check if already connected
+      if (mongoose.connection.readyState === 1) {
+        console.log('Already connected to test MongoDB');
+        return;
+      }
+
+      // Connect with enhanced options
+      await mongoose.connect(MONGODB_URI, connectionOptions);
+      console.log('Connected to test MongoDB');
+      return; // Success, exit the retry loop
+    } catch (err) {
+      console.error(`MongoDB connection attempt ${attempt} failed:`, err.message);
+
+      if (attempt === maxRetries) {
+        console.error('All MongoDB connection attempts failed');
+        throw err;
+      }
+
+      console.log(`Retrying MongoDB connection in ${retryDelay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
   }
 }
 
@@ -91,6 +125,15 @@ export async function loadRooms() {
 
 export async function saveRoom(roomData) {
   try {
+    // Validate input
+    if (!roomData) {
+      throw new Error('Room data is required');
+    }
+
+    if (!roomData.code) {
+      throw new Error('Room code is required');
+    }
+
     // Create a deep copy of the room data
     const roomDataToSave = JSON.parse(JSON.stringify(roomData));
 
