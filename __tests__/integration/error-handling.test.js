@@ -162,6 +162,8 @@ describe('Error Handling and Edge Cases', () => {
       const mockConnect = vi.spyOn(mongoose.default, 'connect').mockRejectedValue(new Error('Connection failed'))
 
       try {
+        // Disconnect first to force a new connection attempt
+        await disconnectDatabase()
         await expect(connectToDatabase()).rejects.toThrow()
       } finally {
         mockConnect.mockRestore()
