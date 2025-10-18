@@ -40,7 +40,7 @@ jobs:
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.10.0
         with:
-          mongodb-version: '7.0'
+          mongodb-version: 'latest'
           mongodb-db: 'heart-tiles-test'
           mongodb-port: 27017
 
