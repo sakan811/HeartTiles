@@ -10,10 +10,18 @@ import {
 } from '../utils/server-test-utils.js'
 import { User } from '../../models.js'
 
-// Mock next-auth/jwt module properly
-vi.mock('next-auth/jwt', () => ({
+// Create mock functions before mocking the module
+const { getToken: mockGetToken } = vi.hoisted(() => ({
   getToken: vi.fn()
 }))
+
+// Mock next-auth/jwt module properly
+vi.mock('next-auth/jwt', () => ({
+  getToken: mockGetToken
+}))
+
+// Import the mocked getToken for use in beforeEach
+import { getToken } from 'next-auth/jwt'
 
 describe('Authentication Integration Tests', () => {
   let mockRooms, mockPlayerSessions
@@ -21,14 +29,17 @@ describe('Authentication Integration Tests', () => {
   beforeEach(() => {
     mockRooms = new Map()
     mockPlayerSessions = new Map()
-    vi.clearAllMocks()
   })
 
   describe('Socket Authentication', () => {
+    beforeEach(() => {
+      // Reset the mock before each authentication test
+      mockGetToken.mockReset()
+    })
+
     it('should authenticate socket with valid token', async () => {
       // Mock successful token retrieval
-      const { getToken } = await import('next-auth/jwt')
-      const mockGetToken = vi.mocked(getToken).mockResolvedValue({
+      mockGetToken.mockResolvedValue({
         id: 'user-123',
         jti: 'session-456',
         email: 'test@example.com',
@@ -63,14 +74,12 @@ describe('Authentication Integration Tests', () => {
       } finally {
         // Restore original functions
         User.findById = originalUserFindById
-        vi.clearAllMocks()
       }
     })
 
     it('should reject socket with invalid token', async () => {
       // Mock failed token retrieval
-      const { getToken } = await import('next-auth/jwt')
-      vi.mocked(getToken).mockResolvedValue(null)
+      mockGetToken.mockResolvedValue(null)
 
       const mockSocket = {
         handshake: {},
@@ -82,8 +91,7 @@ describe('Authentication Integration Tests', () => {
 
     it('should reject socket when user not found', async () => {
       // Mock successful token but failed user lookup
-      const { getToken } = await import('next-auth/jwt')
-      vi.mocked(getToken).mockResolvedValue({
+      mockGetToken.mockResolvedValue({
         id: 'nonexistent-user',
         jti: 'session-456'
       })
@@ -100,14 +108,12 @@ describe('Authentication Integration Tests', () => {
         await expect(authenticateSocket(mockSocket)).rejects.toThrow('User not found')
       } finally {
         User.findById = originalUserFindById
-        vi.clearAllMocks()
       }
     })
 
     it('should handle authentication errors gracefully', async () => {
       // Mock token retrieval error
-      const { getToken } = await import('next-auth/jwt')
-      vi.mocked(getToken).mockRejectedValue(new Error('Token verification failed'))
+      mockGetToken.mockRejectedValue(new Error('Token verification failed'))
 
       const mockSocket = {
         handshake: {},
@@ -345,8 +351,7 @@ describe('Authentication Integration Tests', () => {
 
     it('should handle expired tokens', async () => {
       // Mock expired token
-      const { getToken } = await import('next-auth/jwt')
-      vi.mocked(getToken).mockResolvedValue({
+      mockGetToken.mockResolvedValue({
         id: 'user-expired',
         jti: 'session-expired',
         email: 'expired@example.com',
@@ -376,14 +381,12 @@ describe('Authentication Integration Tests', () => {
         expect(result.authenticated).toBe(true)
       } finally {
         User.findById = originalUserFindById
-        vi.clearAllMocks()
       }
     })
 
     it('should handle malformed token data', async () => {
       // Mock malformed token
-      const { getToken } = await import('next-auth/jwt')
-      vi.mocked(getToken).mockResolvedValue({
+      mockGetToken.mockResolvedValue({
         // Missing required 'id' field
         jti: 'session-malformed',
         email: 'malformed@example.com'
@@ -399,8 +402,7 @@ describe('Authentication Integration Tests', () => {
 
     it('should handle database connection errors during authentication', async () => {
       // Mock successful token but database error
-      const { getToken } = await import('next-auth/jwt')
-      vi.mocked(getToken).mockResolvedValue({
+      mockGetToken.mockResolvedValue({
         id: 'user-db-error',
         jti: 'session-db-error'
       })
@@ -417,7 +419,6 @@ describe('Authentication Integration Tests', () => {
         await expect(authenticateSocket(mockSocket)).rejects.toThrow('User not found')
       } finally {
         User.findById = originalUserFindById
-        vi.clearAllMocks()
       }
     })
   })
@@ -446,12 +447,12 @@ describe('Authentication Integration Tests', () => {
         }
       ]
 
-      const { loadPlayerSessions } = await import('../utils/server-test-utils.js')
-      const mockLoadPlayerSessions = vi.spyOn({ loadPlayerSessions }, 'loadPlayerSessions')
+      const serverUtils = await import('../utils/server-test-utils.js')
+      const mockLoadPlayerSessions = vi.spyOn(serverUtils, 'loadPlayerSessions')
         .mockResolvedValue(new Map(mockDbSessions.filter(s => s.isActive).map(s => [s.userId, s])))
 
       try {
-        const sessions = await loadPlayerSessions()
+        const sessions = await serverUtils.loadPlayerSessions()
         expect(sessions.size).toBe(1) // Only active session
         expect(sessions.has('db-user-1')).toBe(true)
         expect(sessions.has('db-user-2')).toBe(false)
@@ -465,12 +466,12 @@ describe('Authentication Integration Tests', () => {
     })
 
     it('should handle database errors during session loading', async () => {
-      const { loadPlayerSessions } = await import('../utils/server-test-utils.js')
-      const mockLoadPlayerSessions = vi.spyOn({ loadPlayerSessions }, 'loadPlayerSessions')
+      const serverUtils = await import('../utils/server-test-utils.js')
+      const mockLoadPlayerSessions = vi.spyOn(serverUtils, 'loadPlayerSessions')
         .mockRejectedValue(new Error('Database error'))
 
       try {
-        const sessions = await loadPlayerSessions()
+        const sessions = await serverUtils.loadPlayerSessions()
         expect(sessions.size).toBe(0) // Should return empty map on error
       } finally {
         mockLoadPlayerSessions.mockRestore()

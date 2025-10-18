@@ -154,7 +154,8 @@ export async function authenticateSocket(socket) {
     return { authenticated: true, user };
   } catch (error) {
     console.error('Socket authentication error:', error);
-    throw new Error('Authentication failed');
+    // Re-throw the original error message instead of a generic one
+    throw error;
   }
 }
 

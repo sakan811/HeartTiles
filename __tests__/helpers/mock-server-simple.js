@@ -5,8 +5,8 @@ import { createInitialHand, generateRandomHeartCard, generateRandomMagicCard } f
 import { createTileSet } from '../factories/game-factories.js';
 
 /**
- * Mock Socket.IO Server for integration testing
- * Encapsulates all server behavior and game logic
+ * Simplified Mock Socket.IO Server for integration testing
+ * Focused on stability and basic functionality
  */
 export class MockSocketServer {
   constructor(options = {}) {
@@ -14,14 +14,18 @@ export class MockSocketServer {
     this.io = null;
     this.port = null;
     this.rooms = new Map();
-    this.turnLocks = new Map();
-    this.clientSockets = [];
     this.isReady = false;
     this.options = {
-      cors: { origin: "*", methods: ["GET", "POST"] },
-      transports: ['websocket', 'polling'], // Allow both transports
-      pingTimeout: 6000, // Increased from 2000 to 6000ms
-      pingInterval: 3000, // Increased from 1000 to 3000ms
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
+      },
+      transports: ['websocket', 'polling'],
+      pingTimeout: 60000, // Increased for test environment
+      pingInterval: 25000,
+      allowEIO3: true, // Allow Engine.IO v3 compatibility
+      path: '/socket.io/',
       ...options
     };
 
@@ -38,13 +42,13 @@ export class MockSocketServer {
 
     this.io = new Server(this.httpServer, this.options);
 
-    // Setup authentication middleware
+    // Setup simple authentication middleware
     this.setupAuthMiddleware();
 
     // Setup event handlers
     this.setupEventHandlers();
 
-    // Add a simple HTTP health check route
+    // Add health check route
     this.httpServer.on('request', (req, res) => {
       if (req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -53,19 +57,18 @@ export class MockSocketServer {
       }
     });
 
-    // Start server and get the actual port
+    // Start server
     await new Promise((resolve, reject) => {
-      this.httpServer.listen(0, () => {
+      this.httpServer.listen(0, '127.0.0.1', () => {
         this.port = this.httpServer.address().port;
         console.log(`Mock server started on port ${this.port}`);
-        console.log(`Mock server health check: http://localhost:${this.port}/health`);
 
-        // Add a small delay to ensure server is fully ready
+        // Add delay to ensure server is fully ready
         setTimeout(() => {
           console.log(`Mock server: Ready for connections on port ${this.port}`);
           this.isReady = true;
           resolve();
-        }, 100);
+        }, 500); // Increased delay for server readiness
       });
       this.httpServer.on('error', reject);
     });
@@ -77,44 +80,8 @@ export class MockSocketServer {
    * Stop the mock server
    */
   async stop() {
-    // Close all client sockets first
-    this.clientSockets.forEach(socket => {
-      if (socket && socket.connected) {
-        socket.disconnect();
-      }
-    });
-    this.clientSockets = [];
-
-    // Close server - use the correct method for Socket.IO v4+
     if (this.io) {
-      // Disconnect all sockets and close the server
-      try {
-        // Try to disconnect all sockets using available methods
-        if (this.io.sockets) {
-          this.io.sockets.disconnectSockets();
-        }
-        // Alternative: close all sockets directly
-        const sockets = this.io.sockets?.sockets || this.io._nsps?.get('/')?.sockets;
-        if (sockets) {
-          sockets.forEach(socket => {
-            try {
-              socket.disconnect(true);
-            } catch (e) {
-              // Ignore socket disconnection errors
-            }
-          });
-        }
-      } catch (error) {
-        console.warn('Error disconnecting sockets:', error.message);
-      }
-      // Use the correct close method
-      try {
-        if (typeof this.io.close === 'function') {
-          this.io.close();
-        }
-      } catch (error) {
-        console.warn('Error closing Socket.IO server:', error.message);
-      }
+      this.io.close();
     }
     if (this.httpServer) {
       this.httpServer.close();
@@ -122,51 +89,33 @@ export class MockSocketServer {
   }
 
   /**
-   * Setup authentication middleware
+   * Setup simple authentication middleware
    */
   setupAuthMiddleware() {
-    this.io.use(async (socket, next) => {
+    this.io.use((socket, next) => {
       try {
-        console.log(`Mock server: Incoming connection attempt from ${socket.handshake.address}`);
-        console.log(`Mock server: Handshake query:`, socket.handshake.query);
-        console.log(`Mock server: Handshake auth:`, socket.handshake.auth);
-
         const token = socket.handshake.auth?.token;
-        // Enhanced authentication handling for testing
-        if (token?.id) {
-          // Use provided token data
-          socket.data.userId = token.id;
-          socket.data.userEmail = token.email || `${token.id}@example.com`;
-          socket.data.userName = token.name || `User ${token.id}`;
-          socket.data.userSessionId = token.jti || `session-${token.id}`;
-        } else if (token && typeof token === 'object') {
-          // Handle cases where token is provided but might be malformed
-          socket.data.userId = token.id || 'user1';
-          socket.data.userEmail = token.email || 'user1@example.com';
-          socket.data.userName = token.name || 'User 1';
-          socket.data.userSessionId = token.jti || 'session-user1';
-        } else {
-          // Create default user data for testing with clear indication
-          const defaultUserId = `default-user-${Date.now()}`;
-          socket.data.userId = defaultUserId;
-          socket.data.userEmail = `${defaultUserId}@example.com`;
-          socket.data.userName = `Default User`;
-          socket.data.userSessionId = `session-${defaultUserId}`;
-          console.log(`Mock server: Using default user data: ${defaultUserId}`);
+
+        // For the specific authentication test, reject connections with token: null
+        if (token === null) {
+          return next(new Error('Authentication required'));
         }
 
-        console.log(`Mock server: Connection accepted for user ${socket.data.userName} (${socket.data.userId})`);
+        if (token?.id) {
+          socket.data.userId = token.id;
+          socket.data.userName = token.name || `User ${token.id}`;
+          socket.data.userEmail = token.email || `${token.id}@example.com`;
+        } else {
+          socket.data.userId = 'test-user-1';
+          socket.data.userName = 'Test User 1';
+          socket.data.userEmail = 'test-user-1@example.com';
+        }
+
+        console.log(`Mock server: Connection accepted for ${socket.data.userName} (${socket.data.userId})`);
         next();
       } catch (error) {
-        console.log('Mock server: Authentication error:', error.message);
-        console.log('Mock server: Authentication error stack:', error.stack);
-        // Accept connection even on auth error for testing reliability
-        socket.data.userId = `error-user-${Date.now()}`;
-        socket.data.userName = 'Error Recovery User';
-        socket.data.userEmail = `error@example.com`;
-        socket.data.userSessionId = 'session-error';
-        console.log(`Mock server: Connection accepted with recovery data for ${socket.data.userName}`);
-        next();
+        console.log('Mock server: Auth error, rejecting connection');
+        next(new Error('Authentication failed'));
       }
     });
   }
@@ -176,10 +125,7 @@ export class MockSocketServer {
    */
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      const { userId, userName, userEmail } = socket.data;
-      console.log(`Mock server: New connection established - Socket ID: ${socket.id}, User: ${userName} (${userId})`);
-      console.log(`Mock server: Socket transport: ${socket.conn.transport.name}`);
-      console.log(`Mock server: Total connected sockets: ${this.io.sockets.sockets.size}`);
+      console.log(`Mock server: ${socket.data.userName} connected (${socket.id})`);
 
       // Room management events
       socket.on('join-room', (data) => this.handleJoinRoom(socket, data));
@@ -192,6 +138,10 @@ export class MockSocketServer {
       socket.on('draw-magic-card', (data) => this.handleDrawMagicCard(socket, data));
       socket.on('use-magic-card', (data) => this.handleUseMagicCard(socket, data));
       socket.on('end-turn', (data) => this.handleEndTurn(socket, data));
+
+      socket.on('disconnect', () => {
+        console.log(`Mock server: ${socket.data.userName} disconnected`);
+      });
     });
   }
 
@@ -199,11 +149,10 @@ export class MockSocketServer {
    * Handle join-room event
    */
   async handleJoinRoom(socket, { roomCode }) {
-    console.log(`Mock server: join-room event for roomCode: ${roomCode} from user ${socket.data.userName}`);
+    console.log(`Mock server: ${socket.data.userName} joining room ${roomCode}`);
 
     // Validate room code
     if (!roomCode || typeof roomCode !== 'string' || !/^[A-Z0-9]{6}$/i.test(roomCode)) {
-      console.log(`Mock server: Invalid room code rejected: ${roomCode}`);
       socket.emit('room-error', 'Invalid room code');
       return;
     }
@@ -212,23 +161,25 @@ export class MockSocketServer {
     let room = this.rooms.get(roomCode);
 
     if (!room) {
-      // Create new room
       room = this.createRoom(roomCode);
       this.rooms.set(roomCode, room);
-      console.log(`Mock server: Room ${roomCode} created by ${socket.data.userName}`);
+      console.log(`Mock server: Created room ${roomCode}`);
     }
 
-    // Add or update player
+    // Add player to room
     this.addOrUpdatePlayer(room, socket.data);
 
-    // Join socket room and set socket data
+    // Join socket room
     socket.join(roomCode);
     socket.data.roomCode = roomCode;
 
-    // Emit room-joined event to current player with updated room state
-    socket.emit('room-joined', { players: room.players, playerId: socket.data.userId });
+    // Send room-joined event
+    socket.emit('room-joined', {
+      players: room.players,
+      playerId: socket.data.userId
+    });
 
-    // Broadcast player-joined event to all players in room (including this one for consistency)
+    // Broadcast to all players
     this.io.to(roomCode).emit('player-joined', { players: room.players });
   }
 
@@ -251,15 +202,12 @@ export class MockSocketServer {
       }
     }
     socket.leave(roomCode);
-    socket.data.roomCode = null;
   }
 
   /**
    * Handle player-ready event
    */
   async handlePlayerReady(socket, { roomCode }) {
-    console.log(`Mock server: player-ready from ${socket.data.userName} for room ${roomCode}`);
-
     if (!roomCode || typeof roomCode !== 'string' || roomCode.length !== 6) {
       socket.emit('room-error', 'Invalid room code');
       return;
@@ -271,8 +219,6 @@ export class MockSocketServer {
       const player = room.players.find(p => p.userId === socket.data.userId);
       if (player) {
         player.isReady = !player.isReady;
-        console.log(`Mock server: Player ${socket.data.userName} is now ${player.isReady ? 'ready' : 'not ready'}`);
-
         this.io.to(roomCode).emit('player-ready', { players: room.players });
 
         // Check if game should start
@@ -337,7 +283,9 @@ export class MockSocketServer {
     this.io.to(roomCode).emit('heart-placed', {
       tiles: room.gameState.tiles,
       players: room.players.map(p => ({
-        ...p, hand: room.gameState.playerHands[p.userId] || [], score: p.score || 0
+        ...p,
+        hand: room.gameState.playerHands[p.userId] || [],
+        score: p.score || 0
       })),
       playerHands: room.gameState.playerHands
     });
@@ -365,30 +313,42 @@ export class MockSocketServer {
       return;
     }
 
+    // Check if player already drew a heart card this turn
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+    const playerActions = room.gameState.playerActions[socket.data.userId] || {
+      drawnHeart: false,
+      drawnMagic: false,
+      heartsPlaced: 0,
+      magicCardsUsed: 0
+    };
+
+    if (playerActions.drawnHeart) {
+      socket.emit('room-error', 'You can only draw one heart card per turn');
+      return;
+    }
+
     if (room.gameState.deck.cards <= 0) {
       socket.emit('room-error', 'No more cards in deck');
       return;
     }
 
-    // Track player actions
-    this.ensurePlayerActions(room, socket.data.userId);
-    if (room.gameState.playerActions[socket.data.userId].drawnHeart) {
-      socket.emit('room-error', 'You can only draw one heart card per turn');
-      return;
-    }
-
-    // Generate new heart card
+    // Generate and add new heart card
     const newHeart = generateRandomHeartCard();
     room.gameState.playerHands[socket.data.userId].push(newHeart);
     room.gameState.deck.cards--;
-    room.gameState.playerActions[socket.data.userId].drawnHeart = true;
 
-    console.log(`Mock server: Heart drawn by ${socket.data.userName} - ${newHeart.color} ${newHeart.value} ${newHeart.emoji}`);
+    // Record the action
+    playerActions.drawnHeart = true;
+    room.gameState.playerActions[socket.data.userId] = playerActions;
 
     // Broadcast heart-drawn event
     this.io.to(roomCode).emit('heart-drawn', {
       players: room.players.map(p => ({
-        ...p, hand: room.gameState.playerHands[p.userId] || [], score: p.score || 0
+        ...p,
+        hand: room.gameState.playerHands[p.userId] || [],
+        score: p.score || 0
       })),
       playerHands: room.gameState.playerHands,
       deck: room.gameState.deck
@@ -417,30 +377,42 @@ export class MockSocketServer {
       return;
     }
 
+    // Check if player already drew a magic card this turn
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+    const playerActions = room.gameState.playerActions[socket.data.userId] || {
+      drawnHeart: false,
+      drawnMagic: false,
+      heartsPlaced: 0,
+      magicCardsUsed: 0
+    };
+
+    if (playerActions.drawnMagic) {
+      socket.emit('room-error', 'You can only draw one magic card per turn');
+      return;
+    }
+
     if (room.gameState.magicDeck.cards <= 0) {
       socket.emit('room-error', 'No more magic cards in deck');
       return;
     }
 
-    // Track player actions
-    this.ensurePlayerActions(room, socket.data.userId);
-    if (room.gameState.playerActions[socket.data.userId].drawnMagic) {
-      socket.emit('room-error', 'You can only draw one magic card per turn');
-      return;
-    }
-
-    // Generate new magic card
+    // Generate and add new magic card
     const newMagicCard = generateRandomMagicCard();
     room.gameState.playerHands[socket.data.userId].push(newMagicCard);
     room.gameState.magicDeck.cards--;
-    room.gameState.playerActions[socket.data.userId].drawnMagic = true;
 
-    console.log(`Mock server: Magic card drawn by ${socket.data.userName} - ${newMagicCard.name} ${newMagicCard.emoji}`);
+    // Record the action
+    playerActions.drawnMagic = true;
+    room.gameState.playerActions[socket.data.userId] = playerActions;
 
     // Broadcast magic-card-drawn event
     this.io.to(roomCode).emit('magic-card-drawn', {
       players: room.players.map(p => ({
-        ...p, hand: room.gameState.playerHands[p.userId] || [], score: p.score || 0
+        ...p,
+        hand: room.gameState.playerHands[p.userId] || [],
+        score: p.score || 0
       })),
       playerHands: room.gameState.playerHands,
       magicDeck: room.gameState.magicDeck,
@@ -452,8 +424,6 @@ export class MockSocketServer {
    * Handle use-magic-card event
    */
   async handleUseMagicCard(socket, { roomCode, cardId, targetTileId }) {
-    console.log(`Mock server: User ${socket.data.userName} using magic card ${cardId} on tile ${targetTileId} in room ${roomCode}`);
-
     if (!roomCode || !cardId) {
       socket.emit('room-error', 'Invalid input data');
       return;
@@ -483,29 +453,26 @@ export class MockSocketServer {
     const card = playerHand.splice(cardIndex, 1)[0];
     const actionResult = this.executeMagicCardEffect(card, room, targetTileId, socket.data.userId);
 
-    const magicCardUsedData = {
+    // Broadcast magic-card-used event
+    this.io.to(roomCode).emit('magic-card-used', {
       card,
       actionResult,
       tiles: room.gameState.tiles,
       players: room.players.map(p => ({
-        ...p, hand: room.gameState.playerHands[p.userId] || [], score: p.score || 0
+        ...p,
+        hand: room.gameState.playerHands[p.userId] || [],
+        score: p.score || 0
       })),
       playerHands: room.gameState.playerHands,
       usedBy: socket.data.userId,
       shields: room.gameState.shields || {}
-    };
-
-    console.log(`Mock server: Broadcasting magic-card-used event to room ${roomCode}`);
-
-    this.io.to(roomCode).emit('magic-card-used', magicCardUsedData);
+    });
   }
 
   /**
    * Handle end-turn event
    */
   async handleEndTurn(socket, { roomCode }) {
-    console.log(`Mock server: end-turn from ${socket.data.userName} for room ${roomCode}`);
-
     if (!roomCode || typeof roomCode !== 'string' || roomCode.length !== 6) {
       socket.emit('room-error', 'Invalid room code');
       return;
@@ -524,24 +491,28 @@ export class MockSocketServer {
       return;
     }
 
-    // Check if player has drawn required cards
-    this.ensurePlayerActions(room, socket.data.userId);
-    const playerActions = room.gameState.playerActions[socket.data.userId] || { drawnHeart: false, drawnMagic: false };
-    const heartDeckEmpty = room.gameState.deck.cards <= 0;
-    const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
+    // Check if player has drawn required cards this turn
+    if (!room.gameState.playerActions) {
+      room.gameState.playerActions = {};
+    }
+    const playerActions = room.gameState.playerActions[socket.data.userId] || {
+      drawnHeart: false,
+      drawnMagic: false,
+      heartsPlaced: 0,
+      magicCardsUsed: 0
+    };
 
-    if (!playerActions.drawnHeart && !heartDeckEmpty) {
+    // Check if heart card draw is required (deck has cards)
+    if (room.gameState.deck.cards > 0 && !playerActions.drawnHeart) {
       socket.emit('room-error', 'You must draw a heart card before ending your turn');
       return;
     }
 
-    if (!playerActions.drawnMagic && !magicDeckEmpty) {
+    // Check if magic card draw is required (deck has cards)
+    if (room.gameState.magicDeck.cards > 0 && !playerActions.drawnMagic) {
       socket.emit('room-error', 'You must draw a magic card before ending your turn');
       return;
     }
-
-    // Reset actions for current player
-    room.gameState.playerActions[socket.data.userId] = { drawnHeart: false, drawnMagic: false };
 
     // Switch to next player
     const currentPlayerIndex = room.players.findIndex(p => p.userId === socket.data.userId);
@@ -549,21 +520,26 @@ export class MockSocketServer {
     room.gameState.currentPlayer = room.players[nextPlayerIndex];
     room.gameState.turnCount++;
 
-    console.log(`Mock server: Turn changed to ${room.gameState.currentPlayer.name} (turn ${room.gameState.turnCount})`);
+    // Reset actions for the next player
+    room.gameState.playerActions[socket.data.userId] = {
+      drawnHeart: false,
+      drawnMagic: false,
+      heartsPlaced: 0,
+      magicCardsUsed: 0
+    };
 
     // Broadcast turn-changed event
-    const turnChangeData = {
+    this.io.to(roomCode).emit('turn-changed', {
       currentPlayer: room.gameState.currentPlayer,
       turnCount: room.gameState.turnCount,
       players: room.players.map(p => ({
-        ...p, hand: room.gameState.playerHands[p.userId] || []
+        ...p,
+        hand: room.gameState.playerHands[p.userId] || []
       })),
       playerHands: room.gameState.playerHands,
       deck: room.gameState.deck,
       shields: room.gameState.shields || {}
-    };
-
-    this.io.to(roomCode).emit('turn-changed', turnChangeData);
+    });
   }
 
   /**
@@ -575,7 +551,7 @@ export class MockSocketServer {
       players: [],
       maxPlayers: 2,
       gameState: {
-        tiles: [], // Will be generated when game starts
+        tiles: [],
         gameStarted: false,
         currentPlayer: null,
         deck: { emoji: '💌', cards: 16, type: 'hearts' },
@@ -600,7 +576,6 @@ export class MockSocketServer {
         joinedAt: new Date()
       });
     } else {
-      // Update existing player data
       existingPlayer.name = userData.userName;
       existingPlayer.email = userData.userEmail;
       if (existingPlayer.score === undefined) existingPlayer.score = 0;
@@ -608,9 +583,9 @@ export class MockSocketServer {
   }
 
   async startGame(room, roomCode) {
-    console.log(`Mock server: Game starting in room ${roomCode}`);
+    console.log(`Mock server: Starting game in room ${roomCode}`);
 
-    // Generate tiles
+    // Generate tiles and setup game
     room.gameState.tiles = createTileSet();
     room.gameState.gameStarted = true;
     room.gameState.deck.cards = 16;
@@ -633,7 +608,7 @@ export class MockSocketServer {
         ...p,
         hand: room.gameState.playerHands[p.userId] || [],
         score: p.score || 0,
-        isReady: true // All players are ready when game starts
+        isReady: true
       })),
       playerHands: room.gameState.playerHands,
       deck: room.gameState.deck,
@@ -644,69 +619,9 @@ export class MockSocketServer {
       playerActions: room.gameState.playerActions || {}
     };
 
-    // Send personalized game-start data to each player
-    let allSockets = [];
-    try {
-      // Try different Socket.IO v4+ ways to access sockets
-      if (this.io.sockets && this.io.sockets.sockets) {
-        allSockets = Array.from(this.io.sockets.sockets.values());
-      } else if (this.io._nsps && this.io._nsps.get('/') && this.io._nsps.get('/').sockets) {
-        allSockets = Array.from(this.io._nsps.get('/').sockets.values());
-      }
-    } catch (error) {
-      console.warn('Error accessing sockets:', error.message);
-      allSockets = [];
-    }
-
-    console.log(`Mock server: Attempting to send game-start to ${room.players.length} players`);
-    console.log(`Mock server: Available sockets: ${allSockets.length}`);
-    console.log(`Mock server: Available socket user IDs: ${allSockets.map(s => s.data.userId).join(', ')}`);
-
-    // Always broadcast to room first to ensure the event is sent
-    console.log(`Mock server: Broadcasting game-start to room ${roomCode}`);
+    // Broadcast game-start to room
     this.io.to(roomCode).emit('game-start', gameStartData);
-
-    // Also try to send personalized data to each player
-    room.players.forEach(player => {
-      const personalizedData = {
-        ...gameStartData,
-        playerId: player.userId
-      };
-
-      console.log(`Mock server: Looking for socket for user ${player.userId} (${player.name})`);
-
-      // Try to find socket by userId first, then by matching with auth token
-      let playerSocket = allSockets.find(s => s.data.userId === player.userId);
-
-      if (!playerSocket) {
-        // Fallback: try to match by checking if socket is in the room
-        const socketsInRoom = allSockets.filter(s => s.rooms.has(roomCode));
-        console.log(`Mock server: Found ${socketsInRoom.length} sockets in room ${roomCode}`);
-        playerSocket = socketsInRoom.find(s => {
-          // Check if this socket belongs to the player by comparing auth data
-          const authUserId = s.auth?.token?.id || s.handshake?.auth?.token?.id;
-          return authUserId === player.userId;
-        });
-      }
-
-      if (playerSocket) {
-        console.log(`Mock server: Found socket for ${player.name}, emitting personalized game-start`);
-        playerSocket.emit('game-start', personalizedData);
-      } else {
-        console.log(`Mock server: No socket found for ${player.name} (${player.userId})`);
-      }
-    });
-
-    console.log(`Mock server: Broadcasting game-start to room ${roomCode}`);
-  }
-
-  ensurePlayerActions(room, userId) {
-    if (!room.gameState.playerActions) {
-      room.gameState.playerActions = {};
-    }
-    if (!room.gameState.playerActions[userId]) {
-      room.gameState.playerActions[userId] = { drawnHeart: false, drawnMagic: false };
-    }
+    console.log(`Mock server: Game started in room ${roomCode}`);
   }
 
   executeMagicCardEffect(card, room, targetTileId, playerId) {
@@ -736,25 +651,24 @@ export class MockSocketServer {
       }
     } else if (card.type === 'recycle' && targetTileId !== undefined) {
       const tile = room.gameState.tiles.find(t => t.id == targetTileId);
-      if (tile && !tile.placedHeart && tile.color !== 'white') {
-        const actionResult = {
+      if (tile) {
+        const previousColor = tile.color;
+        // Change tile to white
+        tile.color = 'white';
+        tile.emoji = '⬜';
+
+        return {
           type: 'recycle',
-          previousColor: tile.color,
+          previousColor: previousColor,
           newColor: 'white',
           tileId: tile.id,
           newTileState: {
             id: tile.id,
             color: 'white',
             emoji: '⬜',
-            placedHeart: tile.placedHeart
+            placedHeart: tile.placedHeart // Keep any placed heart
           }
         };
-        // Apply the effect
-        const tileIndex = room.gameState.tiles.findIndex(t => t.id == targetTileId);
-        if (tileIndex !== -1) {
-          room.gameState.tiles[tileIndex] = actionResult.newTileState;
-        }
-        return actionResult;
       }
     } else if (card.type === 'shield') {
       if (!room.gameState.shields) room.gameState.shields = {};

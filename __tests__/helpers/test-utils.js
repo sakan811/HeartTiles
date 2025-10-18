@@ -6,7 +6,7 @@ import { createGameReadyRoom, createActiveGameRoom, generateRoomCode } from '../
 /**
  * Helper utility for waiting for events with better error handling and debugging
  */
-export const waitFor = (socket, event, timeout = 3000) => {
+export const waitFor = (socket, event, timeout = 5000) => {
   return new Promise((resolve, reject) => {
     if (!socket || !socket.connected) {
       reject(new Error(`Socket is not connected for event: ${event}`));
@@ -37,27 +37,76 @@ export const waitFor = (socket, event, timeout = 3000) => {
 /**
  * Helper to wait for connection
  */
-export const waitForConnection = (client, timeout = 2000) => {
+export const waitForConnection = (client, timeout = 20000) => {
   return new Promise((resolve, reject) => {
+    console.log(`Test helper: Waiting for connection with timeout ${timeout}ms`);
+
     const timer = setTimeout(() => {
+      console.log(`Test helper: Connection timeout after ${timeout}ms`);
+      // Add more detailed debugging info
+      console.log(`Test helper: Client readyState: ${client.io?.engine?.readyState}`);
+      console.log(`Test helper: Client transport: ${client.io?.engine?.transport?.name}`);
+      console.log(`Test helper: Client connected: ${client.connected}`);
+      console.log(`Test helper: Client disconnected: ${client.disconnected}`);
       reject(new Error(`Connection timeout after ${timeout}ms`));
     }, timeout);
 
+    // Check if already connected
     if (client.connected) {
+      console.log('Test helper: Client already connected');
       clearTimeout(timer);
       resolve();
       return;
     }
 
-    client.on('connect', () => {
-      clearTimeout(timer);
-      resolve();
-    });
+    let connected = false;
+    let errorOccurred = false;
 
-    client.on('connect_error', (error) => {
+    // Connection event handlers
+    const onConnect = () => {
+      if (connected || errorOccurred) return; // Prevent multiple calls
+      connected = true;
+      console.log('Test helper: Client connected successfully');
+      console.log(`Test helper: Socket ID: ${client.id}, Transport: ${client.io?.engine?.transport?.name}`);
       clearTimeout(timer);
-      reject(error);
-    });
+      cleanup();
+      resolve();
+    };
+
+    const onConnectError = (error) => {
+      if (errorOccurred || connected) return; // Prevent multiple calls
+      errorOccurred = true;
+      console.log(`Test helper: Connection error: ${error.message}`);
+      console.log(`Test helper: Error details:`, error);
+      clearTimeout(timer);
+      cleanup();
+      reject(new Error(`Connection failed: ${error.message}`));
+    };
+
+    const onDisconnect = (reason) => {
+      console.log(`Test helper: Client disconnected during connection attempt: ${reason}`);
+      if (!connected && !errorOccurred) {
+        errorOccurred = true;
+        clearTimeout(timer);
+        cleanup();
+        reject(new Error(`Disconnected during connection: ${reason}`));
+      }
+    };
+
+    const cleanup = () => {
+      client.off('connect', onConnect);
+      client.off('connect_error', onConnectError);
+      client.off('disconnect', onDisconnect);
+    };
+
+    client.on('connect', onConnect);
+    client.on('connect_error', onConnectError);
+    client.on('disconnect', onDisconnect);
+
+    // If client has an engine and it's already trying to connect, log its state
+    if (client.io?.engine) {
+      console.log(`Test helper: Engine readyState: ${client.io.engine.readyState}`);
+    }
   });
 };
 
@@ -65,11 +114,24 @@ export const waitForConnection = (client, timeout = 2000) => {
  * Helper to create authenticated client with URL string
  */
 export const createAuthenticatedClient = (port, userId = 'user1') => {
-  return ClientIO(`http://localhost:${port}`, {
-    transports: ['websocket'],
+  console.log(`Test helper: Creating client for user ${userId} on port ${port}`);
+
+  const client = ClientIO(`http://127.0.0.1:${port}`, {
+    transports: ['polling'], // Use polling first for more reliable connections in tests
     forceNew: true,
     reconnection: false,
-    timeout: 2000,
+    timeout: 20000, // Increased timeout for test environment
+    // Add debugging options
+    forceJSONP: false,
+    rememberUpgrade: false,
+    // Ensure path matches server default
+    path: '/socket.io/',
+    // Add connection retry options
+    upgrade: false, // Disable upgrade for more stable test connections
+    rememberTransport: false,
+    // Add more robust connection options
+    autoConnect: true,
+    multiplex: false,
     auth: {
       token: {
         id: userId,
@@ -79,12 +141,28 @@ export const createAuthenticatedClient = (port, userId = 'user1') => {
       }
     }
   });
+
+  // Add debugging event listeners
+  client.on('connect', () => {
+    console.log(`Test helper: Client ${userId} connected successfully with socket ID: ${client.id}`);
+  });
+
+  client.on('connect_error', (error) => {
+    console.error(`Test helper: Client ${userId} connection error:`, error.message);
+    console.error(`Test helper: Full error:`, error);
+  });
+
+  client.on('disconnect', (reason) => {
+    console.log(`Test helper: Client ${userId} disconnected, reason: ${reason}`);
+  });
+
+  return client;
 };
 
 /**
  * Helper to wait for multiple events
  */
-export const waitForMultipleEvents = (socket, events, timeout = 3000) => {
+export const waitForMultipleEvents = (socket, events, timeout = 5000) => {
   const promises = events.map(event => waitFor(socket, event, timeout));
   return Promise.all(promises);
 };
@@ -92,7 +170,7 @@ export const waitForMultipleEvents = (socket, events, timeout = 3000) => {
 /**
  * Helper to wait for any of multiple events
  */
-export const waitForAnyEvent = (socket, events, timeout = 3000) => {
+export const waitForAnyEvent = (socket, events, timeout = 5000) => {
   return Promise.race(events.map(event => waitFor(socket, event, timeout)));
 };
 

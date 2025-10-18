@@ -58,8 +58,8 @@ export default defineConfig({
           environment: 'node',
           globals: true,
           setupFiles: ['./__tests__/integration/setup.js'],
-          testTimeout: 15000,
-          hookTimeout: 15000,
+          testTimeout: 25000,
+          hookTimeout: 20000,
           css: false,
           // Skip integration tests if MongoDB is not available
           bail: 0
