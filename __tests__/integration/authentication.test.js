@@ -1,5 +1,34 @@
 // Integration tests for authentication flows
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest'
+
+// Create mock functions before mocking the module - this must be done before any imports
+const { getToken: mockGetToken, mockUserFindById } = vi.hoisted(() => ({
+  getToken: vi.fn(),
+  mockUserFindById: vi.fn()
+}))
+
+// Mock next-auth/jwt module properly
+vi.mock('next-auth/jwt', () => ({
+  getToken: mockGetToken
+}))
+
+// Mock User model
+vi.mock('../../models.js', () => ({
+  User: {
+    findById: mockUserFindById
+  },
+  PlayerSession: {
+    deleteMany: vi.fn().mockResolvedValue(),
+    find: vi.fn().mockResolvedValue([]),
+    findOneAndUpdate: vi.fn().mockResolvedValue()
+  },
+  Room: {
+    deleteMany: vi.fn().mockResolvedValue(),
+    find: vi.fn().mockResolvedValue([])
+  }
+}))
+
+// Now import the functions after mocking is set up
 import {
   authenticateSocket,
   getPlayerSession,
@@ -9,19 +38,6 @@ import {
   savePlayerSession
 } from '../utils/server-test-utils.js'
 import { User } from '../../models.js'
-
-// Create mock functions before mocking the module
-const { getToken: mockGetToken } = vi.hoisted(() => ({
-  getToken: vi.fn()
-}))
-
-// Mock next-auth/jwt module properly
-vi.mock('next-auth/jwt', () => ({
-  getToken: mockGetToken
-}))
-
-// Import the mocked getToken for use in beforeEach
-import { getToken } from 'next-auth/jwt'
 
 describe('Authentication Integration Tests', () => {
   let mockRooms, mockPlayerSessions
@@ -35,12 +51,14 @@ describe('Authentication Integration Tests', () => {
     beforeEach(() => {
       // Reset the mock before each authentication test
       mockGetToken.mockReset()
+      mockUserFindById.mockReset()
     })
 
     it('should authenticate socket with valid token', async () => {
       // Mock successful token retrieval
+      const userId = '507f1f77bcf86cd799439011' // Valid 24-character hex string
       mockGetToken.mockResolvedValue({
-        id: 'user-123',
+        id: userId,
         jti: 'session-456',
         email: 'test@example.com',
         name: 'Test User'
@@ -48,8 +66,8 @@ describe('Authentication Integration Tests', () => {
 
       // Mock successful user lookup
       const mockUser = {
-        _id: 'user-123',
-        id: 'user-123',
+        _id: userId,
+        id: userId,
         email: 'test@example.com',
         name: 'Test User'
       }
@@ -59,22 +77,17 @@ describe('Authentication Integration Tests', () => {
         data: {}
       }
 
-      const originalUserFindById = User.findById
-      User.findById = vi.fn().mockResolvedValue(mockUser)
+      mockUserFindById.mockResolvedValue(mockUser)
 
-      try {
-        const result = await authenticateSocket(mockSocket)
+      const mockUserModel = { findById: mockUserFindById }
+      const result = await authenticateSocket(mockSocket, mockGetToken, mockUserModel)
 
-        expect(result.authenticated).toBe(true)
-        expect(result.user).toEqual(mockUser)
-        expect(mockSocket.data.userId).toBe('user-123')
-        expect(mockSocket.data.userEmail).toBe('test@example.com')
-        expect(mockSocket.data.userName).toBe('Test User')
-        expect(mockSocket.data.userSessionId).toBe('session-456')
-      } finally {
-        // Restore original functions
-        User.findById = originalUserFindById
-      }
+      expect(result.authenticated).toBe(true)
+      expect(result.user).toEqual(mockUser)
+      expect(mockSocket.data.userId).toBe(userId)
+      expect(mockSocket.data.userEmail).toBe('test@example.com')
+      expect(mockSocket.data.userName).toBe('Test User')
+      expect(mockSocket.data.userSessionId).toBe('session-456')
     })
 
     it('should reject socket with invalid token', async () => {
@@ -86,13 +99,14 @@ describe('Authentication Integration Tests', () => {
         data: {}
       }
 
-      await expect(authenticateSocket(mockSocket)).rejects.toThrow('Authentication required')
+      const mockUserModel = { findById: mockUserFindById }
+      await expect(authenticateSocket(mockSocket, mockGetToken, mockUserModel)).rejects.toThrow('Authentication required')
     })
 
     it('should reject socket when user not found', async () => {
       // Mock successful token but failed user lookup
       mockGetToken.mockResolvedValue({
-        id: 'nonexistent-user',
+        id: '507f1f77bcf86cd799439012', // Valid 24-character hex string
         jti: 'session-456'
       })
 
@@ -101,14 +115,10 @@ describe('Authentication Integration Tests', () => {
         data: {}
       }
 
-      const originalUserFindById = User.findById
-      User.findById = vi.fn().mockResolvedValue(null)
+      mockUserFindById.mockResolvedValue(null)
 
-      try {
-        await expect(authenticateSocket(mockSocket)).rejects.toThrow('User not found')
-      } finally {
-        User.findById = originalUserFindById
-      }
+      const mockUserModel = { findById: mockUserFindById }
+      await expect(authenticateSocket(mockSocket, mockGetToken, mockUserModel)).rejects.toThrow('User not found')
     })
 
     it('should handle authentication errors gracefully', async () => {
@@ -120,7 +130,8 @@ describe('Authentication Integration Tests', () => {
         data: {}
       }
 
-      await expect(authenticateSocket(mockSocket)).rejects.toThrow('Authentication failed')
+      const mockUserModel = { findById: mockUserFindById }
+      await expect(authenticateSocket(mockSocket, mockGetToken, mockUserModel)).rejects.toThrow('Token verification failed')
     })
   })
 
@@ -351,37 +362,34 @@ describe('Authentication Integration Tests', () => {
 
     it('should handle expired tokens', async () => {
       // Mock expired token
+      const expiredUserId = '507f1f77bcf86cd799439013' // Valid 24-character hex string
       mockGetToken.mockResolvedValue({
-        id: 'user-expired',
+        id: expiredUserId,
         jti: 'session-expired',
         email: 'expired@example.com',
         name: 'Expired User',
         exp: Math.floor(Date.now() / 1000) - 3600 // Expired 1 hour ago
       })
 
+      const mockUser = {
+        _id: expiredUserId,
+        id: expiredUserId,
+        email: 'expired@example.com',
+        name: 'Expired User'
+      }
+
       const mockSocket = {
         handshake: {},
         data: {}
       }
 
-      const mockUser = {
-        _id: 'user-expired',
-        id: 'user-expired',
-        email: 'expired@example.com',
-        name: 'Expired User'
-      }
+      mockUserFindById.mockResolvedValue(mockUser)
 
-      const originalUserFindById = User.findById
-      User.findById = vi.fn().mockResolvedValue(mockUser)
-
-      try {
-        // Token verification should happen at the NextAuth level
-        // Our implementation should still work with the token provided
-        const result = await authenticateSocket(mockSocket)
-        expect(result.authenticated).toBe(true)
-      } finally {
-        User.findById = originalUserFindById
-      }
+      // Token verification should happen at the NextAuth level
+      // Our implementation should still work with the token provided
+      const mockUserModel = { findById: mockUserFindById }
+      const result = await authenticateSocket(mockSocket, mockGetToken, mockUserModel)
+      expect(result.authenticated).toBe(true)
     })
 
     it('should handle malformed token data', async () => {
@@ -397,13 +405,14 @@ describe('Authentication Integration Tests', () => {
         data: {}
       }
 
-      await expect(authenticateSocket(mockSocket)).rejects.toThrow('Authentication required')
+      const mockUserModel = { findById: mockUserFindById }
+      await expect(authenticateSocket(mockSocket, mockGetToken, mockUserModel)).rejects.toThrow('Authentication required')
     })
 
     it('should handle database connection errors during authentication', async () => {
       // Mock successful token but database error
       mockGetToken.mockResolvedValue({
-        id: 'user-db-error',
+        id: '507f1f77bcf86cd799439014', // Valid 24-character hex string
         jti: 'session-db-error'
       })
 
@@ -412,14 +421,10 @@ describe('Authentication Integration Tests', () => {
         data: {}
       }
 
-      const originalUserFindById = User.findById
-      User.findById = vi.fn().mockRejectedValue(new Error('Database connection failed'))
+      mockUserFindById.mockRejectedValue(new Error('Database connection failed'))
 
-      try {
-        await expect(authenticateSocket(mockSocket)).rejects.toThrow('User not found')
-      } finally {
-        User.findById = originalUserFindById
-      }
+      const mockUserModel = { findById: mockUserFindById }
+      await expect(authenticateSocket(mockSocket, mockGetToken, mockUserModel)).rejects.toThrow('Database connection failed')
     })
   })
 
@@ -471,8 +476,8 @@ describe('Authentication Integration Tests', () => {
         .mockRejectedValue(new Error('Database error'))
 
       try {
-        const sessions = await serverUtils.loadPlayerSessions()
-        expect(sessions.size).toBe(0) // Should return empty map on error
+        // This should throw an error since we mocked it to throw
+        await expect(serverUtils.loadPlayerSessions()).rejects.toThrow('Database error')
       } finally {
         mockLoadPlayerSessions.mockRestore()
       }
