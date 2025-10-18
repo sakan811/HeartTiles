@@ -37,8 +37,20 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: "./pnpm-lock.yaml"
 
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.10.0
+        with:
+          mongodb-version: '7.0'
+          mongodb-db: 'heart-tiles-test'
+          mongodb-port: 27017
+
       - name: Install dependencies
         run: pnpm install
 
       - name: Run tests
         run: pnpm run test
+        env:
+          MONGODB_URI: mongodb://localhost:27017/heart-tiles-test
+          NEXTAUTH_SECRET: test-secret
+          NEXTAUTH_URL: http://localhost:3000
+          NODE_ENV: test
