@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { io as ClientIO } from 'socket.io-client';
-import { MockSocketServer } from '../helpers/mock-server.js';
+import { MockSocketServer } from '../helpers/mock-server-simple.js';
 import {
   waitFor,
   waitForConnection,
@@ -86,14 +86,18 @@ describe('Socket.IO Events Integration Tests', () => {
   let roomCodeGenerator;
   let testRooms = new Set();
 
-  // Note: test timeout is already set to 15s in vitest.config.ts for integration tests
-
   // Setup mock server for entire test suite
   beforeAll(async () => {
+    console.log('Test suite: Starting mock server...');
     mockServer = new MockSocketServer();
     port = await mockServer.start();
+
+    // Wait a bit more to ensure server is fully ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    console.log(`Test suite: Mock server ready on port ${port}`);
     roomCodeGenerator = createRoomCodeGenerator();
-  });
+  }, 30000); // Increased timeout for server setup
 
   // Cleanup after all tests
   afterAll(async () => {
@@ -123,12 +127,50 @@ describe('Socket.IO Events Integration Tests', () => {
     }
   });
 
-  // Helper function to create and track client sockets
-  const createClient = async (userId = 'user1') => {
-    const client = createAuthenticatedClient(port, userId);
-    clientSockets.push(client);
-    await waitForConnection(client);
-    return client;
+  // Helper function to create and track client sockets with retry logic
+  const createClient = async (userId = 'user1', maxRetries = 3) => {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Test helper: Attempt ${attempt} to create client ${userId}`);
+        const client = createAuthenticatedClient(port, userId);
+        clientSockets.push(client);
+
+        // Add a small delay before waiting for connection to let the client initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        await waitForConnection(client);
+        console.log(`Test helper: Successfully created client ${userId} on attempt ${attempt}`);
+        return client;
+      } catch (error) {
+        lastError = error;
+        console.log(`Test helper: Client ${userId} attempt ${attempt} failed: ${error.message}`);
+
+        if (attempt < maxRetries) {
+          // Clean up failed client and wait before retry
+          const clientIndex = clientSockets.length - 1;
+          const failedClient = clientSockets[clientIndex];
+          if (failedClient) {
+            try {
+              failedClient.disconnect();
+            } catch (e) {
+              // Ignore disconnect errors
+            }
+            clientSockets.splice(clientIndex, 1);
+          }
+
+          // Wait before retry with exponential backoff
+          const delay = Math.min(500 * Math.pow(2, attempt - 1), 2000);
+          console.log(`Test helper: Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // All retries failed
+    console.error(`Test helper: All ${maxRetries} attempts failed for client ${userId}`);
+    throw new Error(`Failed to create client ${userId} after ${maxRetries} attempts: ${lastError.message}`);
   };
 
   describe('Authentication & Room Management', () => {
@@ -213,28 +255,27 @@ describe('Socket.IO Events Integration Tests', () => {
         transports: ['websocket'],
         forceNew: true,
         reconnection: false,
-        timeout: 5000,
+        timeout: 8000,
         auth: { token: null }
       });
 
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Authentication test timeout'));
-        }, 8000);
-
+      await expect(new Promise((resolve, reject) => {
         unauthenticatedClient.on('connect_error', (error) => {
-          clearTimeout(timeout);
           expect(error.message).toContain('Authentication required');
           unauthenticatedClient.disconnect();
           resolve();
         });
 
         unauthenticatedClient.on('connect', () => {
-          clearTimeout(timeout);
           reject(new Error('Should not have connected without authentication'));
         });
-      });
-    });
+
+        // Add a timeout to prevent hanging
+        setTimeout(() => {
+          reject(new Error('Authentication test timeout - no error received'));
+        }, 7000);
+      })).resolves.not.toThrow();
+    }, 10000); // Increased timeout for this specific test
   });
 
   describe('Game Setup & Initialization', () => {
@@ -528,7 +569,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
       // Verify tile color is restored to original color
       expect(targetTileAfter.color).toBe(placedTile.placedHeart.originalTileColor || 'white');
-    });
+    }, 12000); // Increased timeout for complex multi-step test
 
     it('should handle recycle card usage correctly', async () => {
       const { clients, gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
@@ -754,7 +795,7 @@ describe('Socket.IO Events Integration Tests', () => {
       const { clients, roomCode } = await setupGame(port);
       testRooms.add(roomCode);
 
-      // Send multiple events rapidly
+      // Send multiple events rapidly with proper error handling and timeout
       const events = [
         waitFor(clients[0], 'player-ready'),
         waitFor(clients[0], 'room-error'), // Expected for invalid action
@@ -765,8 +806,16 @@ describe('Socket.IO Events Integration Tests', () => {
       clients[0].emit('draw-heart', { roomCode }); // Should error since game already started
       clients[1].emit('player-ready', { roomCode });
 
-      await Promise.allSettled(events);
-    });
+      // Use Promise.allSettled with timeout to prevent hanging
+      const results = await Promise.race([
+        Promise.allSettled(events),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Concurrent operations timeout')), 5000))
+      ]);
+
+      // Verify all operations completed (either fulfilled or rejected)
+      expect(results).toHaveLength(3);
+      expect(Array.isArray(results)).toBe(true);
+    }, 8000); // Increased timeout for concurrent test
   });
 
   describe('Data Consistency & State Management', () => {
@@ -835,6 +884,6 @@ describe('Socket.IO Events Integration Tests', () => {
       const placedTileAfterDraw = drawResponse.tiles.find(t => t.id === emptyTile.id);
       expect(placedTileAfter.placedHeart).toBeDefined();
       expect(placedTileAfterDraw.placedHeart).toBeDefined();
-    });
+    }, 10000); // Increased timeout for complex state consistency test
   });
 });

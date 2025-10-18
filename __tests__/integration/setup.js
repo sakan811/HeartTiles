@@ -23,20 +23,7 @@ vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn(),
 }))
 
-// Mock Socket.IO for integration testing
-vi.mock('socket.io', () => ({
-  Server: vi.fn().mockImplementation(() => ({
-    use: vi.fn(),
-    on: vi.fn(),
-    to: vi.fn(() => ({
-      emit: vi.fn(),
-    })),
-    emit: vi.fn(),
-    sockets: {
-      values: vi.fn(() => []),
-    }
-  })),
-}))
+// Note: Socket.IO is not mocked here because we need real Socket.IO functionality for integration tests
 
 // Set up environment variables for integration testing
 process.env.NODE_ENV = 'test'
