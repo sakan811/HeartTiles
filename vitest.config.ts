@@ -62,7 +62,14 @@ export default defineConfig({
           hookTimeout: 20000,
           css: false,
           // Skip integration tests if MongoDB is not available
-          bail: 0
+          bail: 0,
+          // Run integration tests sequentially to avoid database conflicts
+          pool: 'forks',
+          poolOptions: {
+            forks: {
+              singleFork: true
+            }
+          }
         },
         resolve: {
           alias: {
