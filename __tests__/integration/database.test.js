@@ -220,8 +220,8 @@ describe('Database Operations', () => {
         gameState: {}
       }
 
-      // Should not throw an error, but handle it gracefully
-      await expect(saveRoom(invalidRoomData)).resolves.not.toThrow()
+      // Should throw an error for invalid data
+      await expect(saveRoom(invalidRoomData)).rejects.toThrow('Room code is required')
     })
   })
 
@@ -358,17 +358,23 @@ describe('Database Operations', () => {
 
   describe('Database Connection', () => {
     it('should handle connection failures gracefully', async () => {
-      // Test with invalid MongoDB URI
+      // Test with invalid MongoDB URI (wrong port)
       const originalUri = process.env.MONGODB_URI
-      process.env.MONGODB_URI = 'mongodb://nonexistent:27017/test'
+      const originalNodeEnv = process.env.NODE_ENV
+
+      process.env.MONGODB_URI = 'mongodb://localhost:99999/test' // Invalid port
+      process.env.NODE_ENV = 'development' // Disable retries for this test
 
       try {
+        // Disconnect first to force a new connection attempt
+        await disconnectDatabase()
         await expect(connectToDatabase()).rejects.toThrow()
       } finally {
-        // Restore original URI
+        // Restore original environment
         process.env.MONGODB_URI = originalUri
+        process.env.NODE_ENV = originalNodeEnv
       }
-    }, 10000) // Add timeout to prevent hanging
+    }, 8000) // Reduced timeout since port check is faster than DNS
 
     it('should handle disconnection failures gracefully', async () => {
       // This test checks that disconnectDatabase doesn't throw when not connected
