@@ -278,7 +278,8 @@ describe('Complete Game Scenario Tests', () => {
         const actionResult = await executeMagicCard(room, 'player-1', windCard.id, targetTile.id)
 
         // Verify heart was removed and score subtracted
-        expect(targetTile.placedHeart).toBeUndefined()
+        const updatedTile = room.gameState.tiles[0] // Check the updated tile in the array
+        expect(updatedTile.placedHeart).toBeUndefined()
         expect(room.players[1].score).toBeLessThan(10) // Score should be reduced
         expect(actionResult).toBeDefined()
       } catch (error) {
@@ -339,8 +340,10 @@ describe('Complete Game Scenario Tests', () => {
       try {
         const actionResult = await executeMagicCard(room, 'player-1', recycleCard.id, coloredTile.id)
 
-        // Verify tile was changed to white
-        expect(coloredTile.color).toBe('white')
+        // Verify tile was changed to white - check the updated tile in the array
+        const tileIndex = room.gameState.tiles.findIndex(t => t.id === coloredTile.id)
+        const updatedTile = room.gameState.tiles[tileIndex]
+        expect(updatedTile.color).toBe('white')
         expect(actionResult.previousColor).toBe(originalColor)
         expect(actionResult.newColor).toBe('white')
       } catch (error) {
