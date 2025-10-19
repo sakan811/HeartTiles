@@ -573,4 +573,488 @@ describe('Signup API Route Tests', () => {
       )
     })
   })
+
+  describe('MongoDB Error Handling - Catch Block Scenarios', () => {
+    it('should handle duplicate key error (MongoDB error code 11000) in catch block', async () => {
+      // Test the specific scenario where the error object has code 11000
+      // This simulates what happens when MongoDB throws a duplicate key error
+      const duplicateKeyError = {
+        code: 11000,
+        keyPattern: { email: 1 },
+        keyValue: { email: 'test@example.com' },
+        message: 'E11000 duplicate key error collection'
+      }
+
+      mockUser.findOne.mockRejectedValue(duplicateKeyError)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "User with this email already exists" },
+        { status: 400 }
+      )
+    })
+
+    it('should handle error objects with null prototype and code 11000', async () => {
+      const errorWithNullPrototype = Object.create(null)
+      errorWithNullPrototype.code = 11000
+      errorWithNullPrototype.message = 'Duplicate key error'
+
+      mockUser.findOne.mockRejectedValue(errorWithNullPrototype)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "User with this email already exists" },
+        { status: 400 }
+      )
+    })
+
+    it('should handle error objects without code property', async () => {
+      mockUser.findOne.mockRejectedValue({
+        message: 'Some database error without code',
+        name: 'DatabaseError'
+      })
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle undefined error in catch block', async () => {
+      mockUser.findOne.mockRejectedValue(undefined)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle null error in catch block', async () => {
+      mockUser.findOne.mockRejectedValue(null)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle error objects that are not objects (string)', async () => {
+      mockUser.findOne.mockRejectedValue('string error that is not an object')
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle error objects that are not objects (number)', async () => {
+      mockUser.findOne.mockRejectedValue(12345)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle error objects with nested properties', async () => {
+      mockUser.findOne.mockRejectedValue({
+        name: 'ValidationError',
+        message: 'User validation failed',
+        errors: {
+          email: {
+            properties: {
+              message: 'Email is required',
+              type: 'required',
+              path: 'email'
+            }
+          }
+        }
+      })
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+  })
+
+  describe('Additional Error Scenarios', () => {
+    it('should handle database connection errors during user creation', async () => {
+      mockUser.findOne.mockRejectedValue({
+        name: 'MongoNetworkError',
+        message: 'failed to connect to server',
+        code: 'ECONNREFUSED'
+      })
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle database timeout errors', async () => {
+      mockUser.findOne.mockRejectedValue({
+        name: 'MongoTimeoutError',
+        message: 'Server selection timed out after 30000 ms',
+        code: 'MONGODB_SERVER_SELECTION_TIMEOUT'
+      })
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle bcrypt-related errors', async () => {
+      mockUser.findOne.mockRejectedValue({
+        name: 'Error',
+        message: 'data and salt arguments required',
+        code: 'EINVAL'
+      })
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+
+    it('should handle validation errors from mongoose', async () => {
+      mockUser.findOne.mockRejectedValue({
+        name: 'ValidationError',
+        message: 'User validation failed: password: Path `password` is required.'
+      })
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "An error occurred during signup" },
+        { status: 500 }
+      )
+    })
+  })
+
+  describe('Security and Input Validation Edge Cases', () => {
+    it('should handle extremely long email addresses', async () => {
+      mockUser.findOne.mockResolvedValue(null)
+
+      const longEmail = 'a'.repeat(300) + '@example.com'
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: longEmail,
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      // Should still attempt to process, letting database handle validation
+      expect(mockUser.findOne).toHaveBeenCalledWith({ email: longEmail })
+    })
+
+    it('should handle extremely long passwords', async () => {
+      mockUser.findOne.mockResolvedValue(null)
+
+      const longPassword = 'a'.repeat(10000)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: longPassword
+      })
+
+      await POST(mockRequest)
+
+      expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+    })
+
+    it('should handle special characters in email addresses', async () => {
+      mockUser.findOne.mockResolvedValue(null)
+
+      const specialEmails = [
+        'test+tag@example.com',
+        'user.name@example.co.uk',
+        'user123@test-domain.com',
+        'user_name@example.org'
+      ]
+
+      for (const email of specialEmails) {
+        mockRequest.json.mockResolvedValue({
+          name: 'Test User',
+          email: email,
+          password: 'password123'
+        })
+
+        await POST(mockRequest)
+
+        expect(mockUser.findOne).toHaveBeenCalledWith({ email: email })
+      }
+    })
+
+    it('should handle Unicode characters in name', async () => {
+      mockUser.findOne.mockResolvedValue(null)
+
+      const unicodeNames = [
+        '用户测试',  // Chinese characters
+        'テストユーザー',  // Japanese characters
+        'Пользователь',  // Cyrillic characters
+        'Müller'  // German umlaut
+      ]
+
+      for (const name of unicodeNames) {
+        mockRequest.json.mockResolvedValue({
+          name: name,
+          email: 'test@example.com',
+          password: 'password123'
+        })
+
+        await POST(mockRequest)
+
+        expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+      }
+    })
+
+    it('should handle null and undefined values in request body', async () => {
+      mockRequest.json.mockResolvedValue({
+        name: null,
+        email: undefined,
+        password: 'password123'
+      })
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "Missing required fields" },
+        { status: 400 }
+      )
+    })
+
+    it('should handle empty request body', async () => {
+      mockRequest.json.mockResolvedValue({})
+
+      await POST(mockRequest)
+
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        { error: "Missing required fields" },
+        { status: 400 }
+      )
+    })
+
+    it('should handle request body with additional properties', async () => {
+      mockUser.findOne.mockResolvedValue(null)
+
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123',
+        extraProperty: 'should be ignored',
+        anotherExtra: { nested: 'object' },
+        numberProperty: 123
+      })
+
+      await POST(mockRequest)
+
+      expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+    })
+
+    it('should handle SQL injection attempts in email', async () => {
+      mockUser.findOne.mockResolvedValue(null)
+
+      const maliciousEmails = [
+        "'; DROP TABLE users; --",
+        "test@example.com'; INSERT INTO users VALUES ('hacker', 'hacker@evil.com', 'password'); --",
+        "1' OR '1'='1",
+        "admin@example.com' UNION SELECT * FROM users --"
+      ]
+
+      for (const email of maliciousEmails) {
+        mockRequest.json.mockResolvedValue({
+          name: 'Test User',
+          email: email,
+          password: 'password123'
+        })
+
+        await POST(mockRequest)
+
+        expect(mockUser.findOne).toHaveBeenCalledWith({ email: email })
+      }
+    })
+
+    it('should handle XSS attempts in name field', async () => {
+      mockUser.findOne.mockResolvedValue(null)
+
+      const xssAttempts = [
+        '<script>alert("xss")</script>',
+        '"><script>alert("xss")</script>',
+        '<img src="x" onerror="alert(\'xss\')">',
+        'javascript:alert("xss")'
+      ]
+
+      for (const name of xssAttempts) {
+        mockRequest.json.mockResolvedValue({
+          name: name,
+          email: 'test@example.com',
+          password: 'password123'
+        })
+
+        await POST(mockRequest)
+
+        expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+      }
+    })
+  })
+
+  describe('Error Response Format Consistency', () => {
+    it('should always return consistent error response format', async () => {
+      const errorScenarios = [
+        { name: '', email: 'test@example.com', password: 'password123' },
+        { name: 'Test User', email: '', password: 'password123' },
+        { name: 'Test User', email: 'test@example.com', password: '' },
+        { name: 'Test User', email: 'test@example.com', password: '123' },
+      ]
+
+      for (const scenario of errorScenarios) {
+        mockRequest.json.mockResolvedValue(scenario)
+        await POST(mockRequest)
+
+        const [errorData, status] = mockNextResponse.json.mock.calls[mockNextResponse.json.mock.calls.length - 1]
+
+        expect(errorData).toHaveProperty('error')
+        expect(typeof errorData.error).toBe('string')
+        expect(status).toHaveProperty('status')
+        expect(typeof status.status).toBe('number')
+      }
+    })
+
+    it('should return proper HTTP status codes for different error types', async () => {
+      // Test validation errors (400)
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: '123'
+      })
+      await POST(mockRequest)
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        expect.any(Object),
+        { status: 400 }
+      )
+
+      // Test duplicate user error (400)
+      mockUser.findOne.mockResolvedValue({ _id: 'existing' })
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+      await POST(mockRequest)
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        expect.any(Object),
+        { status: 400 }
+      )
+
+      // Test server error (500)
+      mockUser.findOne.mockRejectedValue(new Error('Database error'))
+      mockRequest.json.mockResolvedValue({
+        name: 'Test User',
+        email: 'test@example.com',
+        password: 'password123'
+      })
+      await POST(mockRequest)
+      expect(mockNextResponse.json).toHaveBeenCalledWith(
+        expect.any(Object),
+        { status: 500 }
+      )
+    })
+  })
 })

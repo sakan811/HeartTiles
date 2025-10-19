@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React, { useContext } from 'react'
 import { render, screen, act, waitFor } from '@testing-library/react'
-import { SocketProvider, useSocket, SocketContext } from '../../../src/contexts/SocketContext'
+import { SocketProvider, useSocket, SocketContext } from '../../src/contexts/SocketContext'
 import { SessionProvider } from 'next-auth/react'
 
 // Mock socket.io-client
