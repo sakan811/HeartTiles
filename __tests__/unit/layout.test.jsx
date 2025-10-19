@@ -1,101 +1,299 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React from 'react'
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import Layout from '../../src/app/layout.js'
 
-// Mock next/font
+// Mock next/font/google
 vi.mock('next/font/google', () => ({
-  Geist: () => ({
+  Geist: vi.fn(() => ({
     variable: '--font-geist-sans',
     style: {
       fontFamily: 'Geist Sans, sans-serif'
     }
-  }),
-  Geist_Mono: () => ({
+  })),
+  Geist_Mono: vi.fn(() => ({
     variable: '--font-geist-mono',
     style: {
       fontFamily: 'Geist Mono, monospace'
     }
-  })
+  }))
 }))
 
 // Mock SessionProvider
 vi.mock('../../src/components/providers/SessionProvider.js', () => ({
-  SessionProvider: ({ children }) => (
+  SessionProvider: vi.fn(({ children }) => (
     <div data-testid="session-provider">{children}</div>
-  )
+  ))
 }))
 
 // Mock SocketProvider
 vi.mock('../../src/contexts/SocketContext.js', () => ({
-  SocketProvider: ({ children }) => (
+  SocketProvider: vi.fn(({ children }) => (
     <div data-testid="socket-provider">{children}</div>
-  )
+  ))
 }))
+
+// Mock CSS import
+vi.mock('../../src/app/globals.css', () => ({}))
+
+// Get references to mocked modules
+import { Geist, Geist_Mono } from 'next/font/google'
+import { SessionProvider } from '../../src/components/providers/SessionProvider.js'
+import { SocketProvider } from '../../src/contexts/SocketContext.js'
 
 describe('Layout Component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset document structure before each test
+    document.documentElement.lang = ''
+    document.body.className = ''
+    document.body.innerHTML = ''
   })
 
-  it('should render layout with proper structure', () => {
-    const mockChildren = <div data-testid="test-content">Test Content</div>
-
-    render(<Layout>{mockChildren}</Layout>)
-
-    // Check that the document has proper lang attribute
-    expect(document.documentElement.lang).toBe('en')
-
-    // Check that body has font variable classes and antialiased
-    expect(document.body.className).toContain('--font-geist-sans')
-    expect(document.body.className).toContain('--font-geist-mono')
-    expect(document.body.className).toContain('antialiased')
-
-    // Check that children are rendered
-    const testContent = document.querySelector('[data-testid="test-content"]')
-    expect(testContent).toBeTruthy()
+  afterEach(() => {
+    // Clean up document after each test
+    document.documentElement.lang = ''
+    document.body.className = ''
+    document.body.innerHTML = ''
   })
 
-  it('should have proper meta viewport tag', () => {
-    const mockChildren = <div>Test</div>
+  describe('Font Loading', () => {
+    it('should load Geist font with correct configuration', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
 
-    render(<Layout>{mockChildren}</Layout>)
+      render(<Layout>{mockChildren}</Layout>)
 
-    // Note: In a real Next.js environment, the metadata would be handled automatically
-    // For testing purposes, we'll just verify the component renders without error
-    expect(document.body).toBeTruthy()
+      expect(Geist).toHaveBeenCalledWith({
+        variable: '--font-geist-sans',
+        subsets: ['latin']
+      })
+    })
+
+    it('should load Geist Mono font with correct configuration', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      expect(Geist_Mono).toHaveBeenCalledWith({
+        variable: '--font-geist-mono',
+        subsets: ['latin']
+      })
+    })
   })
 
-  it('should have proper favicon link', () => {
-    const mockChildren = <div>Test</div>
+  describe('Document Structure', () => {
+    it('should render HTML with proper lang attribute', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
 
-    render(<Layout>{mockChildren}</Layout>)
+      render(<Layout>{mockChildren}</Layout>)
 
-    // Note: In a real Next.js environment, the favicon would be handled automatically
-    // For testing purposes, we'll just verify the component renders without error
-    expect(document.body).toBeTruthy()
+      expect(document.documentElement.lang).toBe('en')
+    })
+
+    it('should render body with correct CSS classes', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      expect(document.body.className).toContain('--font-geist-sans')
+      expect(document.body.className).toContain('--font-geist-mono')
+      expect(document.body.className).toContain('antialiased')
+    })
+
+    it('should render children correctly', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      expect(screen.getByTestId('test-content')).toBeInTheDocument()
+      expect(screen.getByText('Test Content')).toBeInTheDocument()
+    })
   })
 
-  it('should include global styles', () => {
-    const mockChildren = <div>Test</div>
+  describe('Provider Integration', () => {
+    it('should wrap children in SessionProvider', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
 
-    render(<Layout>{mockChildren}</Layout>)
+      render(<Layout>{mockChildren}</Layout>)
 
-    // Check that styles are loaded (this would be injected by next/dynamic)
-    const styles = document.querySelector('style[data-emotion]')
-    // Note: In a real test environment, you might need to mock CSS differently
+      expect(SessionProvider).toHaveBeenCalled()
+      expect(screen.getByTestId('session-provider')).toBeInTheDocument()
+    })
+
+    it('should wrap children in SocketProvider', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      expect(SocketProvider).toHaveBeenCalled()
+      expect(screen.getByTestId('socket-provider')).toBeInTheDocument()
+    })
+
+    it('should nest providers in correct order', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      const sessionProvider = screen.getByTestId('session-provider')
+      const socketProvider = screen.getByTestId('socket-provider')
+      const testContent = screen.getByTestId('test-content')
+
+      expect(sessionProvider).toBeInTheDocument()
+      expect(socketProvider).toBeInTheDocument()
+      expect(testContent).toBeInTheDocument()
+
+      // Check nesting: SessionProvider > SocketProvider > children
+      expect(sessionProvider.contains(socketProvider)).toBe(true)
+      expect(socketProvider.contains(testContent)).toBe(true)
+    })
+
+    it('should pass correct props to SessionProvider', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      expect(SessionProvider).toHaveBeenCalledWith(
+        { children: expect.any(Object) },
+        undefined
+      )
+    })
+
+    it('should pass correct props to SocketProvider', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      expect(SocketProvider).toHaveBeenCalledWith(
+        { children: expect.any(Object) },
+        undefined
+      )
+    })
   })
 
-  it('should wrap children in SessionProvider', () => {
-    const mockChildren = <div data-testid="test-content">Test Content</div>
+  describe('Metadata', () => {
+    it('should export correct metadata configuration', () => {
+      // Test the metadata export directly
+      const metadata = Layout.metadata
 
-    render(<Layout>{mockChildren}</Layout>)
+      expect(metadata).toEqual({
+        title: 'Heart Tiles',
+        description: 'A multiplayer card game inspired by Love and Deepspace'
+      })
+    })
+  })
 
-    const sessionProvider = document.querySelector('[data-testid="session-provider"]')
-    expect(sessionProvider).toBeTruthy()
+  describe('Component Structure', () => {
+    it('should be a default export function', () => {
+      expect(typeof Layout).toBe('function')
+    })
 
-    const testContent = document.querySelector('[data-testid="test-content"]')
-    expect(testContent).toBeTruthy()
-    expect(sessionProvider?.contains(testContent)).toBe(true)
+    it('should accept children prop', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      expect(() => {
+        render(<Layout>{mockChildren}</Layout>)
+      }).not.toThrow()
+    })
+
+    it('should handle complex children structures', () => {
+      const ComplexChildren = () => (
+        <div>
+          <header>Header Content</header>
+          <main>Main Content</main>
+          <footer>Footer Content</footer>
+        </div>
+      )
+
+      render(<Layout><ComplexChildren /></Layout>)
+
+      expect(screen.getByText('Header Content')).toBeInTheDocument()
+      expect(screen.getByText('Main Content')).toBeInTheDocument()
+      expect(screen.getByText('Footer Content')).toBeInTheDocument()
+    })
+
+    it('should handle multiple children', () => {
+      render(
+        <Layout>
+          <div data-testid="child-1">Child 1</div>
+          <div data-testid="child-2">Child 2</div>
+          <div data-testid="child-3">Child 3</div>
+        </Layout>
+      )
+
+      expect(screen.getByTestId('child-1')).toBeInTheDocument()
+      expect(screen.getByTestId('child-2')).toBeInTheDocument()
+      expect(screen.getByTestId('child-3')).toBeInTheDocument()
+    })
+  })
+
+  describe('Error Handling', () => {
+    it('should handle null children gracefully', () => {
+      expect(() => {
+        render(<Layout>{null}</Layout>)
+      }).not.toThrow()
+    })
+
+    it('should handle undefined children gracefully', () => {
+      expect(() => {
+        render(<Layout>{undefined}</Layout>)
+      }).not.toThrow()
+    })
+
+    it('should handle empty string children', () => {
+      expect(() => {
+        render(<Layout>{''}</Layout>)
+      }).not.toThrow()
+    })
+
+    it('should handle children that throw errors', () => {
+      const ErrorComponent = () => {
+        throw new Error('Test error')
+      }
+
+      expect(() => {
+        render(<Layout><ErrorComponent /></Layout>)
+      }).toThrow('Test error')
+    })
+  })
+
+  describe('CSS Import', () => {
+    it('should import global CSS', () => {
+      const mockChildren = <div>Test</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      // Since we mock the CSS import, we just verify it doesn't cause errors
+      expect(screen.getByTestId('session-provider')).toBeInTheDocument()
+    })
+  })
+
+  describe('Performance', () => {
+    it('should not cause unnecessary re-renders', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      // Font functions should only be called once
+      expect(Geist).toHaveBeenCalledTimes(1)
+      expect(Geist_Mono).toHaveBeenCalledTimes(1)
+      expect(SessionProvider).toHaveBeenCalledTimes(1)
+      expect(SocketProvider).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Accessibility', () => {
+    it('should have proper HTML semantic structure', () => {
+      const mockChildren = <div data-testid="test-content">Test Content</div>
+
+      render(<Layout>{mockChildren}</Layout>)
+
+      // Check that html element has lang attribute
+      expect(document.documentElement.hasAttribute('lang')).toBe(true)
+      expect(document.documentElement.getAttribute('lang')).toBe('en')
+
+      // Check that body element exists and has proper classes
+      expect(document.body).toBeTruthy()
+      expect(document.body.className).toContain('antialiased')
+    })
   })
 })
