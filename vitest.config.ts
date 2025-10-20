@@ -82,16 +82,11 @@ export default defineConfig({
         test: {
           include: ['**/*.test.jsx', '**/*.test.tsx', '**/components/**/*.test.*', '**/contexts/**/*.test.*'],
           exclude: ['node_modules', '**/integration/**', '**/unit/**'],
-          environment: 'jsdom',
+          environment: 'happy-dom',
           globals: true,
           setupFiles: ['./__tests__/setup.js'],
           testTimeout: 10000,
-          hookTimeout: 10000,
-          environmentOptions: {
-            jsdom: {
-              url: 'http://localhost:3000'
-            }
-          }
+          hookTimeout: 10000
         },
         resolve: {
           alias: {
