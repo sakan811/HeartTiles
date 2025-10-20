@@ -10,7 +10,8 @@ vi.mock('../../../models', () => ({
   Room: {
     find: vi.fn(),
     findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
+    deleteOne: vi.fn(),
+    deleteRoom: vi.fn()
   },
   User: {
     findById: vi.fn()
@@ -19,19 +20,6 @@ vi.mock('../../../models', () => ({
 
 vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn()
-}))
-
-vi.mock('../../src/lib/cards.js', () => ({
-  HeartCard: {
-    generateRandom: vi.fn()
-  },
-  WindCard: vi.fn(),
-  RecycleCard: vi.fn(),
-  ShieldCard: vi.fn(),
-  generateRandomMagicCard: vi.fn(),
-  isHeartCard: vi.fn(),
-  isMagicCard: vi.fn(),
-  createCardFromData: vi.fn()
 }))
 
 // Set environment

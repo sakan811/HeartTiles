@@ -10,7 +10,8 @@ vi.mock('../../../models', () => ({
   Room: {
     find: vi.fn(),
     findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
+    deleteOne: vi.fn(),
+    deleteRoom: vi.fn()
   },
   User: {
     findById: vi.fn()
@@ -19,20 +20,6 @@ vi.mock('../../../models', () => ({
 
 vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn()
-}))
-
-// Mock cards library
-vi.mock('../../src/lib/cards.js', () => ({
-  HeartCard: {
-    generateRandom: vi.fn()
-  },
-  WindCard: vi.fn(),
-  RecycleCard: vi.fn(),
-  ShieldCard: vi.fn(),
-  generateRandomMagicCard: vi.fn(),
-  isHeartCard: vi.fn(),
-  isMagicCard: vi.fn(),
-  createCardFromData: vi.fn()
 }))
 
 // Set environment
@@ -77,7 +64,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         value: 2,
         emoji: '❤️'
       }
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
+      const heartSpy = vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
 
       const room = {
         code: roomCode,
@@ -745,7 +732,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     })
 
     it('should maintain deck integrity across multiple turns', async () => {
-      const { HeartCard, resetPlayerActions } = await import('../../server.js')
+      const { resetPlayerActions } = await import('../../server.js')
+      const { HeartCard } = await import('../../src/lib/cards.js')
 
       const mockHeartCard = { id: 'heart-multi', type: 'heart' }
       HeartCard.generateRandom.mockReturnValue(mockHeartCard)
