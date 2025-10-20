@@ -209,6 +209,198 @@ global.clearInterval = vi.fn((id) => {
   return originalClearInterval(id)
 })
 
+// Mock cards library for all tests
+vi.mock('../src/lib/cards.js', () => {
+  // Mock BaseCard class
+  class MockBaseCard {
+    constructor(id, type, emoji, name, description) {
+      this.id = id;
+      this.type = type;
+      this.emoji = emoji;
+      this.name = name;
+      this.description = description;
+    }
+
+    canTargetTile() {
+      return true;
+    }
+
+    executeEffect() {
+      return { success: true };
+    }
+  }
+
+  // Mock HeartCard class
+  class MockHeartCard extends MockBaseCard {
+    constructor(id, color, value, emoji) {
+      super(id, 'heart', emoji, `${color} heart`, `A ${color} heart card worth ${value} points`);
+      this.color = color;
+      this.value = value;
+    }
+
+    canTargetTile(tile) {
+      return !tile?.placedHeart;
+    }
+
+    calculateScore(tile) {
+      if (tile?.color === 'white') return this.value;
+      return this.color === tile?.color ? this.value * 2 : 0;
+    }
+
+    static generateRandom() {
+      const colors = ['red', 'yellow', 'green'];
+      const emojis = ['❤️', '💛', '💚'];
+      const randomIndex = Math.floor(Math.random() * colors.length);
+      const randomValue = Math.floor(Math.random() * 3) + 1;
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substr(2, 9);
+      const cardId = `${timestamp}-${randomSuffix}`;
+
+      return new MockHeartCard(
+        cardId,
+        colors[randomIndex],
+        randomValue,
+        emojis[randomIndex]
+      );
+    }
+
+    static getAvailableColors() {
+      return ["red", "yellow", "green"];
+    }
+
+    static getColorEmojis() {
+      return ["❤️", "💛", "💚"];
+    }
+  }
+
+  // Mock MagicCard class
+  class MockMagicCard extends MockBaseCard {
+    constructor(id, type, emoji, name, description) {
+      super(id, type, emoji, name, description);
+    }
+  }
+
+  // Mock WindCard class
+  class MockWindCard extends MockMagicCard {
+    constructor(id) {
+      super(id, 'wind', '💨', 'Wind Card', 'Remove opponent heart from a tile');
+    }
+
+    canTargetTile(tile, playerId) {
+      return tile?.placedHeart && tile.placedHeart.placedBy !== playerId;
+    }
+
+    executeEffect(gameState, targetTileId, playerId) {
+      return { success: true, type: 'wind', targetTileId, playerId };
+    }
+  }
+
+  // Mock RecycleCard class
+  class MockRecycleCard extends MockMagicCard {
+    constructor(id) {
+      super(id, 'recycle', '♻️', 'Recycle Card', 'Change colored tile to white');
+    }
+
+    canTargetTile(tile, playerId) {
+      return !tile?.placedHeart && tile?.color !== 'white';
+    }
+
+    executeEffect(gameState, targetTileId, playerId) {
+      return { success: true, type: 'recycle', targetTileId, playerId };
+    }
+  }
+
+  // Mock ShieldCard class
+  class MockShieldCard extends MockMagicCard {
+    constructor(id) {
+      super(id, 'shield', '🛡️', 'Shield Card', 'Protection for 2 turns');
+    }
+
+    canTargetTile(tile, playerId) {
+      return true; // Shield can be used without target
+    }
+
+    executeEffect(gameState, targetTileId, playerId) {
+      return { success: true, type: 'shield', playerId };
+    }
+
+    static isTileProtected(gameState, tile, turnCount) {
+      if (!gameState?.shields || !tile?.placedHeart) return false;
+
+      const playerShield = gameState.shields[tile.placedHeart.placedBy];
+      if (!playerShield?.active) return false;
+
+      return playerShield.remainingTurns > 0;
+    }
+  }
+
+  // Mock generateRandomMagicCard function with spy support
+  let mockMagicCardImpl = () => {
+    const cardTypes = ['wind', 'recycle', 'shield'];
+    const weights = [0.4, 0.35, 0.25]; // Probabilities for each type
+    const random = Math.random();
+    let accumulated = 0;
+    let selectedType = 'wind';
+
+    for (let i = 0; i < cardTypes.length; i++) {
+      accumulated += weights[i];
+      if (random < accumulated) {
+        selectedType = cardTypes[i];
+        break;
+      }
+    }
+
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substr(2, 9);
+    const cardId = `${timestamp}-${randomSuffix}`;
+
+    switch (selectedType) {
+      case 'wind':
+        return new MockWindCard(cardId);
+      case 'recycle':
+        return new MockRecycleCard(cardId);
+      case 'shield':
+        return new MockShieldCard(cardId);
+      default:
+        return new MockWindCard(cardId);
+    }
+  };
+
+  const mockGenerateRandomMagicCard = vi.fn(mockMagicCardImpl);
+
+  // Mock utility functions
+  const mockIsHeartCard = vi.fn((card) => card?.type === 'heart');
+  const mockIsMagicCard = vi.fn((card) => ['wind', 'recycle', 'shield'].includes(card?.type));
+  const mockCreateCardFromData = vi.fn((data) => {
+    if (data.type === 'heart') {
+      return new MockHeartCard(data.id, data.color, data.value, data.emoji);
+    } else if (data.type === 'wind') {
+      return new MockWindCard(data.id);
+    } else if (data.type === 'recycle') {
+      return new MockRecycleCard(data.id);
+    } else if (data.type === 'shield') {
+      return new MockShieldCard(data.id);
+    }
+    return null;
+  });
+
+  // Wrap the static method with vi.fn for spy support
+  MockHeartCard.generateRandom = vi.fn(MockHeartCard.generateRandom);
+
+  return {
+    BaseCard: MockBaseCard,
+    HeartCard: MockHeartCard,
+    MagicCard: MockMagicCard,
+    WindCard: MockWindCard,
+    RecycleCard: MockRecycleCard,
+    ShieldCard: MockShieldCard,
+    generateRandomMagicCard: mockGenerateRandomMagicCard,
+    isHeartCard: mockIsHeartCard,
+    isMagicCard: mockIsMagicCard,
+    createCardFromData: mockCreateCardFromData
+  };
+});
+
 // Custom matchers for Shield card testing
 expect.extend({
   toBeShieldCard(received) {
@@ -231,6 +423,8 @@ expect.extend({
   },
 
   toBeProtectedTile(received, gameState, turnCount) {
+    // Import ShieldCard from the mock for this test
+    const { ShieldCard } = require('../src/lib/cards.js');
     const isProtectedTile = received &&
       typeof received === 'object' &&
       gameState &&
