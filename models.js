@@ -210,6 +210,15 @@ const roomSchema = new mongoose.Schema({
 
 // Note: Indexes are automatically created by unique: true in schema definitions
 
+// Delete room function
+export async function deleteRoom(roomCode) {
+  try {
+    await Room.deleteOne({ code: roomCode });
+  } catch (err) {
+    console.error('Failed to delete room:', err);
+  }
+}
+
 // Export models with caching to prevent OverwriteModelError
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 const PlayerSession = mongoose.models.PlayerSession || mongoose.model('PlayerSession', playerSessionSchema);
