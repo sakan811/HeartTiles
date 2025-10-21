@@ -95,13 +95,22 @@ async function savePlayerSession(sessionData) {
 // Exportable utility functions
 function validateRoomCode(roomCode) {
   if (!roomCode || typeof roomCode !== 'string') return false;
-  return /^[A-Z0-9]{6}$/i.test(roomCode);
+  const trimmedCode = roomCode.trim();
+  if (trimmedCode.length !== 6) return false;
+  // Room codes should be either: 3 letters + 3 numbers, or 6 numbers
+  return /^[A-Z]{3}[0-9]{3}$|^[0-9]{6}|^[a-z]{3}[0-9]{3}$/.test(trimmedCode);
 }
 
 function validatePlayerName(playerName) {
   if (!playerName || typeof playerName !== 'string') return false;
   const trimmedName = playerName.trim();
-  return trimmedName.length > 0 && trimmedName.length <= 20;
+  // Check for empty names after trimming
+  if (trimmedName.length === 0) return false;
+  // Check length constraints
+  if (trimmedName.length > 20) return false;
+  // Check for control characters
+  if (/[\x00-\x1F\x7F]/.test(trimmedName)) return false;
+  return true;
 }
 
 function sanitizeInput(input) {
@@ -117,25 +126,52 @@ function findPlayerByName(room, playerName) {
 }
 
 function validateRoomState(room) {
-  if (!room) return { valid: false, error: "Room not found" };
+  if (!room || typeof room !== 'object') return { valid: false, error: "Room not found" };
   if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
-  if (!room.gameState) return { valid: false, error: "Invalid game state" };
-  if (room.gameState.gameStarted && !room.gameState.currentPlayer) {
+  if (!room.gameState || typeof room.gameState !== 'object') return { valid: false, error: "Invalid game state" };
+
+  // If game is started, there must be a current player
+  if (room.gameState.gameStarted === true && !room.gameState.currentPlayer) {
     return { valid: false, error: "Game started but no current player" };
   }
+
+  // If game is not started, there should be no current player
+  if (room.gameState.gameStarted === false && room.gameState.currentPlayer) {
+    return { valid: false, error: "Game not started but has current player" };
+  }
+
+  // For gameState without explicit gameStarted property, require players
+  if (room.gameState.gameStarted === undefined && room.players.length === 0) {
+    return { valid: false, error: "Invalid players state" };
+  }
+
   return { valid: true };
 }
 
 function validatePlayerInRoom(room, userId) {
+  if (!room || typeof room !== 'object') return { valid: false, error: "Room not found" };
+  if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
   const playerInRoom = room.players.find(p => p.userId === userId);
   return playerInRoom ? { valid: true } : { valid: false, error: "Player not in room" };
 }
 
 function validateDeckState(room) {
-  if (!room.gameState.deck) return { valid: false, error: "Invalid deck state" };
-  if (typeof room.gameState.deck.cards !== 'number' || room.gameState.deck.cards < 0) {
+  if (!room?.gameState?.deck) return { valid: false, error: "Invalid deck state" };
+  const deck = room.gameState.deck;
+
+  // Check that cards count exists and is valid
+  if (typeof deck.cards !== 'number' ||
+      isNaN(deck.cards) ||
+      !isFinite(deck.cards) ||
+      deck.cards < 0) {
     return { valid: false, error: "Invalid deck count" };
   }
+
+  // Check that type exists and is valid
+  if (!deck.type || typeof deck.type !== 'string') {
+    return { valid: false, error: "Invalid deck type" };
+  }
+
   return { valid: true };
 }
 
@@ -224,17 +260,24 @@ function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
 }
 
 function checkAndExpireShields(room) {
-  if (!room.gameState.shields) return;
+  if (!room?.gameState?.shields || typeof room.gameState.shields !== 'object') return;
 
-  // Decrement remaining turns for all active shields at the end of each turn
+  // Process all shields to handle expiration and cleanup
   for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    if (shield.remainingTurns > 0) {
-      shield.remainingTurns--;
-      console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
+    if (shield && typeof shield === 'object' && typeof shield.remainingTurns === 'number') {
+      // Only decrement and process shields that are still active (remainingTurns > 0)
+      if (shield.remainingTurns > 0) {
+        shield.remainingTurns--;
+        console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
 
-      // Remove shield if it has expired
-      if (shield.remainingTurns <= 0) {
-        console.log(`Shield expired for ${userId}`);
+        // Remove shield if it has expired
+        if (shield.remainingTurns <= 0) {
+          console.log(`Shield expired for ${userId}`);
+          delete room.gameState.shields[userId];
+        }
+      } else {
+        // Remove shields that are already at 0 or below (inactive shields)
+        console.log(`Removing inactive shield for ${userId}`);
         delete room.gameState.shields[userId];
       }
     }
@@ -276,17 +319,27 @@ function calculateScore(heart, tile) {
 }
 
 // Turn lock management (needs to be global for testing)
+// Use global turnLocks if available (for testing), otherwise create module-level one
 let turnLocks = new Map();
 
-function acquireTurnLock(roomCode, userId) {
-  const lockKey = `${roomCode}_${userId}`;
-  if (turnLocks.has(lockKey)) return false;
-  turnLocks.set(lockKey, Date.now());
+function acquireTurnLock(roomCode, socketId) {
+  const lockKey = `${roomCode}_${socketId}`;
+
+  // Use global turnLocks if available (for testing), otherwise use module-level
+  const locks = global.turnLocks || turnLocks;
+
+  if (locks.has(lockKey)) return false;
+  locks.set(lockKey, Date.now());
   return true;
 }
 
-function releaseTurnLock(roomCode, userId) {
-  turnLocks.delete(`${roomCode}_${userId}`);
+function releaseTurnLock(roomCode, socketId) {
+  const lockKey = `${roomCode}_${socketId}`;
+
+  // Use global turnLocks if available (for testing), otherwise use module-level
+  const locks = global.turnLocks || turnLocks;
+
+  locks.delete(lockKey);
 }
 
 // Prevent server from starting during tests
@@ -303,8 +356,10 @@ if (process.env.NODE_ENV !== 'test') {
   });
 
   const rooms = await loadRooms();
-  // Use the global turnLocks instead of creating a new one
-  turnLocks.clear(); // Clear any existing locks from previous runs
+  // Clear any existing locks from previous runs
+  // Use global turnLocks if available (for testing), otherwise use module-level
+  const locks = global.turnLocks || turnLocks;
+  locks.clear();
   const connectionPool = new Map();
   const playerSessions = await loadPlayerSessions();
   const MAX_CONNECTIONS_PER_IP = 5;
@@ -401,8 +456,10 @@ if (process.env.NODE_ENV !== 'test') {
       };
     }
 
-    for (const lockKey of turnLocks.keys()) {
-      if (lockKey.includes(oldUserId)) turnLocks.delete(lockKey);
+    // Use global turnLocks if available (for testing), otherwise use module-level
+    const locks = global.turnLocks || turnLocks;
+    for (const lockKey of locks.keys()) {
+      if (lockKey.includes(oldUserId)) locks.delete(lockKey);
     }
   }
 
