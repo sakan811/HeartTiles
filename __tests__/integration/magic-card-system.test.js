@@ -490,7 +490,7 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         gameState: {
           playerHands: {
             user123: [
-              { id: 'magic-to-use', }
+              { id: 'magic-to-use', },
               { id: 'magic-to-keep', type: 'shield' }
             ]
           }
@@ -689,8 +689,8 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
           ],
           playerHands: {
             user123: [
-              { id: 'wind1', }
-              { id: 'recycle1', }
+              { id: 'wind1', },
+              { id: 'recycle1', },
               { id: 'shield1', type: 'shield' }
             ]
           },
