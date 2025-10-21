@@ -15,7 +15,17 @@ vi.mock('../../../models', () => ({
   },
   User: {
     findById: vi.fn()
-  }
+  },
+  deleteRoom: vi.fn().mockImplementation(async (roomCode) => {
+    // Mimic the actual deleteRoom behavior from models.js
+    try {
+      // Mock the Room.deleteOne call - in real implementation this would delete from DB
+      // In our mock, this just logs the action for debugging
+      console.log(`Mock: Deleted room ${roomCode}`)
+    } catch (err) {
+      console.error('Mock: Failed to delete room:', err)
+    }
+  })
 }))
 
 vi.mock('next-auth/jwt', () => ({
@@ -545,8 +555,8 @@ describe('Player Session Management and Reconnection Logic', () => {
             { id: 0, color: 'red', placedHeart: { placedBy: userId, value: 4 } },
             { id: 1, color: 'blue', placedHeart: null }
           ],
-          deck: { cards: 12, emoji: '💌', type: 'hearts' },
-          magicDeck: { cards: 14, emoji: '🔮', type: 'magic' },
+          deck: { emoji: '💌', cards: 12, } emoji: '💌', }
+          magicDeck: { emoji: '🔮', cards: 14, } emoji: '🔮', }
           playerHands: {
             user123: [
               { id: 'heart1', type: 'heart', color: 'yellow', value: 3 },

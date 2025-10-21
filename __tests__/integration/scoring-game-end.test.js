@@ -114,7 +114,9 @@ describe('Scoring System and Game End Conditions', () => {
           tiles: [
             { id: 0, color: 'red', placedHeart: null },
             { id: 1, color: 'white', placedHeart: null }
-          ]
+          ],
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, type: 'magic' }
         }
       }
 
@@ -152,7 +154,9 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 1 } },
             { placedHeart: { value: 2 } },
             { placedHeart: { value: 3 } }
-          ]
+          ],
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, type: 'magic' }
         }
       }
 
@@ -172,7 +176,9 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 3 } },
             { placedHeart: null }, // Empty tile
             { placedHeart: { value: 2 } }
-          ]
+          ],
+          deck: { emoji: '💌', cards: 5, }
+          magicDeck: { emoji: '🔮', cards: 8, type: 'magic' }
         }
       }
 
@@ -191,8 +197,8 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 2 } },
             { placedHeart: null } // Not all filled
           ],
-          deck: { cards: 0 },
-          magicDeck: { cards: 0 }
+          deck: { emoji: '💌', cards: 0, }
+          magicDeck: { emoji: '🔮', cards: 0, type: 'magic' }
         }
       }
 
@@ -211,8 +217,8 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 2 } },
             { placedHeart: null }
           ],
-          deck: { cards: 0 },
-          magicDeck: { cards: 5 } // Magic deck has cards
+          deck: { emoji: '💌', cards: 0, }
+          magicDeck: { emoji: '🔮', cards: 5, type: 'magic' } // Magic deck has cards
         }
       }
 
@@ -231,8 +237,8 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 2 } },
             { placedHeart: null }
           ],
-          deck: { cards: 3 }, // Heart deck has cards
-          magicDeck: { cards: 0 }
+          deck: { emoji: '💌', cards: 3, } // Heart deck has cards
+          magicDeck: { emoji: '🔮', cards: 0, type: 'magic' }
         }
       }
 
@@ -251,8 +257,8 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 2 } },
             { placedHeart: null }
           ],
-          deck: { cards: 0 },
-          magicDeck: { cards: 0 }
+          deck: { emoji: '💌', cards: 0, }
+          magicDeck: { emoji: '🔮', cards: 0, type: 'magic' }
         }
       }
 
@@ -271,8 +277,8 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 2 } },
             { placedHeart: { value: 3 } }
           ],
-          deck: { cards: 0 },
-          magicDeck: { cards: 0 }
+          deck: { emoji: '💌', cards: 0, }
+          magicDeck: { emoji: '🔮', cards: 0, type: 'magic' }
         }
       }
 
@@ -342,7 +348,7 @@ describe('Scoring System and Game End Conditions', () => {
         gameState: {
           playerHands: {
             user1: [
-              { id: 'heart1', type: 'heart' },
+              { id: 'heart1', }
               { id: 'magic1', type: 'magic' }
             ],
             user2: [
@@ -658,8 +664,8 @@ describe('Scoring System and Game End Conditions', () => {
             { placedHeart: { value: 3, placedBy: 'user456', score: 6 } },
             { placedHeart: { value: 2, placedBy: 'user456', score: 4 } }
           ],
-          deck: { cards: 0 },
-          magicDeck: { cards: 1 }
+          deck: { emoji: '💌', cards: 0, }
+          magicDeck: { emoji: '🔮', cards: 1, type: 'magic' }
         }
       }
 

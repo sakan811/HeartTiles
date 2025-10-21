@@ -183,8 +183,8 @@ describe('Socket.IO Room Management Events', () => {
           tiles: [],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: "💌", cards: 16, type: 'hearts' },
-          magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+          deck: { emoji: "💌", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, }
           playerHands: {},
           shields: {},
           turnCount: 0,
@@ -233,8 +233,8 @@ describe('Socket.IO Room Management Events', () => {
           tiles: [{ id: 0, color: 'red' }],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: "💌", cards: 16, type: 'hearts' },
-          magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+          deck: { emoji: "💌", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, }
           playerHands: {},
           shields: {},
           turnCount: 0,
@@ -319,8 +319,8 @@ describe('Socket.IO Room Management Events', () => {
           gameStarted: true,
           currentPlayer: { userId: 'user123', name: 'TestUser' },
           tiles: [],
-          deck: { cards: 10 },
-          magicDeck: { cards: 12 },
+          deck: { emoji: '💌', cards: 10, }
+          magicDeck: { emoji: '🔮', cards: 12, }
           playerHands: {
             user123: [{ id: 'heart1', type: 'heart' }]
           },
@@ -358,8 +358,8 @@ describe('Socket.IO Room Management Events', () => {
           gameStarted: true,
           currentPlayer: { userId: 'user456', name: 'OtherUser' },
           tiles: [{ id: 0, color: 'red', placedHeart: null }],
-          deck: { cards: 8, emoji: "💌", type: 'hearts' },
-          magicDeck: { cards: 14, emoji: "🔮", type: 'magic' },
+          deck: { emoji: '💌', cards: 8, } emoji: "💌", }
+          magicDeck: { emoji: '🔮', cards: 14, } emoji: "🔮", }
           playerHands: {
             user123: [{ id: 'heart1', type: 'heart', color: 'red', value: 2 }],
             user456: [{ id: 'heart2', type: 'heart', color: 'blue', value: 1 }]
@@ -530,8 +530,8 @@ describe('Socket.IO Room Management Events', () => {
           tiles: [],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: "💌", cards: 16, type: 'hearts' },
-          magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+          deck: { emoji: "💌", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, }
           playerHands: {},
           shields: {},
           turnCount: 0,

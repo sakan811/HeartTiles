@@ -31,8 +31,8 @@ describe('Game Mechanics Rules', () => {
         { id: 7, color: 'white', emoji: '⬜', placedHeart: null }
       ],
       playerHands: {},
-      deck: { emoji: '💌', cards: 16, type: 'hearts' },
-      magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+      deck: { emoji: '💌', cards: 16, }
+      magicDeck: { emoji: '🔮', cards: 16, }
       shields: {}
     };
   });

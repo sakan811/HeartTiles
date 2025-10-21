@@ -186,6 +186,42 @@ global.console = {
 const mockDate = new Date('2024-01-01T00:00:00.000Z')
 global.Date.now = vi.fn(() => mockDate.getTime())
 
+// Mock Math.random() for consistent testing
+// Create a predictable sequence that still allows for unique IDs
+let mathRandomCallCount = 0
+
+// Store the original Math.random to ensure we can always fall back
+const originalMathRandom = Math.random
+
+// Create a robust Math.random mock that never returns undefined
+const robustMathRandom = vi.fn(() => {
+  try {
+    // Return deterministic but varied values for different test scenarios
+    // Using the golden ratio technique for better distribution and uniqueness
+    const goldenRatio = 0.618033988749895
+    const seed = 0.123456789
+    const current = (seed + mathRandomCallCount * goldenRatio) % 1
+    mathRandomCallCount++
+
+    // Ensure we never return undefined or NaN
+    if (typeof current === 'number' && !isNaN(current) && current >= 0 && current <= 1) {
+      return current
+    }
+
+    // Fallback to original Math.random if something goes wrong
+    const fallback = originalMathRandom()
+    console.warn('Math.random() fallback used, returned:', fallback)
+    return fallback
+  } catch (error) {
+    console.error('Error in Math.random() mock, using fallback:', error)
+    return originalMathRandom()
+  }
+})
+
+// Apply the mock to both global.Math and Math directly
+global.Math.random = robustMathRandom
+Math.random = robustMathRandom
+
 // Store original timer functions before mocking
 const originalSetTimeout = global.setTimeout
 const originalSetInterval = global.setInterval
@@ -241,6 +277,12 @@ vi.mock('../src/lib/cards.js', async (importOriginal) => {
 
   // Mock WindCard class to provide proper executeEffect behavior
   class MockWindCard extends ActualWindCard {
+    constructor(id) {
+      super(id)
+      // Mock the canTargetTile method for testability
+      this.canTargetTile = vi.fn(super.canTargetTile.bind(this))
+    }
+
     executeEffect(gameState, targetTileId, playerId) {
       const tile = gameState.tiles.find(t => t.id == targetTileId);
       if (!tile || !this.canTargetTile(tile, playerId)) {
@@ -280,6 +322,12 @@ vi.mock('../src/lib/cards.js', async (importOriginal) => {
 
   // Mock RecycleCard class to provide proper executeEffect behavior
   class MockRecycleCard extends ActualRecycleCard {
+    constructor(id) {
+      super(id)
+      // Mock the canTargetTile method for testability
+      this.canTargetTile = vi.fn(super.canTargetTile.bind(this))
+    }
+
     executeEffect(gameState, targetTileId, currentPlayerId) {
       const tile = gameState.tiles.find(t => t.id == targetTileId);
       if (!tile || !this.canTargetTile(tile)) {
@@ -328,6 +376,13 @@ vi.mock('../src/lib/cards.js', async (importOriginal) => {
 
   // Mock ShieldCard class to provide proper static methods
   class MockShieldCard extends ActualShieldCard {
+    constructor(id) {
+      super(id)
+      // Mock the executeEffect method for testability
+      const originalExecuteEffect = super.executeEffect.bind(this)
+      this.executeEffect = vi.fn((gameState, playerId) => originalExecuteEffect(gameState, playerId))
+    }
+
     static isActive(shield, currentTurnCount) {
       if (!shield) return false;
 
@@ -582,6 +637,13 @@ expect.extend({
 afterEach(() => {
   // Clean up any global mocks after each test
   vi.clearAllMocks()
+
+  // Reset Math.random() call count for test isolation
+  mathRandomCallCount = 0
+
+  // Re-apply the Math.random() mock to ensure it's always available
+  global.Math.random = robustMathRandom
+  Math.random = robustMathRandom
 
   // Re-establish comprehensive window object mock to ensure consistency across tests
   // This includes all properties that React DOM might need during rendering and cleanup

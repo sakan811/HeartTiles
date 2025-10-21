@@ -406,7 +406,7 @@ describe('Server Functions Tests', async () => {
       const { validateDeckState } = await import('../../server.js')
       const room = {
         gameState: {
-          deck: { cards: 16, type: 'hearts' }
+          deck: { emoji: '💌', cards: 16, type: 'hearts' }
         }
       }
 
@@ -511,8 +511,8 @@ describe('Server Functions Tests', async () => {
         gameState: {
           gameStarted: true,
           tiles: [{ placedHeart: null }],
-          deck: { cards: 0 },
-          magicDeck: { cards: 0 }
+          deck: { emoji: '💌', cards: 0, }
+          magicDeck: { emoji: '🔮', cards: 0, type: 'magic' }
         }
       }
 

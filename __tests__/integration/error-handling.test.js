@@ -247,8 +247,8 @@ describe('Error Handling and Edge Cases', () => {
           tiles: [],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: '💌', cards: 16, type: 'hearts' },
-          magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, }
           playerHands: {},
           shields: {},
           turnCount: 0,
