@@ -555,8 +555,8 @@ describe('Player Session Management and Reconnection Logic', () => {
             { id: 0, color: 'red', placedHeart: { placedBy: userId, value: 4 } },
             { id: 1, color: 'blue', placedHeart: null }
           ],
-          deck: { emoji: '💌', cards: 12, } emoji: '💌', }
-          magicDeck: { emoji: '🔮', cards: 14, } emoji: '🔮', }
+          deck: { emoji: '💌', cards: 12, },
+          magicDeck: { emoji: '🔮', cards: 14, },
           playerHands: {
             user123: [
               { id: 'heart1', type: 'heart', color: 'yellow', value: 3 },

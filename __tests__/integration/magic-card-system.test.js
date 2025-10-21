@@ -367,7 +367,7 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
           currentPlayer: { userId: 'user123' },
           playerHands: {
             user123: [
-              { id: 'magic1', }
+              { id: 'magic1', },
               { id: 'magic2', type: 'shield' }
             ]
           }
@@ -659,7 +659,7 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
             { placedHeart: null }, // One empty tile
             { placedHeart: { value: 1 } }
           ],
-          deck: { emoji: '💌', cards: 0, } // Empty
+          deck: { emoji: '💌', cards: 0, }, // Empty
           magicDeck: { emoji: '🔮', cards: 2, type: 'magic' } // Some magic cards left
         }
       }

@@ -43,8 +43,8 @@ describe('Shield Card Gameplay Integration', () => {
             new ShieldCard('shield2')
           ]
         },
-        deck: { emoji: '💌', cards: 10, } emoji: '💌', }
-        magicDeck: { emoji: '🔮', cards: 10, } emoji: '🔮', }
+        deck: { emoji: '💌', cards: 10, },
+        magicDeck: { emoji: '🔮', cards: 10, },
         shields: {}
       }
     };

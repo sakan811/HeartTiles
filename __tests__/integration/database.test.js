@@ -73,8 +73,8 @@ describe('Database Operations', () => {
           ],
           gameStarted: true,
           currentPlayer: { userId: 'user-1', name: 'Player 1' },
-          deck: { emoji: '💌', cards: 12, }
-          magicDeck: { emoji: '🔮', cards: 10, }
+          deck: { emoji: '💌', cards: 12, },
+          magicDeck: { emoji: '🔮', cards: 10, },
           playerHands: {
             'user-1': [
               { id: 'heart-1', type: 'heart', color: 'red', value: 2, emoji: '❤️' }
@@ -129,8 +129,8 @@ describe('Database Operations', () => {
           tiles: [],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: '💌', cards: 16, }
-          magicDeck: { emoji: '🔮', cards: 16, }
+          deck: { emoji: '💌', cards: 16, },
+          magicDeck: { emoji: '🔮', cards: 16, },
           playerHands: {},
           turnCount: 0,
           playerActions: {
@@ -185,8 +185,8 @@ describe('Database Operations', () => {
           tiles: [],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: '💌', cards: 16, }
-          magicDeck: { emoji: '🔮', cards: 16, }
+          deck: { emoji: '💌', cards: 16, },
+          magicDeck: { emoji: '🔮', cards: 16, },
           playerHands: {},
           turnCount: 0,
           playerActions: {}
@@ -438,8 +438,8 @@ describe('Database Operations', () => {
           gameStarted: true,
           gameEnded: false,
           currentPlayer: { userId: 'player-2', name: 'Player Two' },
-          deck: { emoji: '💌', cards: 8, }
-          magicDeck: { emoji: '🔮', cards: 6, }
+          deck: { emoji: '💌', cards: 8, },
+          magicDeck: { emoji: '🔮', cards: 6, },
           playerHands: {
             'player-1': [
               { id: 'heart-3', type: 'heart', color: 'green', value: 1, emoji: '💚' },
