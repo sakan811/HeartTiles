@@ -1,6 +1,5 @@
 import { vi } from 'vitest'
 import React from 'react'
-import { ShieldCard } from '../src/lib/cards.js'
 import '@testing-library/jest-dom'
 
 // Mock mongoose before any imports that might use it
