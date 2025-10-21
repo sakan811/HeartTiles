@@ -579,8 +579,8 @@ describe('Game State Management and Turn-Based Gameplay', () => {
 
       const room = {
         gameState: {
-          deck: { emoji: '💌', cards: 0, }      // Hearts empty
-          magicDeck: { emoji: '🔮', cards: 0, }  // Magic empty
+          deck: { emoji: '💌', cards: 0, },      // Hearts empty
+          magicDeck: { emoji: '🔮', cards: 0, },  // Magic empty
           playerActions: {
             user123: {
               drawnHeart: false,   // Has not drawn heart

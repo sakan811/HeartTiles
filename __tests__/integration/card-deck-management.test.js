@@ -200,7 +200,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         emoji: '💨',
         name: 'Wind Card'
       }
-      generateRandomMagicCard.mockReturnValue(mockMagicCard)
+      const magicSpy = vi.spyOn({ generateRandomMagicCard }, 'generateRandomMagicCard').mockReturnValue(mockMagicCard)
 
       const room = {
         code: roomCode,
@@ -339,8 +339,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         emoji: '💨'
       }
 
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
-      generateRandomMagicCard.mockReturnValue(mockMagicCard)
+      vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
+      vi.spyOn({ generateRandomMagicCard }, 'generateRandomMagicCard').mockReturnValue(mockMagicCard)
 
       const room = {
         players: [
@@ -397,8 +397,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       const mockHeartCard = { id: 'heart', type: 'heart' }
       const mockMagicCard = { id: 'magic', type: 'magic' }
 
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
-      generateRandomMagicCard.mockReturnValue(mockMagicCard)
+      vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
+      vi.spyOn({ generateRandomMagicCard }, 'generateRandomMagicCard').mockReturnValue(mockMagicCard)
 
       const room = {
         players: [
@@ -431,7 +431,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       const { HeartCard } = await import('../../src/lib/cards.js')
 
       const mockHeartCard = { id: 'heart', type: 'heart' }
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
+      vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
 
       const room = {
         gameState: {
