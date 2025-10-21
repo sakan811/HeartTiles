@@ -21,43 +21,7 @@ vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn()
 }))
 
-// Mock cards library with more detailed implementations
-vi.mock('../../src/lib/cards.js', () => ({
-  HeartCard: {
-    generateRandom: vi.fn(),
-    calculateScore: vi.fn()
-  },
-  WindCard: vi.fn().mockImplementation((id) => ({
-    id,
-    type: 'wind',
-    emoji: '💨',
-    name: 'Wind Card',
-    canTargetTile: vi.fn(),
-    executeEffect: vi.fn()
-  })),
-  RecycleCard: vi.fn().mockImplementation((id) => ({
-    id,
-    type: 'recycle',
-    emoji: '♻️',
-    name: 'Recycle Card',
-    canTargetTile: vi.fn(),
-    executeEffect: vi.fn()
-  })),
-  ShieldCard: vi.fn().mockImplementation((id) => ({
-    id,
-    type: 'shield',
-    emoji: '🛡️',
-    name: 'Shield Card',
-    canTargetTile: vi.fn(),
-    executeEffect: vi.fn(),
-    isActive: vi.fn(),
-    getRemainingTurns: vi.fn()
-  })),
-  generateRandomMagicCard: vi.fn(),
-  isHeartCard: vi.fn(),
-  isMagicCard: vi.fn(),
-  createCardFromData: vi.fn()
-}))
+// Note: Using cards mock from setup.js - no local mock needed
 
 // Set environment
 process.env.NODE_ENV = 'test'
@@ -116,32 +80,13 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         ]
       }
 
-      // Mock canTargetTile to return true for opponent hearts
-      windCard.canTargetTile.mockReturnValue(true)
-
-      // Mock executeEffect to return expected result
-      const expectedResult = {
-        type: 'wind',
-        removedHeart: gameState.tiles[0].placedHeart,
-        targetedPlayerId: 'user456',
-        tileId: 0,
-        newTileState: {
-          id: 0,
-          color: 'red',
-          emoji: '🟥',
-          placedHeart: undefined
-        }
-      }
-      windCard.executeEffect.mockReturnValue(expectedResult)
-
-      // Execute wind card effect
+      // Execute wind card effect using the actual mock implementation
       const actionResult = windCard.executeEffect(gameState, targetTileId, currentPlayerId)
 
-      expect(windCard.canTargetTile).toHaveBeenCalledWith(gameState.tiles[0], currentPlayerId)
-      expect(windCard.executeEffect).toHaveBeenCalledWith(gameState, targetTileId, currentPlayerId)
       expect(actionResult.type).toBe('wind')
       expect(actionResult.removedHeart.placedBy).toBe('user456')
       expect(actionResult.newTileState.placedHeart).toBeUndefined()
+      expect(actionResult.newTileState.color).toBe('red') // Original tile color restored
     })
 
     it('should subtract points from opponent when wind removes heart', async () => {
@@ -202,19 +147,6 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         ]
       }
 
-      windCard.canTargetTile.mockReturnValue(true)
-
-      const expectedResult = {
-        type: 'wind',
-        newTileState: {
-          id: 1,
-          color: 'red', // Should restore to original
-          emoji: '🟥',
-          placedHeart: undefined
-        }
-      }
-      windCard.executeEffect.mockReturnValue(expectedResult)
-
       const actionResult = windCard.executeEffect(gameState, 1, 'user123')
 
       expect(actionResult.newTileState.color).toBe('red')
@@ -232,8 +164,6 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
       const opponentTile = {
         placedHeart: { placedBy: 'user456' }
       }
-      windCard.canTargetTile.mockReturnValue(true)
-
       let canTarget = windCard.canTargetTile(opponentTile, currentUserId)
       expect(canTarget).toBe(true)
 
@@ -241,15 +171,11 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
       const ownTile = {
         placedHeart: { placedBy: 'user123' }
       }
-      windCard.canTargetTile.mockReturnValue(false)
-
       canTarget = windCard.canTargetTile(ownTile, currentUserId)
       expect(canTarget).toBe(false)
 
       // Test targeting empty tile (should not be allowed)
       const emptyTile = {}
-      windCard.canTargetTile.mockReturnValue(false)
-
       canTarget = windCard.canTargetTile(emptyTile, currentUserId)
       expect(canTarget).toBe(false)
     })
@@ -273,26 +199,8 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         ]
       }
 
-      recycleCard.canTargetTile.mockReturnValue(true)
-
-      const expectedResult = {
-        type: 'recycle',
-        previousColor: 'red',
-        newColor: 'white',
-        tileId: 2,
-        newTileState: {
-          id: 2,
-          color: 'white',
-          emoji: '⬜',
-          placedHeart: null
-        }
-      }
-      recycleCard.executeEffect.mockReturnValue(expectedResult)
-
       const actionResult = recycleCard.executeEffect(gameState, targetTileId, 'user123')
 
-      expect(recycleCard.canTargetTile).toHaveBeenCalledWith(gameState.tiles[0])
-      expect(recycleCard.executeEffect).toHaveBeenCalledWith(gameState, targetTileId, 'user123')
       expect(actionResult.type).toBe('recycle')
       expect(actionResult.previousColor).toBe('red')
       expect(actionResult.newColor).toBe('white')
@@ -321,19 +229,6 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         ]
       }
 
-      recycleCard.canTargetTile.mockReturnValue(true)
-
-      const expectedResult = {
-        type: 'recycle',
-        newTileState: {
-          id: 3,
-          color: 'white',
-          emoji: '⬜',
-          placedHeart: gameState.tiles[0].placedHeart // Heart should remain
-        }
-      }
-      recycleCard.executeEffect.mockReturnValue(expectedResult)
-
       const actionResult = recycleCard.executeEffect(gameState, 3, 'user123')
 
       expect(actionResult.newTileState.color).toBe('white')
@@ -351,8 +246,6 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         color: 'red',
         placedHeart: null
       }
-      recycleCard.canTargetTile.mockReturnValue(true)
-
       let canTarget = recycleCard.canTargetTile(validTile)
       expect(canTarget).toBe(true)
 
@@ -361,8 +254,6 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         color: 'white',
         placedHeart: null
       }
-      recycleCard.canTargetTile.mockReturnValue(false)
-
       canTarget = recycleCard.canTargetTile(whiteTile)
       expect(canTarget).toBe(false)
 
@@ -371,8 +262,6 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         color: 'red',
         placedHeart: { placedBy: 'user456' }
       }
-      recycleCard.canTargetTile.mockReturnValue(false)
-
       canTarget = recycleCard.canTargetTile(occupiedTile)
       expect(canTarget).toBe(false)
     })
@@ -390,20 +279,8 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         turnCount: 3
       }
 
-      // Mock executeEffect to return shield activation result
-      const expectedResult = {
-        type: 'shield',
-        activatedFor: userId,
-        protectedPlayerId: userId,
-        remainingTurns: 2,
-        message: 'Shield activated! Your tiles and hearts are protected for 2 turns.',
-        reinforced: false
-      }
-      shieldCard.executeEffect.mockReturnValue(expectedResult)
-
       const actionResult = shieldCard.executeEffect(gameState, userId)
 
-      expect(shieldCard.executeEffect).toHaveBeenCalledWith(gameState, userId)
       expect(actionResult.type).toBe('shield')
       expect(actionResult.activatedFor).toBe(userId)
       expect(actionResult.remainingTurns).toBe(2)
@@ -427,19 +304,6 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         },
         turnCount: 3
       }
-
-      // Mock isActive to return true for existing shield
-      shieldCard.isActive.mockReturnValue(true)
-
-      const expectedResult = {
-        type: 'shield',
-        activatedFor: userId,
-        protectedPlayerId: userId,
-        remainingTurns: 2,
-        message: 'Shield reinforced! Protection extended for 2 more turns.',
-        reinforced: true
-      }
-      shieldCard.executeEffect.mockReturnValue(expectedResult)
 
       const actionResult = shieldCard.executeEffect(gameState, userId)
 
@@ -466,14 +330,7 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         turnCount: 3
       }
 
-      // Mock getRemainingTurns for opponent's shield
-      shieldCard.getRemainingTurns.mockReturnValue(1)
-
-      // Mock executeEffect to throw error when opponent has shield
-      shieldCard.executeEffect.mockImplementation(() => {
-        throw new Error('Cannot activate Shield while opponent has active Shield (1 turns remaining)')
-      })
-
+      // This should automatically throw an error due to opponent's active shield
       expect(() => {
         shieldCard.executeEffect(gameState, userId)
       }).toThrow('Cannot activate Shield while opponent has active Shield')
@@ -489,22 +346,16 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         activatedTurn: 3,
         remainingTurns: 2
       }
-      shieldCard.isActive.mockReturnValue(true)
-      shieldCard.getRemainingTurns.mockReturnValue(2)
-
-      expect(shieldCard.isActive(activeShield, 4)).toBe(true)
-      expect(shieldCard.getRemainingTurns(activeShield, 4)).toBe(1) // (3+2)-4 = 1
+      expect(ShieldCard.isActive(activeShield, 4)).toBe(true)
+      expect(ShieldCard.getRemainingTurns(activeShield, 4)).toBe(1) // (3+2)-4 = 1
 
       // Test expired shield
       const expiredShield = {
         activatedTurn: 2,
         remainingTurns: 0
       }
-      shieldCard.isActive.mockReturnValue(false)
-      shieldCard.getRemainingTurns.mockReturnValue(0)
-
-      expect(shieldCard.isActive(expiredShield, 5)).toBe(false)
-      expect(shieldCard.getRemainingTurns(expiredShield, 5)).toBe(0)
+      expect(ShieldCard.isActive(expiredShield, 5)).toBe(false)
+      expect(ShieldCard.getRemainingTurns(expiredShield, 5)).toBe(0)
     })
   })
 
@@ -516,7 +367,7 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
           currentPlayer: { userId: 'user123' },
           playerHands: {
             user123: [
-              { id: 'magic1', type: 'wind' },
+              { id: 'magic1', }
               { id: 'magic2', type: 'shield' }
             ]
           }
@@ -604,8 +455,8 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
 
     it('should validate shield card targeting rules', async () => {
       const cardTypes = [
-        { id: 'shield1', type: 'shield' },
-        { id: 'wind1', type: 'wind' },
+        { id: 'shield1', }
+        { id: 'wind1', }
         { id: 'recycle1', type: 'recycle' }
       ]
 
@@ -639,7 +490,7 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
         gameState: {
           playerHands: {
             user123: [
-              { id: 'magic-to-use', type: 'wind' },
+              { id: 'magic-to-use', }
               { id: 'magic-to-keep', type: 'shield' }
             ]
           }
@@ -786,14 +637,10 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
       const opponentId = 'user456'
       const currentTurnCount = room.gameState.turnCount
 
-      // Mock ShieldCard protection check
-      ShieldCard.isActive.mockReturnValue(true)
-      ShieldCard.getRemainingTurns.mockReturnValue(1)
-
       const isProtected = ShieldCard.isActive(room.gameState.shields[opponentId], currentTurnCount)
 
       expect(isProtected).toBe(true)
-      expect(ShieldCard.getRemainingTurns).toHaveBeenCalledWith(room.gameState.shields[opponentId], currentTurnCount)
+      expect(ShieldCard.getRemainingTurns(room.gameState.shields[opponentId], currentTurnCount)).toBe(1)
 
       // Wind card should be blocked
       const windBlocked = isProtected
@@ -812,8 +659,8 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
             { placedHeart: null }, // One empty tile
             { placedHeart: { value: 1 } }
           ],
-          deck: { cards: 0 }, // Empty
-          magicDeck: { cards: 2 } // Some magic cards left
+          deck: { emoji: '💌', cards: 0, } // Empty
+          magicDeck: { emoji: '🔮', cards: 2, type: 'magic' } // Some magic cards left
         }
       }
 
@@ -842,8 +689,8 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
           ],
           playerHands: {
             user123: [
-              { id: 'wind1', type: 'wind' },
-              { id: 'recycle1', type: 'recycle' },
+              { id: 'wind1', }
+              { id: 'recycle1', }
               { id: 'shield1', type: 'shield' }
             ]
           },

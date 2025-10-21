@@ -4,6 +4,46 @@ import { vi } from 'vitest'
 // Important: Unmock mongoose to use real database for integration tests
 vi.unmock('mongoose')
 
+// Mock Math.random() for consistent testing (same as main setup)
+// Create a predictable sequence that still allows for unique IDs
+let mathRandomCallCount = 0
+
+// Store the original Math.random to ensure we can always fall back
+const originalMathRandom = Math.random
+
+// Create a robust Math.random mock that never returns undefined
+const robustMathRandom = vi.fn(() => {
+  try {
+    // Return deterministic but varied values for different test scenarios
+    // Using the golden ratio technique for better distribution and uniqueness
+    const goldenRatio = 0.618033988749895
+    const seed = 0.123456789
+    const current = (seed + mathRandomCallCount * goldenRatio) % 1
+    mathRandomCallCount++
+
+    // Ensure we never return undefined or NaN
+    if (typeof current === 'number' && !isNaN(current) && current >= 0 && current <= 1) {
+      return current
+    }
+
+    // Fallback to original Math.random if something goes wrong
+    const fallback = originalMathRandom()
+    console.warn('Math.random() fallback used in integration tests, returned:', fallback)
+    return fallback
+  } catch (error) {
+    console.error('Error in Math.random() mock in integration tests, using fallback:', error)
+    return originalMathRandom()
+  }
+})
+
+// Apply the mock to both global.Math and Math directly
+global.Math.random = robustMathRandom
+Math.random = robustMathRandom
+
+// Mock Date.now for consistent testing
+const mockDate = new Date('2024-01-01T00:00:00.000Z')
+global.Date.now = vi.fn(() => mockDate.getTime())
+
 // Import mongoose after unmocking
 import mongoose from 'mongoose'
 import {
@@ -85,6 +125,16 @@ afterEach(async () => {
 
     // Reset all mocks
     vi.restoreAllMocks()
+
+    // Reset Math.random() call count for test isolation
+    mathRandomCallCount = 0
+
+    // Re-apply the Math.random() mock to ensure it's always available
+    global.Math.random = robustMathRandom
+    Math.random = robustMathRandom
+
+    // Re-apply Date.now mock
+    global.Date.now = vi.fn(() => mockDate.getTime())
   } catch (error) {
     console.warn('Failed to clear database in afterEach:', error.message)
   }

@@ -35,8 +35,8 @@ describe('Wind Card Score Subtraction', () => {
         tiles: tiles,
         gameStarted: true,
         currentPlayer: players[0],
-        deck: { emoji: '💌', cards: 16, type: 'hearts' },
-        magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+        deck: { emoji: '💌', cards: 16, }
+        magicDeck: { emoji: '🔮', cards: 16, }
         playerHands: {},
         shields: {},
         turnCount: 1,

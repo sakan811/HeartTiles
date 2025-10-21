@@ -406,8 +406,8 @@ describe('Game State Management and Turn-Based Gameplay', () => {
           gameStarted: true,
           currentPlayer: { userId: 'user1', name: 'User1' },
           tiles: [],
-          deck: { cards: 16 },
-          magicDeck: { cards: 16 },
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, }
           playerHands: {},
           turnCount: 1
         }
@@ -449,7 +449,7 @@ describe('Game State Management and Turn-Based Gameplay', () => {
 
       // Valid deck
       let result = validateDeckState({
-        gameState: { deck: { cards: 16, type: 'hearts' } }
+        gameState: { deck: { emoji: '💌', cards: 16, } type: 'hearts' } }
       })
       expect(result.valid).toBe(true)
 
@@ -531,8 +531,8 @@ describe('Game State Management and Turn-Based Gameplay', () => {
 
       const room = {
         gameState: {
-          deck: { cards: 10 }, // Hearts not empty
-          magicDeck: { cards: 8 }, // Magic not empty
+          deck: { emoji: '💌', cards: 10, } // Hearts not empty
+          magicDeck: { emoji: '🔮', cards: 8, } // Magic not empty
           playerActions: {
             user123: {
               drawnHeart: false, // Has not drawn heart
@@ -555,8 +555,8 @@ describe('Game State Management and Turn-Based Gameplay', () => {
 
       const room = {
         gameState: {
-          deck: { cards: 10 },
-          magicDeck: { cards: 8 },
+          deck: { emoji: '💌', cards: 10, }
+          magicDeck: { emoji: '🔮', cards: 8, }
           playerActions: {
             user123: {
               drawnHeart: true,    // Has drawn heart
@@ -579,8 +579,8 @@ describe('Game State Management and Turn-Based Gameplay', () => {
 
       const room = {
         gameState: {
-          deck: { cards: 0 },      // Hearts empty
-          magicDeck: { cards: 0 },  // Magic empty
+          deck: { emoji: '💌', cards: 0, }      // Hearts empty
+          magicDeck: { emoji: '🔮', cards: 0, }  // Magic empty
           playerActions: {
             user123: {
               drawnHeart: false,   // Has not drawn heart

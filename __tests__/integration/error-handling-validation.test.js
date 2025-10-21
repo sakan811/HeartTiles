@@ -15,7 +15,17 @@ vi.mock('../../../models', () => ({
   },
   User: {
     findById: vi.fn()
-  }
+  },
+  deleteRoom: vi.fn().mockImplementation(async (roomCode) => {
+    // Mimic the actual deleteRoom behavior from models.js
+    try {
+      // Mock the Room.deleteOne call - in real implementation this would delete from DB
+      // In our mock, this just logs the action for debugging
+      console.log(`Mock: Deleted room ${roomCode}`)
+    } catch (err) {
+      console.error('Mock: Failed to delete room:', err)
+    }
+  })
 }))
 
 vi.mock('next-auth/jwt', () => ({
@@ -192,8 +202,8 @@ describe('Error Handling and Validation Scenarios', () => {
           gameStarted: true,
           currentPlayer: { userId: 'user1', name: 'User1' },
           tiles: [],
-          deck: { cards: 16 },
-          magicDeck: { cards: 16 }
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, type: 'magic' }
         }
       }
 
@@ -223,9 +233,9 @@ describe('Error Handling and Validation Scenarios', () => {
 
       // Valid deck states
       const validDecks = [
-        { deck: { cards: 16, type: 'hearts' } },
-        { deck: { cards: 0, type: 'hearts' } },
-        { deck: { cards: 1, type: 'magic' } }
+        { deck: { emoji: '💌', cards: 16, } type: 'hearts' } },
+        { deck: { emoji: '💌', cards: 0, } type: 'hearts' } },
+        { deck: { emoji: '💌', cards: 1, } type: 'magic' } }
       ]
 
       for (const deckState of validDecks) {
@@ -241,7 +251,7 @@ describe('Error Handling and Validation Scenarios', () => {
         { deck: { cards: -1, type: 'hearts' } }, // Negative count
         { deck: { cards: 'not number', type: 'hearts' } }, // Non-number count
         { deck: { type: 'hearts' } }, // Missing cards count
-        { deck: { cards: 10 } } // Missing type
+        { deck: { emoji: '💌', cards: 10, type: 'hearts' } } // Missing type
       ]
 
       for (const deckState of invalidDecks) {
@@ -381,8 +391,8 @@ describe('Error Handling and Validation Scenarios', () => {
         gameState: {
           playerHands: {
             user123: [
-              { id: 'wind1', type: 'wind' },
-              { id: 'recycle1', type: 'recycle' },
+              { id: 'wind1', }
+              { id: 'recycle1', }
               { id: 'shield1', type: 'shield' }
             ]
           },

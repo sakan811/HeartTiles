@@ -15,7 +15,17 @@ vi.mock('../../../models', () => ({
   },
   User: {
     findById: vi.fn()
-  }
+  },
+  deleteRoom: vi.fn().mockImplementation(async (roomCode) => {
+    // Mimic the actual deleteRoom behavior from models.js
+    try {
+      // Mock the Room.deleteOne call - in real implementation this would delete from DB
+      // In our mock, this just logs the action for debugging
+      console.log(`Mock: Deleted room ${roomCode}`)
+    } catch (err) {
+      console.error('Mock: Failed to delete room:', err)
+    }
+  })
 }))
 
 vi.mock('next-auth/jwt', () => ({
@@ -75,8 +85,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: userId, name: 'TestUser' },
-          deck: { emoji: "💌", cards: 16, type: 'hearts' },
-          magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+          deck: { emoji: "💌", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, }
           playerHands: {
             user123: [],
             user456: []
@@ -116,7 +126,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       const room = {
         gameState: {
-          deck: { cards: 10 },
+          deck: { emoji: '💌', cards: 10, }
           playerActions: {
             user123: {
               drawnHeart: true,
@@ -141,7 +151,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: 'user123' },
-          deck: { cards: 0 }, // Empty deck
+          deck: { emoji: '💌', cards: 0, } // Empty deck
           playerHands: {
             user123: []
           },
@@ -165,7 +175,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: 'user456' }, // Different user
-          deck: { cards: 10 }
+          deck: { emoji: '💌', cards: 10, type: 'hearts' }
         }
       }
 
@@ -197,8 +207,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: userId, name: 'TestUser' },
-          deck: { emoji: "💌", cards: 16, type: 'hearts' },
-          magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+          deck: { emoji: "💌", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, }
           playerHands: {
             user123: []
           },
@@ -237,7 +247,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       const room = {
         gameState: {
-          magicDeck: { cards: 10 },
+          magicDeck: { emoji: '🔮', cards: 10, }
           playerActions: {
             user123: {
               drawnHeart: true,
@@ -262,7 +272,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: 'user123' },
-          magicDeck: { cards: 0 }, // Empty deck
+          magicDeck: { emoji: '🔮', cards: 0, } // Empty deck
           playerHands: {
             user123: []
           },
@@ -341,8 +351,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
           gameStarted: true,
           currentPlayer: null,
           tiles: generateTiles(),
-          deck: { emoji: "💌", cards: 16, type: 'hearts' },
-          magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+          deck: { emoji: "💌", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, }
           playerHands: {},
           playerActions: {}
         }
@@ -425,8 +435,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       const room = {
         gameState: {
-          deck: { cards: 16, type: 'hearts' },
-          magicDeck: { cards: 16, type: 'magic' },
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, }
           playerHands: {
             user123: []
           }
@@ -459,7 +469,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       const room = {
         gameState: {
-          deck: { cards: 16, type: 'hearts' },
+          deck: { emoji: '💌', cards: 16, } type: 'hearts' },
           playerHands: {
             user1: [],
             user2: []
@@ -487,13 +497,13 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       // Valid deck
       let result = validateDeckState({
-        gameState: { deck: { cards: 16, type: 'hearts' } }
+        gameState: { deck: { emoji: '💌', cards: 16, } type: 'hearts' } }
       })
       expect(result.valid).toBe(true)
 
       // Empty but valid deck
       result = validateDeckState({
-        gameState: { deck: { cards: 0, type: 'hearts' } }
+        gameState: { deck: { emoji: '💌', cards: 0, } type: 'hearts' } }
       })
       expect(result.valid).toBe(true)
 
@@ -518,8 +528,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       // Case 1: Both decks available, must draw both
       let room = {
         gameState: {
-          deck: { cards: 10 }, // Available
-          magicDeck: { cards: 8 }, // Available
+          deck: { emoji: '💌', cards: 10, } // Available
+          magicDeck: { emoji: '🔮', cards: 8, } // Available
           playerActions: {
             user123: {
               drawnHeart: false, // Haven't drawn heart
@@ -572,8 +582,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       const room = {
         gameState: {
-          deck: { cards: 16 },
-          magicDeck: { cards: 16 },
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, }
           playerActions: {}
         }
       }
@@ -710,8 +720,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
             { placedHeart: { value: 2 } },
             { placedHeart: { value: 3 } }
           ],
-          deck: { cards: 1 }, // Almost empty
-          magicDeck: { cards: 0 }, // Empty
+          deck: { emoji: '💌', cards: 1, } // Almost empty
+          magicDeck: { emoji: '🔮', cards: 0, } // Empty
           playerHands: {
             user123: [{ id: 'heart1', type: 'heart' }]
           }
@@ -746,8 +756,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: 'user1', name: 'User1' },
-          deck: { cards: 16 },
-          magicDeck: { cards: 16 },
+          deck: { emoji: '💌', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, }
           playerHands: {
             user1: [],
             user2: []

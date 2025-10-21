@@ -362,7 +362,7 @@ describe('Complete Game Flows Integration Tests', () => {
           ],
           playerHands: {
             user1: [
-              { id: 'shield-1', type: 'shield' },
+              { id: 'shield-1', }
               { id: 'heart-1', type: 'heart', color: 'blue', value: 1 }
             ],
             user2: [{ id: 'heart-2', type: 'heart', color: 'green', value: 2 }]
@@ -454,7 +454,7 @@ describe('Complete Game Flows Integration Tests', () => {
           ],
           playerHands: {
             user1: [
-              { id: 'recycle-1', type: 'recycle' },
+              { id: 'recycle-1', }
               { id: 'heart-1', type: 'heart', color: 'white', value: 3 }
             ]
           },
@@ -597,8 +597,8 @@ describe('Complete Game Flows Integration Tests', () => {
           score: player.score || 0
         })),
         playerHands: room.gameState.playerHands,
-        deck: room.gameState.deck || { cards: 16 },
-        magicDeck: room.gameState.magicDeck || { cards: 16 },
+        deck: room.gameState.deck || { emoji: '💌', cards: 16, }
+        magicDeck: room.gameState.magicDeck || { emoji: '🔮', cards: 16, }
         turnCount: room.gameState.turnCount,
         playerId: reconnectingUserId,
         shields: room.gameState.shields || {},
@@ -633,8 +633,8 @@ describe('Complete Game Flows Integration Tests', () => {
             { id: 2, color: 'green', placedHeart: null },
             { id: 3, color: 'blue', placedHeart: { placedBy: 'user1', value: 1, score: 0 } }
           ],
-          deck: { cards: 5, type: 'hearts' },
-          magicDeck: { cards: 8, type: 'magic' },
+          deck: { emoji: '💌', cards: 5, } type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 8, } type: 'magic' },
           playerHands: {
             user1: [
               { id: 'heart-1', type: 'heart', color: 'yellow', value: 2 },
@@ -795,8 +795,8 @@ describe('Complete Game Flows Integration Tests', () => {
             { id: 1, placedHeart: { value: 3 } },
             { id: 2, placedHeart: null } // One empty tile
           ],
-          deck: { cards: 0 }, // Heart deck empty
-          magicDeck: { cards: 1 }, // One magic card left
+          deck: { emoji: '💌', cards: 0, } // Heart deck empty
+          magicDeck: { emoji: '🔮', cards: 1, } // One magic card left
           playerHands: {
             user1: [{ id: 'last-magic', type: 'magic' }],
             user2: []
