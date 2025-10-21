@@ -208,7 +208,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
           gameStarted: true,
           currentPlayer: { userId: userId, name: 'TestUser' },
           deck: { emoji: "💌", cards: 16, },
-          magicDeck: { emoji: "🔮", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, },
           playerHands: {
             user123: []
           },

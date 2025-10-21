@@ -407,7 +407,7 @@ describe('Game State Management and Turn-Based Gameplay', () => {
           currentPlayer: { userId: 'user1', name: 'User1' },
           tiles: [],
           deck: { emoji: '💌', cards: 16, },
-          magicDeck: { emoji: '🔮', cards: 16, }
+          magicDeck: { emoji: '🔮', cards: 16, },
           playerHands: {},
           turnCount: 1
         }

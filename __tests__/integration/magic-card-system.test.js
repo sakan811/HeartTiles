@@ -455,8 +455,8 @@ describe('Magic Card System (Wind, Recycle, Shield)', () => {
 
     it('should validate shield card targeting rules', async () => {
       const cardTypes = [
-        { id: 'shield1', }
-        { id: 'wind1', }
+        { id: 'shield1', },
+        { id: 'wind1', },
         { id: 'recycle1', type: 'recycle' }
       ]
 

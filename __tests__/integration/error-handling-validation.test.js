@@ -391,8 +391,8 @@ describe('Error Handling and Validation Scenarios', () => {
         gameState: {
           playerHands: {
             user123: [
-              { id: 'wind1', }
-              { id: 'recycle1', }
+              { id: 'wind1', },
+              { id: 'recycle1', },
               { id: 'shield1', type: 'shield' }
             ]
           },

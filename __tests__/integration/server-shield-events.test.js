@@ -40,7 +40,7 @@ describe('Server Shield Event Integration', () => {
           ]
         },
         deck: { emoji: '💌', cards: 10, },
-        magicDeck: { emoji: '🔮', cards: 10, }
+        magicDeck: { emoji: '🔮', cards: 10, },
         shields: {},
         playerActions: {}
       }

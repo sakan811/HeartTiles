@@ -597,7 +597,7 @@ describe('Complete Game Flows Integration Tests', () => {
           score: player.score || 0
         })),
         playerHands: room.gameState.playerHands,
-        deck: room.gameState.deck || { emoji: '💌', cards: 16, }
+        deck: room.gameState.deck || { emoji: '💌', cards: 16, },
         magicDeck: room.gameState.magicDeck || { emoji: '🔮', cards: 16, }
         turnCount: room.gameState.turnCount,
         playerId: reconnectingUserId,
