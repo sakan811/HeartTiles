@@ -247,7 +247,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       const room = {
         gameState: {
-          magicDeck: { emoji: '🔮', cards: 10, }
+          magicDeck: { emoji: '🔮', cards: 10, },
           playerActions: {
             user123: {
               drawnHeart: true,
@@ -272,7 +272,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: 'user123' },
-          magicDeck: { emoji: '🔮', cards: 0, } // Empty deck
+          magicDeck: { emoji: '🔮', cards: 0, }, // Empty deck
           playerHands: {
             user123: []
           },
@@ -352,7 +352,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
           currentPlayer: null,
           tiles: generateTiles(),
           deck: { emoji: "💌", cards: 16, },
-          magicDeck: { emoji: "🔮", cards: 16, }
+          magicDeck: { emoji: "🔮", cards: 16, },
           playerHands: {},
           playerActions: {}
         }
@@ -469,7 +469,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       const room = {
         gameState: {
-          deck: { emoji: '💌', cards: 16, }, type: 'hearts' },
+          deck: { emoji: '💌', cards: 16, type: 'hearts' },
           playerHands: {
             user1: [],
             user2: []
@@ -497,13 +497,13 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       // Valid deck
       let result = validateDeckState({
-        gameState: { deck: { emoji: '💌', cards: 16, }, type: 'hearts' } }
+        gameState: { deck: { emoji: '💌', cards: 16, type: 'hearts' } }
       })
       expect(result.valid).toBe(true)
 
       // Empty but valid deck
       result = validateDeckState({
-        gameState: { deck: { emoji: '💌', cards: 0, }, type: 'hearts' } }
+        gameState: { deck: { emoji: '💌', cards: 0, type: 'hearts' } }
       })
       expect(result.valid).toBe(true)
 
