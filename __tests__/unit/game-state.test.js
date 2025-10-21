@@ -29,7 +29,7 @@ describe('Game State Management', () => {
         gameStarted: false,
         currentPlayer: null,
         deck: { emoji: '💌', cards: 16, },
-        magicDeck: { emoji: '🔮', cards: 16, }
+        magicDeck: { emoji: '🔮', cards: 16, },
         playerHands: {},
         shields: {},
         turnCount: 0,
