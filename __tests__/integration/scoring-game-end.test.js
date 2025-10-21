@@ -133,7 +133,7 @@ describe('Scoring System and Game End Conditions', () => {
         room.players[playerIndex].score += score
       }
 
-      expect(room.players[0].score).toBe(12) // 10 + 2 (matching colors)
+      expect(room.players[0].score).toBe(14) // 10 + 4 (matching colors)
       expect(score).toBe(4) // 2 * 2 for matching red on red
     })
   })
@@ -449,10 +449,10 @@ describe('Scoring System and Game End Conditions', () => {
         value: 3,
         color: 'green',
         calculateScore: vi.fn().mockImplementation((tile) => {
-          // Custom scoring logic
-          if (tile.color === 'white') return this.value * 2 // Double on white
-          if (this.color === tile.color) return this.value * 3 // Triple on match
-          return this.value // Single point for mismatch
+          // Custom scoring logic using closure to capture mockHeartCard
+          if (tile.color === 'white') return mockHeartCard.value * 2 // Double on white
+          if (mockHeartCard.color === tile.color) return mockHeartCard.value * 3 // Triple on match
+          return mockHeartCard.value // Single point for mismatch
         })
       }
 
@@ -620,7 +620,11 @@ describe('Scoring System and Game End Conditions', () => {
               activatedTurn: 5
             }
           },
-          turnCount: 6
+          turnCount: 6,
+          playerHands: {
+            user1: [],
+            user2: []
+          }
         }
       }
 
@@ -662,29 +666,26 @@ describe('Scoring System and Game End Conditions', () => {
           gameStarted: true,
           tiles: [
             { placedHeart: { value: 3, placedBy: 'user456', score: 6 } },
-            { placedHeart: { value: 2, placedBy: 'user456', score: 4 } }
+            { placedHeart: null } // One tile empty initially
           ],
           deck: { emoji: '💌', cards: 0, },
           magicDeck: { emoji: '🔮', cards: 1, type: 'magic' }
         }
       }
 
-      // Initially game shouldn't end (not all tiles empty AND decks not both empty)
+      // Initially game shouldn't end (not all tiles filled and grace period allowed for empty heart deck)
       const { checkGameEndConditions } = await import('../../server.js')
       let result = checkGameEndConditions(room, true)
       expect(result.shouldEnd).toBe(false)
 
       // Wind card removes one heart
-      room.gameState.tiles[0].placedHeart = undefined
+      room.gameState.tiles[0].placedHeart = null
 
-      // Still shouldn't end (one heart remains)
+      // Still shouldn't end (no hearts on tiles, but grace period allowed)
       result = checkGameEndConditions(room, true)
       expect(result.shouldEnd).toBe(false)
 
-      // Wind card removes second heart
-      room.gameState.tiles[1].placedHeart = undefined
-
-      // Now game should end (no more hearts and magic deck will be empty after this turn)
+      // Now game should end (no hearts on tiles and no grace period)
       result = checkGameEndConditions(room, false) // No grace period
       expect(result.shouldEnd).toBe(true)
     })
