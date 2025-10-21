@@ -46,8 +46,8 @@ describe('Deck Empty Game End Rules', () => {
           { id: 7, color: 'green', emoji: '🟩', placedHeart: null },
           { id: 8, color: 'white', emoji: '⬜', placedHeart: null }
         ],
-        deck: { emoji: '💌', cards: 10, } emoji: '💌', }
-        magicDeck: { emoji: '🔮', cards: 10, } emoji: '🔮', type: 'magic' }
+        deck: { emoji: '💌', cards: 10, },
+        magicDeck: { emoji: '🔮', cards: 10, }
       }
     };
   });

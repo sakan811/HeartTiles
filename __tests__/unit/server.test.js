@@ -511,7 +511,7 @@ describe('Server Functions Tests', async () => {
         gameState: {
           gameStarted: true,
           tiles: [{ placedHeart: null }],
-          deck: { emoji: '💌', cards: 0, }
+          deck: { emoji: '💌', cards: 0, },
           magicDeck: { emoji: '🔮', cards: 0, type: 'magic' }
         }
       }
