@@ -183,8 +183,8 @@ describe('Socket.IO Room Management Events', () => {
           tiles: [],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: "💌", cards: 16, }
-          magicDeck: { emoji: "🔮", cards: 16, }
+          deck: { emoji: "💌", cards: 16, },
+          magicDeck: { emoji: "🔮", cards: 16, },
           playerHands: {},
           shields: {},
           turnCount: 0,
@@ -233,8 +233,8 @@ describe('Socket.IO Room Management Events', () => {
           tiles: [{ id: 0, color: 'red' }],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: "💌", cards: 16, }
-          magicDeck: { emoji: "🔮", cards: 16, }
+          deck: { emoji: "💌", cards: 16, },
+          magicDeck: { emoji: "🔮", cards: 16, },
           playerHands: {},
           shields: {},
           turnCount: 0,
@@ -263,7 +263,7 @@ describe('Socket.IO Room Management Events', () => {
     it('should reject joining when room is full', async () => {
       const { validateRoomCode } = await import('../../server.js')
 
-      const roomCode = 'FULL123'
+      const roomCode = 'FUL123'
       expect(validateRoomCode(roomCode)).toBe(true)
 
       // Create full room
@@ -319,8 +319,8 @@ describe('Socket.IO Room Management Events', () => {
           gameStarted: true,
           currentPlayer: { userId: 'user123', name: 'TestUser' },
           tiles: [],
-          deck: { emoji: '💌', cards: 10, }
-          magicDeck: { emoji: '🔮', cards: 12, }
+          deck: { emoji: '💌', cards: 10, },
+          magicDeck: { emoji: '🔮', cards: 12, },
           playerHands: {
             user123: [{ id: 'heart1', type: 'heart' }]
           },
@@ -358,8 +358,8 @@ describe('Socket.IO Room Management Events', () => {
           gameStarted: true,
           currentPlayer: { userId: 'user456', name: 'OtherUser' },
           tiles: [{ id: 0, color: 'red', placedHeart: null }],
-          deck: { emoji: '💌', cards: 8, } emoji: "💌", }
-          magicDeck: { emoji: '🔮', cards: 14, } emoji: "🔮", }
+          deck: { emoji: '💌', cards: 8, },
+          magicDeck: { emoji: '🔮', cards: 14, },
           playerHands: {
             user123: [{ id: 'heart1', type: 'heart', color: 'red', value: 2 }],
             user456: [{ id: 'heart2', type: 'heart', color: 'blue', value: 1 }]
@@ -401,7 +401,7 @@ describe('Socket.IO Room Management Events', () => {
     it('should remove player from room and update room state', async () => {
       const { validateRoomCode } = await import('../../server.js')
 
-      const roomCode = 'LEAVE123'
+      const roomCode = 'LEA123'
       expect(validateRoomCode(roomCode)).toBe(true)
 
       // Create room with multiple players
@@ -461,7 +461,7 @@ describe('Socket.IO Room Management Events', () => {
     it('should handle leaving non-existent room gracefully', async () => {
       const { validateRoomCode } = await import('../../server.js')
 
-      const roomCode = 'NONEXIST123'
+      const roomCode = 'NON123'
       expect(validateRoomCode(roomCode)).toBe(true)
 
       const room = rooms.get(roomCode)
@@ -480,7 +480,7 @@ describe('Socket.IO Room Management Events', () => {
     it('should toggle player ready status', async () => {
       const { validateRoomCode } = await import('../../server.js')
 
-      const roomCode = 'READY123'
+      const roomCode = 'REA123'
       expect(validateRoomCode(roomCode)).toBe(true)
 
       const room = {
@@ -530,8 +530,8 @@ describe('Socket.IO Room Management Events', () => {
           tiles: [],
           gameStarted: false,
           currentPlayer: null,
-          deck: { emoji: "💌", cards: 16, }
-          magicDeck: { emoji: "🔮", cards: 16, }
+          deck: { emoji: "💌", cards: 16, },
+          magicDeck: { emoji: "🔮", cards: 16, },
           playerHands: {},
           shields: {},
           turnCount: 0,

@@ -202,7 +202,7 @@ describe('Error Handling and Validation Scenarios', () => {
           gameStarted: true,
           currentPlayer: { userId: 'user1', name: 'User1' },
           tiles: [],
-          deck: { emoji: '💌', cards: 16, }
+          deck: { emoji: '💌', cards: 16, },
           magicDeck: { emoji: '🔮', cards: 16, type: 'magic' }
         }
       }
@@ -233,9 +233,9 @@ describe('Error Handling and Validation Scenarios', () => {
 
       // Valid deck states
       const validDecks = [
-        { deck: { emoji: '💌', cards: 16, } type: 'hearts' } },
-        { deck: { emoji: '💌', cards: 0, } type: 'hearts' } },
-        { deck: { emoji: '💌', cards: 1, } type: 'magic' } }
+        { deck: { emoji: '💌', cards: 16, }, type: 'hearts' },
+        { deck: { emoji: '💌', cards: 0, }, type: 'hearts' },
+        { deck: { emoji: '💌', cards: 1, }, type: 'magic' }
       ]
 
       for (const deckState of validDecks) {
@@ -251,7 +251,7 @@ describe('Error Handling and Validation Scenarios', () => {
         { deck: { cards: -1, type: 'hearts' } }, // Negative count
         { deck: { cards: 'not number', type: 'hearts' } }, // Non-number count
         { deck: { type: 'hearts' } }, // Missing cards count
-        { deck: { emoji: '💌', cards: 10, type: 'hearts' } } // Missing type
+        { deck: { emoji: '💌', cards: 10, type: 'hearts' } }, // Missing type
       ]
 
       for (const deckState of invalidDecks) {

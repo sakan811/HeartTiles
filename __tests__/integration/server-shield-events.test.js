@@ -39,7 +39,7 @@ describe('Server Shield Event Integration', () => {
             { id: 'recycle1', type: 'recycle', emoji: '♻️', name: 'Recycle Card' }
           ]
         },
-        deck: { emoji: '💌', cards: 10, }
+        deck: { emoji: '💌', cards: 10, },
         magicDeck: { emoji: '🔮', cards: 10, }
         shields: {},
         playerActions: {}

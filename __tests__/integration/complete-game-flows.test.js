@@ -362,7 +362,7 @@ describe('Complete Game Flows Integration Tests', () => {
           ],
           playerHands: {
             user1: [
-              { id: 'shield-1', }
+              { id: 'shield-1', },
               { id: 'heart-1', type: 'heart', color: 'blue', value: 1 }
             ],
             user2: [{ id: 'heart-2', type: 'heart', color: 'green', value: 2 }]
@@ -454,7 +454,7 @@ describe('Complete Game Flows Integration Tests', () => {
           ],
           playerHands: {
             user1: [
-              { id: 'recycle-1', }
+              { id: 'recycle-1', },
               { id: 'heart-1', type: 'heart', color: 'white', value: 3 }
             ]
           },
@@ -633,8 +633,8 @@ describe('Complete Game Flows Integration Tests', () => {
             { id: 2, color: 'green', placedHeart: null },
             { id: 3, color: 'blue', placedHeart: { placedBy: 'user1', value: 1, score: 0 } }
           ],
-          deck: { emoji: '💌', cards: 5, } type: 'hearts' },
-          magicDeck: { emoji: '🔮', cards: 8, } type: 'magic' },
+          deck: { emoji: '💌', cards: 5, }, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 8, }, type: 'magic' },
           playerHands: {
             user1: [
               { id: 'heart-1', type: 'heart', color: 'yellow', value: 2 },
