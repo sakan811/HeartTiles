@@ -13,7 +13,7 @@ import {
   expectButtonToBeDisabled,
   expectButtonToBeEnabled,
   expectLinkToHaveHref
-} from './utils/test-utils'
+} from './../unit/utils/test-utils.jsx'
 
 // Mock next-auth/react
 vi.mock('next-auth/react', () => ({
