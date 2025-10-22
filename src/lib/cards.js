@@ -227,7 +227,6 @@ export class ShieldCard extends MagicCard {
         protectedPlayerId: playerId
       };
 
-      const newShield = gameState.shields[playerId];
       return {
         type: 'shield',
         activatedFor: playerId,
@@ -250,7 +249,6 @@ export class ShieldCard extends MagicCard {
       protectedPlayerId: playerId
     };
 
-    const newShield = gameState.shields[playerId];
     return {
       type: 'shield',
       activatedFor: playerId,
