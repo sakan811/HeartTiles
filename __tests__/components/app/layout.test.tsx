@@ -20,11 +20,7 @@ vi.mock('next/font/google', () => ({
   }))
 }))
 
-// Mock NextAuth
-vi.mock('next-auth/react', () => ({
-  useSession: vi.fn(),
-  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
+// Note: useSession is mocked globally in setup.js, will be accessed via require in tests
 
 // Mock Socket context
 vi.mock('../../src/contexts/SocketContext.js', () => ({
@@ -47,6 +43,13 @@ describe('RootLayout Component Tests', () => {
     document.documentElement.lang = ''
     document.body.className = ''
     document.body.innerHTML = ''
+
+    // Reset session mock to default unauthenticated state for each test
+    global.__mockUseSession.mockReturnValue({
+      data: null,
+      status: 'unauthenticated',
+      update: vi.fn().mockResolvedValue(null),
+    })
 
     // Mock console methods to avoid noise in tests
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -415,6 +418,99 @@ describe('RootLayout Component Tests', () => {
       expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
       expect(screen.getByText('Page Title')).toBeInTheDocument()
       expect(screen.getByText('Page content')).toBeInTheDocument()
+    })
+  })
+
+  describe('Authentication State Handling', () => {
+    it('should render correctly with unauthenticated user session', () => {
+      const mockChildren = <div data-testid="test-content">Unauthenticated Content</div>
+
+      // Mock unauthenticated session (default state)
+      global.__mockUseSession.mockReturnValue({
+        data: null,
+        status: 'unauthenticated',
+        update: vi.fn().mockResolvedValue(null),
+      })
+
+      render(<RootLayout>{mockChildren}</RootLayout>)
+
+      expect(screen.getByTestId('test-content')).toBeInTheDocument()
+      expect(screen.getByText('Unauthenticated Content')).toBeInTheDocument()
+    })
+
+    it('should render correctly with authenticated user session', () => {
+      const mockChildren = <div data-testid="test-content">Authenticated Content</div>
+      const mockSession = {
+        user: {
+          id: 'test-user-id',
+          email: 'test@example.com',
+          name: 'Test User'
+        },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
+
+      // Mock authenticated session
+      global.__mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
+      })
+
+      render(<RootLayout>{mockChildren}</RootLayout>)
+
+      expect(screen.getByTestId('test-content')).toBeInTheDocument()
+      expect(screen.getByText('Authenticated Content')).toBeInTheDocument()
+    })
+
+    it('should render correctly with loading session state', () => {
+      const mockChildren = <div data-testid="test-content">Loading Content</div>
+
+      // Mock loading session state
+      global.__mockUseSession.mockReturnValue({
+        data: null,
+        status: 'loading',
+        update: vi.fn().mockResolvedValue(null),
+      })
+
+      render(<RootLayout>{mockChildren}</RootLayout>)
+
+      expect(screen.getByTestId('test-content')).toBeInTheDocument()
+      expect(screen.getByText('Loading Content')).toBeInTheDocument()
+    })
+
+    it('should handle session state changes during rendering', () => {
+      const mockChildren = <div data-testid="test-content">Dynamic Content</div>
+
+      // Start with loading state
+      global.__mockUseSession.mockReturnValue({
+        data: null,
+        status: 'loading',
+        update: vi.fn().mockResolvedValue(null),
+      })
+
+      const { rerender } = render(<RootLayout>{mockChildren}</RootLayout>)
+
+      expect(screen.getByTestId('test-content')).toBeInTheDocument()
+
+      // Change to authenticated state
+      const mockSession = {
+        user: {
+          id: 'test-user-id',
+          email: 'test@example.com',
+          name: 'Test User'
+        },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
+
+      global.__mockUseSession.mockReturnValue({
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
+      })
+
+      rerender(<RootLayout>{mockChildren}</RootLayout>)
+
+      expect(screen.getByTestId('test-content')).toBeInTheDocument()
     })
   })
 
