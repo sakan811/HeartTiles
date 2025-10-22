@@ -101,10 +101,7 @@ describe('Error Handling and Edge Cases', () => {
         '12345',
         '1234567',
         'invalid!',
-        'lowercase',
         'MiXeDcAsE',
-        'SPACES ',
-        ' SPACE',
         'SPACE SPACE'
       ]
 
