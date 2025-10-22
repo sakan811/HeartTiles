@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, findByTestId } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 
 // Mock next/font/google BEFORE importing the layout
@@ -549,23 +549,28 @@ describe('RootLayout Component Tests', () => {
         const [loaded, setLoaded] = React.useState(false)
 
         React.useEffect(() => {
-          setTimeout(() => setLoaded(true), 5) // Small delay to ensure loading state is visible
+          const timer = setTimeout(() => setLoaded(true), 5) // Small delay to ensure loading state is visible
+          return () => clearTimeout(timer) // Proper cleanup
         }, [])
 
         return loaded ? <div data-testid="async-content">Loaded</div> : <div>Loading...</div>
       }
 
-      render(<RootLayout><AsyncComponent /></RootLayout>)
+      const { container } = render(<RootLayout><AsyncComponent /></RootLayout>)
 
-      // Initially should show loading
+      // Initially should show loading state
       expect(screen.getByText('Loading...')).toBeInTheDocument()
+      expect(screen.queryByTestId('async-content')).not.toBeInTheDocument()
 
-      // Wait for async update
-      await new Promise(resolve => setTimeout(resolve, 10))
+      // Wait for the async content to appear using findByTestId
+      const asyncContent = await findByTestId(container, 'async-content', {}, { timeout: 1000 })
 
-      // Should now show loaded content
-      expect(screen.getByTestId('async-content')).toBeInTheDocument()
+      // Verify the loaded state
+      expect(asyncContent).toBeInTheDocument()
+      expect(asyncContent).toHaveTextContent('Loaded')
       expect(screen.getByText('Loaded')).toBeInTheDocument()
+
+      // Verify loading state is gone
       expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
     })
   })
