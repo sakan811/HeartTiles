@@ -10,11 +10,7 @@ vi.mock('socket.io-client', () => ({
   io: vi.fn()
 }))
 
-// Mock next-auth/react
-vi.mock('next-auth/react', () => ({
-  useSession: vi.fn(() => ({ data: null, status: 'unauthenticated' })),
-  SessionProvider: ({ children }) => children
-}))
+// Note: next-auth/react is mocked globally in setup.js with proper NextAuth 5.0.0-beta.29 structure
 
 // Mock console methods to avoid noise in tests
 const originalConsoleLog = console.log
@@ -58,7 +54,11 @@ describe('SocketContext', () => {
     // Get the mocked useSession function
     const { useSession } = await import('next-auth/react')
     mockUseSession = useSession
-    mockUseSession.mockReturnValue({ data: null, status: 'unauthenticated' })
+    mockUseSession.mockReturnValue({
+      data: null,
+      status: 'unauthenticated',
+      update: vi.fn().mockResolvedValue(null),
+    })
   })
 
   afterEach(() => {
@@ -83,9 +83,14 @@ describe('SocketContext', () => {
       const { io } = await import('socket.io-client')
 
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       render(
@@ -113,7 +118,11 @@ describe('SocketContext', () => {
       io.mockClear()
 
       // Mock unauthenticated user - socket shouldn't be created
-      mockUseSession.mockReturnValue({ data: null, status: 'unauthenticated' })
+      mockUseSession.mockReturnValue({
+        data: null,
+        status: 'unauthenticated',
+        update: vi.fn().mockResolvedValue(null),
+      })
 
       // Test that the component renders without error - the window check is handled
       // internally by the component's useEffect hook
@@ -140,9 +149,14 @@ describe('SocketContext', () => {
 
     it('should set up socket event listeners', () => {
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       render(
@@ -158,9 +172,14 @@ describe('SocketContext', () => {
 
     it('should disconnect socket on unmount', () => {
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const { unmount } = render(
@@ -186,9 +205,14 @@ describe('SocketContext', () => {
       })
 
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const TestComponent = () => {
@@ -229,9 +253,14 @@ describe('SocketContext', () => {
       })
 
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const TestComponent = () => {
@@ -269,9 +298,14 @@ describe('SocketContext', () => {
       })
 
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const TestComponent = () => {
@@ -304,9 +338,14 @@ describe('SocketContext', () => {
   describe('useSocket Hook', () => {
     it('should provide socket context values', () => {
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const TestComponent = () => {
@@ -337,9 +376,14 @@ describe('SocketContext', () => {
 
     it('should call disconnect function when invoked', () => {
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const TestComponent = () => {
@@ -401,9 +445,14 @@ describe('SocketContext', () => {
       })
 
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const TestComponent = () => {
@@ -452,9 +501,14 @@ describe('SocketContext', () => {
       })
 
       // Mock authenticated user for socket creation
+      const mockSession = {
+        user: { id: 'test-user', name: 'Test User' },
+        expires: '2024-12-31T23:59:59.999Z'
+      }
       mockUseSession.mockReturnValue({
-        data: { user: { id: 'test-user', name: 'Test User' } },
-        status: 'authenticated'
+        data: mockSession,
+        status: 'authenticated',
+        update: vi.fn().mockResolvedValue(mockSession),
       })
 
       const TestComponent = () => {
@@ -555,7 +609,8 @@ describe('SocketContext', () => {
     it('should handle disconnect when socket is null', () => {
       mockUseSession.mockReturnValue({
         data: null,
-        status: 'unauthenticated'
+        status: 'unauthenticated',
+        update: vi.fn().mockResolvedValue(null),
       })
 
       const TestComponent = () => {
