@@ -56,23 +56,23 @@ describe('Game State Management and Turn-Based Gameplay', () => {
       const { acquireTurnLock, releaseTurnLock } = await import('../../server.js')
 
       const roomCode = 'ROOM123'
-      const userId = 'user123'
+      const socketId = 'user123'
 
       // Should acquire lock initially
-      const acquired = acquireTurnLock(roomCode, userId)
+      const acquired = acquireTurnLock(roomCode, socketId)
       expect(acquired).toBe(true)
-      expect(turnLocks.has(`${roomCode}_${userId}`)).toBe(true)
+      expect(turnLocks.has(roomCode)).toBe(true)
 
       // Should not acquire same lock again
-      const acquiredAgain = acquireTurnLock(roomCode, userId)
+      const acquiredAgain = acquireTurnLock(roomCode, socketId)
       expect(acquiredAgain).toBe(false)
 
       // Release lock
-      releaseTurnLock(roomCode, userId)
-      expect(turnLocks.has(`${roomCode}_${userId}`)).toBe(false)
+      releaseTurnLock(roomCode, socketId)
+      expect(turnLocks.has(roomCode)).toBe(false)
 
       // Should be able to acquire again after release
-      const acquiredAfterRelease = acquireTurnLock(roomCode, userId)
+      const acquiredAfterRelease = acquireTurnLock(roomCode, socketId)
       expect(acquiredAfterRelease).toBe(true)
     })
 
@@ -81,24 +81,25 @@ describe('Game State Management and Turn-Based Gameplay', () => {
 
       const roomCode1 = 'ROOM1'
       const roomCode2 = 'ROOM2'
-      const userId1 = 'user1'
-      const userId2 = 'user2'
+      const socketId1 = 'socket1'
+      const socketId2 = 'socket2'
 
-      // Acquire different locks
-      expect(acquireTurnLock(roomCode1, userId1)).toBe(true)
-      expect(acquireTurnLock(roomCode1, userId2)).toBe(true)
-      expect(acquireTurnLock(roomCode2, userId1)).toBe(true)
+      // Acquire different locks - only one lock per room allowed
+      expect(acquireTurnLock(roomCode1, socketId1)).toBe(true)
+      expect(acquireTurnLock(roomCode2, socketId1)).toBe(true)
 
-      // All should exist
-      expect(turnLocks.has(`${roomCode1}_${userId1}`)).toBe(true)
-      expect(turnLocks.has(`${roomCode1}_${userId2}`)).toBe(true)
-      expect(turnLocks.has(`${roomCode2}_${userId1}`)).toBe(true)
+      // Cannot acquire same room lock again
+      expect(acquireTurnLock(roomCode1, socketId2)).toBe(false)
+      expect(acquireTurnLock(roomCode2, socketId2)).toBe(false)
+
+      // All room locks should exist
+      expect(turnLocks.has(roomCode1)).toBe(true)
+      expect(turnLocks.has(roomCode2)).toBe(true)
 
       // Release one lock
-      releaseTurnLock(roomCode1, userId1)
-      expect(turnLocks.has(`${roomCode1}_${userId1}`)).toBe(false)
-      expect(turnLocks.has(`${roomCode1}_${userId2}`)).toBe(true)
-      expect(turnLocks.has(`${roomCode2}_${userId1}`)).toBe(true)
+      releaseTurnLock(roomCode1, socketId1)
+      expect(turnLocks.has(roomCode1)).toBe(false)
+      expect(turnLocks.has(roomCode2)).toBe(true)
     })
   })
 
@@ -609,24 +610,23 @@ describe('Game State Management and Turn-Based Gameplay', () => {
       const { acquireTurnLock, releaseTurnLock } = await import('../../server.js')
 
       const roomCode = 'CONCURRENT123'
-      const userId = 'user123'
-      const lockKey = `${roomCode}_${userId}`
+      const socketId = 'user123'
 
       // First action acquires lock
-      const firstLock = acquireTurnLock(roomCode, userId)
+      const firstLock = acquireTurnLock(roomCode, socketId)
       expect(firstLock).toBe(true)
-      expect(turnLocks.has(lockKey)).toBe(true)
+      expect(turnLocks.has(roomCode)).toBe(true)
 
       // Second action fails to acquire lock
-      const secondLock = acquireTurnLock(roomCode, userId)
+      const secondLock = acquireTurnLock(roomCode, socketId)
       expect(secondLock).toBe(false)
 
       // Simulate action completion and lock release
-      releaseTurnLock(roomCode, userId)
-      expect(turnLocks.has(lockKey)).toBe(false)
+      releaseTurnLock(roomCode, socketId)
+      expect(turnLocks.has(roomCode)).toBe(false)
 
       // Second action can now acquire lock
-      const thirdLock = acquireTurnLock(roomCode, userId)
+      const thirdLock = acquireTurnLock(roomCode, socketId)
       expect(thirdLock).toBe(true)
     })
 
