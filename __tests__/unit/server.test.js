@@ -1,22 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock database operations - must be at top level before any imports that use it
-vi.mock('../../../models', () => ({
-  PlayerSession: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
-  },
-  Room: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
-  },
-  User: {
-    findById: vi.fn()
-  }
-}))
+const mockPlayerSession = {
+  find: vi.fn(),
+  findOneAndUpdate: vi.fn(),
+  deleteOne: vi.fn()
+}
 
+const mockRoom = {
+  find: vi.fn(),
+  findOneAndUpdate: vi.fn(),
+  deleteOne: vi.fn()
+}
+
+const mockUser = {
+  findById: vi.fn()
+}
+
+vi.mock('../../../models', () => ({
+  PlayerSession: mockPlayerSession,
+  Room: mockRoom,
+  User: mockUser
+}))
 
 // Mock next-auth
 vi.mock('next-auth/jwt', () => ({
@@ -36,6 +41,36 @@ vi.mock('../../src/lib/cards.js', () => ({
   isHeartCard: vi.fn(),
   isMagicCard: vi.fn(),
   createCardFromData: vi.fn()
+}))
+
+// Mock mongoose with Schema constructor that supports middleware and types
+const mockSchema = vi.fn().mockImplementation(() => ({
+  pre: vi.fn(),
+  methods: {},
+  statics: {}
+}))
+mockSchema.Types = {
+  Mixed: 'Mixed',
+  ObjectId: 'ObjectId'
+}
+const mockMongoose = {
+  connect: vi.fn(),
+  Schema: mockSchema,
+  model: vi.fn(),
+  models: {}, // This will store cached models like mongoose.models
+  connection: {
+    readyState: 0,
+    close: vi.fn()
+  }
+}
+
+vi.mock('mongoose', () => ({
+  default: mockMongoose,
+  Schema: mockSchema,
+  model: mockMongoose.model,
+  models: mockMongoose.models,
+  connect: mockMongoose.connect,
+  connection: mockMongoose.connection
 }))
 
 // Mock Next.js server app preparation to prevent actual server startup
