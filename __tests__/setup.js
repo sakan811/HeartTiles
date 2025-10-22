@@ -122,6 +122,48 @@ vi.mock('next-auth/providers/credentials', () => ({
   })),
 }))
 
+// Mock next-auth/react with proper NextAuth 5.0.0-beta.29 structure
+const mockUseSession = vi.fn().mockImplementation(() => ({
+  data: null,
+  status: 'unauthenticated',
+  update: vi.fn().mockResolvedValue(null),
+}))
+
+const mockSessionProvider = ({ children }) => children
+const mockSignIn = vi.fn().mockResolvedValue({})
+const mockSignOut = vi.fn().mockResolvedValue({})
+const mockGetSession = vi.fn().mockResolvedValue(null)
+
+vi.mock('next-auth/react', () => ({
+  useSession: mockUseSession,
+  SessionProvider: mockSessionProvider,
+  signIn: mockSignIn,
+  signOut: mockSignOut,
+  getSession: mockGetSession,
+  // For testing purposes, expose the mock helpers
+  __mockHelpers: {
+    setMockSession: (session, status = 'authenticated') => {
+      mockUseSession.mockReturnValue({
+        data: session,
+        status,
+        update: vi.fn().mockResolvedValue(session),
+      })
+    },
+    resetMockSession: () => {
+      mockUseSession.mockReturnValue({
+        data: null,
+        status: 'unauthenticated',
+        update: vi.fn().mockResolvedValue(null),
+      })
+    },
+  },
+  // Also expose the mock function directly for tests
+  __mockUseSession: mockUseSession,
+}))
+
+// Make the mock function globally accessible
+global.__mockUseSession = mockUseSession
+
 // Mock window object for React components using vi.stubGlobal for proper cleanup
 vi.stubGlobal('window', {
   location: {
