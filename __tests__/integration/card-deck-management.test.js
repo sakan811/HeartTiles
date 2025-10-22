@@ -1,4 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { HeartCard, generateRandomMagicCard, ShieldCard } from '../../src/lib/cards.js'
+
+// Mock cards module
+vi.mock('../../src/lib/cards', () => ({
+  HeartCard: {
+    generateRandom: vi.fn()
+  },
+  generateRandomMagicCard: vi.fn(),
+  ShieldCard: {
+    isActive: vi.fn(),
+    getRemainingTurns: vi.fn()
+  }
+}))
 
 // Mock dependencies
 vi.mock('../../../models', () => ({
@@ -43,6 +56,12 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     rooms = new Map()
     global.turnLocks = new Map()
 
+    // Reset mocked functions
+    HeartCard.generateRandom = vi.fn()
+    generateRandomMagicCard = vi.fn()
+    ShieldCard.isActive = vi.fn()
+    ShieldCard.getRemainingTurns = vi.fn()
+
     mockSocket = {
       id: 'socket123',
       data: {
@@ -61,7 +80,6 @@ describe('Card Deck Management and Drawing Mechanics', () => {
   describe('Heart Card Drawing', () => {
     it('should draw heart card when deck has cards', async () => {
       const { validateCardDrawLimit, recordCardDraw } = await import('../../server.js')
-      const { HeartCard } = await import('../../src/lib/cards.js')
 
       const roomCode = 'HEART123'
       const userId = 'user123'
@@ -74,7 +92,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         value: 2,
         emoji: '❤️'
       }
-      const heartSpy = vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
+      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
 
       const room = {
         code: roomCode,
@@ -188,7 +206,6 @@ describe('Card Deck Management and Drawing Mechanics', () => {
   describe('Magic Card Drawing', () => {
     it('should draw magic card when deck has cards', async () => {
       const { validateCardDrawLimit, recordCardDraw } = await import('../../server.js')
-      const { generateRandomMagicCard } = await import('../../src/lib/cards.js')
 
       const roomCode = 'MAGIC123'
       const userId = 'user123'
@@ -200,7 +217,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         emoji: '💨',
         name: 'Wind Card'
       }
-      const magicSpy = vi.spyOn({ generateRandomMagicCard }, 'generateRandomMagicCard').mockReturnValue(mockMagicCard)
+      generateRandomMagicCard.mockReturnValue(mockMagicCard)
 
       const room = {
         code: roomCode,
@@ -290,20 +307,20 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     })
 
     it('should generate different types of magic cards', async () => {
-      const { generateRandomMagicCard } = await import('../../src/lib/cards.js')
 
-      const magicCardTypes = ['wind', 'recycle', 'shield']
-      const generatedCards = []
-
-      // Mock Math.random to generate different card types
-      const originalRandom = Math.random
-      const randomValues = [0.1, 0.5, 0.9] // Will generate different types
+      // Set up mock to return different card types
+      const mockCards = [
+        { id: 'wind-1', type: 'wind', emoji: '💨', name: 'Wind Card' },
+        { id: 'recycle-1', type: 'recycle', emoji: '♻️', name: 'Recycle Card' },
+        { id: 'shield-1', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
+      ]
       let callCount = 0
 
-      Math.random = vi.fn().mockImplementation(() => {
-        return randomValues[callCount++ % randomValues.length]
+      generateRandomMagicCard.mockImplementation(() => {
+        return mockCards[callCount++ % mockCards.length]
       })
 
+      const generatedCards = []
       for (let i = 0; i < 10; i++) {
         const card = generateRandomMagicCard()
         generatedCards.push(card)
@@ -315,16 +332,13 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       // Verify we have different card types (the exact distribution depends on weights)
       const uniqueTypes = new Set(generatedCards.map(card => card.type))
       expect(uniqueTypes.size).toBeGreaterThan(0)
-
-      Math.random = originalRandom
     })
   })
 
   describe('Initial Card Distribution', () => {
     it('should distribute correct number of cards at game start', async () => {
       const { generateTiles } = await import('../../server.js')
-      const { HeartCard, generateRandomMagicCard } = await import('../../src/lib/cards.js')
-
+      
       // Mock card generation
       const mockHeartCard = {
         id: 'heart-start',
@@ -339,8 +353,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         emoji: '💨'
       }
 
-      vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
-      vi.spyOn({ generateRandomMagicCard }, 'generateRandomMagicCard').mockReturnValue(mockMagicCard)
+      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
+      generateRandomMagicCard.mockReturnValue(mockMagicCard)
 
       const room = {
         players: [
@@ -392,13 +406,12 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     })
 
     it('should handle initial distribution for single player', async () => {
-      const { HeartCard, generateRandomMagicCard } = await import('../../src/lib/cards.js')
-
+      
       const mockHeartCard = { id: 'heart', type: 'heart' }
       const mockMagicCard = { id: 'magic', type: 'magic' }
 
-      vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
-      vi.spyOn({ generateRandomMagicCard }, 'generateRandomMagicCard').mockReturnValue(mockMagicCard)
+      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
+      generateRandomMagicCard.mockReturnValue(mockMagicCard)
 
       const room = {
         players: [
@@ -428,8 +441,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
   describe('Deck State Management', () => {
     it('should track deck counts correctly during draws', async () => {
-      const { HeartCard } = await import('../../src/lib/cards.js')
-
+      
       const mockHeartCard = { id: 'heart', type: 'heart' }
       vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
 
@@ -462,8 +474,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     })
 
     it('should handle multiple players drawing from same deck', async () => {
-      const { HeartCard } = await import('../../src/lib/cards.js')
-
+      
       const mockHeartCard = { id: 'heart-multi', type: 'heart' }
       HeartCard.generateRandom.mockReturnValue(mockHeartCard)
 
@@ -621,8 +632,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
   describe('Card Hand Management', () => {
     it('should add cards to correct player hand', async () => {
-      const { HeartCard } = await import('../../src/lib/cards.js')
-
+      
       const mockHeartCard = {
         id: 'heart-hand',
         type: 'heart',
@@ -654,8 +664,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     })
 
     it('should initialize player hand if it does not exist', async () => {
-      const { HeartCard } = await import('../../src/lib/cards.js')
-
+      
       const mockHeartCard = { id: 'heart-new', type: 'heart' }
       HeartCard.generateRandom.mockReturnValue(mockHeartCard)
 
@@ -743,8 +752,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
     it('should maintain deck integrity across multiple turns', async () => {
       const { resetPlayerActions } = await import('../../server.js')
-      const { HeartCard } = await import('../../src/lib/cards.js')
-
+      
       const mockHeartCard = { id: 'heart-multi', type: 'heart' }
       HeartCard.generateRandom.mockReturnValue(mockHeartCard)
 
