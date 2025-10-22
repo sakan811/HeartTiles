@@ -1,5 +1,6 @@
 import { ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { SessionProvider } from 'next-auth/react'
 import { SocketProvider } from '@/contexts/SocketContext'
 import ErrorBoundary from '@/components/ErrorBoundary'
@@ -213,6 +214,7 @@ export const createMockSignInResponse = (overrides = {}) => ({
 // Re-export everything from React Testing Library
 export * from '@testing-library/react'
 export { customRender as render }
+export { userEvent }
 export { vi } from 'vitest'
 
 // Common test helpers
@@ -232,17 +234,21 @@ export const mockFetchError = (error: string) => {
 }
 
 // Form test helpers
-export const fillForm = async (fields: Record<string, string>, user: any) => {
+export const fillForm = async (fields: Record<string, string>, screen: any, userInstance?: any) => {
+  const user = userInstance || userEvent.setup()
   for (const [fieldName, value] of Object.entries(fields)) {
-    const field = user.getByLabelText(fieldName) || user.getByPlaceholderText(fieldName) || user.getByTestId(fieldName)
+    const field = screen.getByLabelText(fieldName) || screen.getByPlaceholderText(fieldName) || screen.getByTestId(fieldName)
     await user.clear(field)
     await user.type(field, value)
   }
+  return user
 }
 
-export const submitForm = async (user: any) => {
-  const submitButton = user.getByRole('button', { type: 'submit' }) || user.getByText('Submit')
+export const submitForm = async (screen: any, userInstance?: any) => {
+  const user = userInstance || userEvent.setup()
+  const submitButton = screen.getByRole('button', { type: 'submit' }) || screen.getByText('Submit') || screen.getByText('Sign in')
   await user.click(submitButton)
+  return user
 }
 
 // Clipboard API mock
