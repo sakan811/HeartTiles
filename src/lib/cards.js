@@ -93,7 +93,7 @@ export class WindCard extends MagicCard {
 
   canTargetTile(tile, playerId) {
     // Wind can only target tiles with opponent hearts
-    return tile.placedHeart && tile.placedHeart.placedBy !== playerId;
+    return Boolean(tile.placedHeart && tile.placedHeart.placedBy !== playerId);
   }
 
   executeEffect(gameState, targetTileId, playerId) {
@@ -141,7 +141,7 @@ export class RecycleCard extends MagicCard {
 
   canTargetTile(tile) {
     // Recycle can only target empty, non-white tiles
-    return !tile.placedHeart && tile.color !== 'white';
+    return Boolean(!tile.placedHeart && tile.color !== 'white');
   }
 
   executeEffect(gameState, targetTileId, currentPlayerId) {

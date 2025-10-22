@@ -113,10 +113,11 @@ describe('Error Handling and Edge Cases', () => {
       })
     })
 
-    it('should handle malformed player names', () => {
+    it('should handle malformed player names', async () => {
       // Test validation if function exists
-      if (typeof require('../utils/server-test-utils.js').validatePlayerName === 'function') {
-        const { validatePlayerName } = require('../utils/server-test-utils.js')
+      const testUtils = await import('../utils/server-test-utils.js')
+      if (typeof testUtils.validatePlayerName === 'function') {
+        const { validatePlayerName } = testUtils
 
         const invalidNames = [
           null,

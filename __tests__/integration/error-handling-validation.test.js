@@ -182,7 +182,7 @@ describe('Error Handling and Validation Scenarios', () => {
 
       invalidParams.forEach(params => {
         const roomCodeValid = /^[A-Z0-9]{6}$/i.test(params.roomCode)
-        const cardIdValid = params.cardId && params.cardId.trim() !== '' && typeof params.cardId === 'string'
+        const cardIdValid = Boolean(params.cardId && params.cardId.trim() !== '' && typeof params.cardId === 'string')
 
         // At least one of these should be invalid for each test case
         expect(roomCodeValid && cardIdValid).toBe(false)
