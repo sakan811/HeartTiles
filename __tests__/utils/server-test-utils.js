@@ -268,7 +268,10 @@ export function decrementConnectionCount(connectionPool, ip) {
 // Validation functions (same as server.js)
 export function validateRoomCode(roomCode) {
   if (!roomCode || typeof roomCode !== 'string') return false;
-  return /^[A-Z0-9]{6}$/i.test(roomCode);
+  const trimmedCode = roomCode.trim();
+  if (trimmedCode.length !== 6) return false;
+  // Room codes should be: 6 letters, 3 letters + 3 numbers, or 6 numbers
+  return /^[A-Z]{6}$|^[a-z]{6}$|^[A-Z]{3}[0-9]{3}$|^[0-9]{6}|^[a-z]{3}[0-9]{3}$/.test(trimmedCode);
 }
 
 export function validatePlayerName(playerName) {
