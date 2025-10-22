@@ -37,7 +37,7 @@ vi.mock('../../src/app/globals.css', () => ({}))
 
 // Import after mocking
 import { Geist, Geist_Mono } from 'next/font/google'
-import RootLayout from '../app/layout'
+import RootLayout from '../../../src/app/layout'
 
 describe('RootLayout Component Tests', () => {
   beforeEach(() => {
