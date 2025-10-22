@@ -528,7 +528,7 @@ describe('Error Handling and Validation Scenarios', () => {
     })
 
     it('should handle room not found scenarios', async () => {
-      const roomCode = 'NOTFND' // 6 chars to match validation pattern
+      const roomCode = 'NOT123' // 3 letters + 3 numbers to match validation pattern
       const { validateRoomCode } = await import('../../server.js')
 
       expect(validateRoomCode(roomCode)).toBe(true)
