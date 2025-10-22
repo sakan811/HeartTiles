@@ -323,23 +323,29 @@ function calculateScore(heart, tile) {
 let turnLocks = new Map();
 
 function acquireTurnLock(roomCode, socketId) {
-  const lockKey = `${roomCode}_${socketId}`;
+  // Use roomCode as the lock key to ensure only one action per room at a time
+  const lockKey = roomCode;
 
   // Use global turnLocks if available (for testing), otherwise use module-level
   const locks = global.turnLocks || turnLocks;
 
   if (locks.has(lockKey)) return false;
-  locks.set(lockKey, Date.now());
+  locks.set(lockKey, { socketId, timestamp: Date.now() });
   return true;
 }
 
 function releaseTurnLock(roomCode, socketId) {
-  const lockKey = `${roomCode}_${socketId}`;
+  // Use roomCode as the lock key to match acquireTurnLock
+  const lockKey = roomCode;
 
   // Use global turnLocks if available (for testing), otherwise use module-level
   const locks = global.turnLocks || turnLocks;
 
-  locks.delete(lockKey);
+  const lock = locks.get(lockKey);
+  // Only release if this socket owns the lock
+  if (lock && lock.socketId === socketId) {
+    locks.delete(lockKey);
+  }
 }
 
 // Prevent server from starting during tests
