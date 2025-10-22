@@ -511,7 +511,7 @@ export default function GameRoomPage() {
             <p className="text-sm">Turn: {turnCount}</p>
 
             {/* Simple Shield Status Display */}
-            {shields && Object.keys(shields).length > 0 && Object.entries(shields).some(([_, shield]) => shield.remainingTurns > 0) && (
+            {shields && Object.keys(shields).length > 0 && Object.entries(shields).some(([, shield]) => shield.remainingTurns > 0) && (
               <div className="mt-3 flex justify-center gap-3">
                 {Object.entries(shields).map(([playerId, shield]) => {
                   const player = players.find(p => p.userId === playerId);
