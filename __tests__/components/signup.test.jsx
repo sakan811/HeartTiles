@@ -14,7 +14,7 @@ import {
   expectButtonToBeDisabled,
   expectButtonToBeEnabled,
   expectLinkToHaveHref
-} from './utils/test-utils'
+} from '../unit/utils/test-utils'
 
 // Mock the providers
 vi.mock('../../src/contexts/SocketContext.js', () => ({
@@ -42,6 +42,10 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams
 }))
 
+// Mock global fetch
+const mockGlobalFetch = vi.fn()
+global.fetch = mockGlobalFetch
+
 describe('Sign Up Page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -49,6 +53,7 @@ describe('Sign Up Page', () => {
     mockRouter.push.mockClear()
     mockRouter.refresh.mockClear()
     mockSearchParams.get.mockClear()
+    mockGlobalFetch.mockClear()
   })
 
   afterEach(() => {
@@ -135,7 +140,7 @@ describe('Sign Up Page', () => {
   })
 
   it('should submit form with valid data', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    mockGlobalFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ message: 'User created successfully' })
     })
@@ -173,7 +178,7 @@ describe('Sign Up Page', () => {
   })
 
   it('should redirect to sign in after successful registration', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    mockGlobalFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ message: 'User created successfully' })
     })
@@ -197,11 +202,11 @@ describe('Sign Up Page', () => {
     // Run timers to complete async operations
     await vi.runAllTimersAsync()
 
-    expect(mockPush).toHaveBeenCalledWith('/auth/signin?message=Account created successfully')
+    expect(mockRouter.push).toHaveBeenCalledWith('/auth/signin?message=Account created successfully')
   })
 
   it('should show error message on registration failure', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
+    mockGlobalFetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: 'Email already exists' })
     })
@@ -230,7 +235,7 @@ describe('Sign Up Page', () => {
 
   it('should show loading state during submission', async () => {
     let resolveFetch
-    vi.mocked(fetch).mockReturnValueOnce(new Promise(resolve => {
+    mockGlobalFetch.mockReturnValueOnce(new Promise(resolve => {
       resolveFetch = resolve
     }))
 
@@ -269,7 +274,7 @@ describe('Sign Up Page', () => {
   })
 
   it('should handle network errors gracefully', async () => {
-    vi.mocked(fetch).mockRejectedValueOnce(new Error('Network error'))
+    mockGlobalFetch.mockRejectedValueOnce(new Error('Network error'))
 
     render(<SignUpPage />)
 
@@ -331,7 +336,8 @@ describe('Sign Up Page', () => {
     it('should render with proper page layout and styling', () => {
       render(<SignUpPage />)
 
-      const mainContainer = screen.getByText('Create your account').closest('div')
+      // Find the main container by looking for the div with the specific classes
+      const mainContainer = screen.getByText('Create your account').closest('.min-h-screen')
       expect(mainContainer).toHaveClass(
         'min-h-screen',
         'flex',
@@ -937,7 +943,7 @@ describe('Sign Up Page', () => {
       const form = screen.getByRole('button', { name: 'Create account' }).closest('form')
 
       await act(async () => {
-        fireEvent.submit(form!)
+        fireEvent.submit(form)
       })
 
       await vi.runAllTimersAsync()

@@ -79,6 +79,9 @@ const renderGamePage = (sessionData = null, sessionStatus = 'unauthenticated') =
 
 describe('GameRoomPage Component (Lines 1-921)', () => {
   beforeEach(() => {
+    // Use fake timers to control setTimeout calls in components
+    vi.useFakeTimers()
+
     vi.clearAllMocks()
     mockRouter.push.mockClear()
     mockSocket.on.mockClear()
@@ -108,7 +111,11 @@ describe('GameRoomPage Component (Lines 1-921)', () => {
   })
 
   afterEach(() => {
+    // Clean up any pending timers to avoid unhandled setTimeout calls
+    vi.clearAllTimers()
     vi.restoreAllMocks()
+    // Restore real timers
+    vi.useRealTimers()
   })
 
   describe('Authentication and Redirects (Lines 97-103)', () => {
