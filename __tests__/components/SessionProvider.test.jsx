@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
 import { render, screen } from '@testing-library/react'
-import { SessionProvider } from '../../../src/components/providers/SessionProvider'
+import { SessionProvider } from '@/components/providers/SessionProvider'
 
 // Mock NextAuth SessionProvider with factory function to avoid hoisting issues
 vi.mock('next-auth/react', () => {
