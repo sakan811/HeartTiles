@@ -210,8 +210,13 @@ vi.stubGlobal('window', {
   self: {},
   performance: {
     now: vi.fn(() => Date.now())
-  }
+  },
+  // Mock alert function for components that use it
+  alert: vi.fn()
 })
+
+// Also expose alert globally for direct access
+global.alert = vi.fn()
 
 // Mock console methods to reduce noise in tests
 global.console = {
@@ -231,7 +236,7 @@ global.Date.now = vi.fn(() => mockDate.getTime())
 // Create a predictable sequence that still allows for unique IDs
 let mathRandomCallCount = 0
 
-// Store the original Math.random to ensure we can always fall back
+// Store the original Math.random
 const originalMathRandom = Math.random
 
 // Create a robust Math.random mock that never returns undefined
@@ -259,9 +264,19 @@ const robustMathRandom = vi.fn(() => {
   }
 })
 
-// Apply the mock to both global.Math and Math directly
-global.Math.random = robustMathRandom
-Math.random = robustMathRandom
+// Only mock Math.random, keep all other Math functions intact
+// Use Object.defineProperty to safely replace only the random function
+const originalMath = Math
+Object.defineProperty(Math, 'random', {
+  value: robustMathRandom,
+  writable: true,
+  configurable: true
+})
+Object.defineProperty(global, 'Math', {
+  value: originalMath,
+  writable: true,
+  configurable: true
+})
 
 // Store original timer functions before mocking
 const originalSetTimeout = global.setTimeout
@@ -682,9 +697,12 @@ afterEach(() => {
   // Reset Math.random() call count for test isolation
   mathRandomCallCount = 0
 
-  // Re-apply the Math.random() mock to ensure it's always available
-  global.Math.random = robustMathRandom
-  Math.random = robustMathRandom
+  // Re-apply the Math.random mock to ensure it's always available
+  Object.defineProperty(Math, 'random', {
+    value: robustMathRandom,
+    writable: true,
+    configurable: true
+  })
 
   // Re-establish comprehensive window object mock to ensure consistency across tests
   // This includes all properties that React DOM might need during rendering and cleanup
@@ -732,6 +750,8 @@ afterEach(() => {
     performance: {
       now: vi.fn(() => Date.now())
     },
+    // Mock alert function
+    alert: vi.fn(),
     // Additional properties that React DOM might access
     console: {
       log: vi.fn(),
