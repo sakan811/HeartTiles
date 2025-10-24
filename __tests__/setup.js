@@ -77,8 +77,8 @@ process.env.NEXTAUTH_SECRET = 'test-secret'
 process.env.NEXTAUTH_URL = 'http://localhost:3000'
 process.env.MONGODB_URI = 'mongodb://localhost:27017/test'
 
-// Mock Next.js modules before any imports
-vi.mock('next/server', () => ({
+// Mock Next.js modules before any imports - fix NextAuth module resolution
+const mockNextServer = {
   NextRequest: vi.fn().mockImplementation((url, init) => ({
     url,
     method: init?.method || 'GET',
@@ -102,17 +102,40 @@ vi.mock('next/server', () => ({
       headers: new Map(),
     })),
   },
+}
+
+vi.mock('next/server', () => mockNextServer)
+vi.mock('next/dist/server', () => mockNextServer)
+
+// Mock NextAuth core modules - fix module resolution issues
+let storedAuthConfig = null
+
+const createMockNextAuth = (config) => {
+  // Store the actual configuration for testing purposes
+  storedAuthConfig = config
+
+  const mockAuth = {
+    handlers: {
+      GET: vi.fn().mockResolvedValue(new Response('OK')),
+      POST: vi.fn().mockResolvedValue(new Response('OK'))
+    },
+    signIn: vi.fn().mockResolvedValue({ success: true }),
+    signOut: vi.fn().mockResolvedValue({ success: true }),
+    auth: vi.fn().mockResolvedValue(null),
+  }
+
+  // Store configuration for test access
+  mockAuth.__innerConfig = config
+
+  return mockAuth
+}
+
+vi.mock('next-auth', () => ({
+  default: createMockNextAuth,
 }))
 
-// Mock NextAuth core modules
-vi.mock('next-auth', () => ({
-  default: vi.fn().mockImplementation((config) => ({
-    handlers: { GET: vi.fn(), POST: vi.fn() },
-    signIn: vi.fn(),
-    signOut: vi.fn(),
-    auth: vi.fn(),
-  })),
-}))
+// Export the stored config for test access
+global.__storedAuthConfig = () => storedAuthConfig
 
 vi.mock('next-auth/providers/credentials', () => ({
   default: vi.fn().mockImplementation((config) => ({
