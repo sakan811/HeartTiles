@@ -53,20 +53,100 @@ import {
   clearTurnLocks
 } from '../utils/server-test-utils.js'
 
-// Mock Next.js modules for integration tests
-vi.mock('next/server', () => ({
-  NextRequest: vi.fn(),
+// Mock Next.js modules for integration tests - fix NextAuth module resolution
+const mockNextServer = {
+  NextRequest: vi.fn().mockImplementation((url, init) => ({
+    url,
+    method: init?.method || 'GET',
+    headers: new Map(),
+    json: vi.fn().mockResolvedValue({}),
+    text: vi.fn().mockResolvedValue(''),
+    body: init?.body,
+  })),
   NextResponse: {
-    json: vi.fn(),
-    redirect: vi.fn(),
-    next: vi.fn(),
+    json: vi.fn().mockImplementation((data, options = {}) => ({
+      status: options.status || 200,
+      json: vi.fn().mockResolvedValue(data),
+      headers: new Map(),
+    })),
+    redirect: vi.fn().mockImplementation((url, options = {}) => ({
+      status: options.status || 302,
+      headers: new Map([['Location', url]]),
+    })),
+    next: vi.fn().mockImplementation(() => ({
+      status: 200,
+      headers: new Map(),
+    })),
   },
+}
+
+vi.mock('next/server', () => mockNextServer)
+vi.mock('next/dist/server', () => mockNextServer)
+
+// Mock NextAuth core modules - fix module resolution issues
+let storedAuthConfig = null
+
+const createMockNextAuth = (config) => {
+  // Store the actual configuration for testing purposes
+  storedAuthConfig = config
+
+  const mockAuth = {
+    handlers: {
+      GET: vi.fn().mockResolvedValue(new Response('OK')),
+      POST: vi.fn().mockResolvedValue(new Response('OK'))
+    },
+    signIn: vi.fn().mockResolvedValue({ success: true }),
+    signOut: vi.fn().mockResolvedValue({ success: true }),
+    auth: vi.fn().mockResolvedValue(null),
+  }
+
+  // Store configuration for test access
+  mockAuth.__innerConfig = config
+
+  return mockAuth
+}
+
+vi.mock('next-auth', () => ({
+  default: createMockNextAuth,
 }))
 
-// Mock NextAuth
+// Export the stored config for test access
+global.__storedAuthConfig = () => storedAuthConfig
+
+vi.mock('next-auth/providers/credentials', () => ({
+  default: vi.fn().mockImplementation((config) => ({
+    type: 'credentials',
+    name: 'credentials',
+    ...config,
+  })),
+}))
+
+// Mock NextAuth JWT
 vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn(),
 }))
+
+// NOTE: For integration tests, we want to use REAL models and database operations
+// Models will NOT be mocked here to allow for proper integration testing
+// Individual tests can mock models as needed for specific scenarios
+
+// Mock bcryptjs
+vi.mock('bcryptjs', () => ({
+  default: {
+    compare: vi.fn()
+  }
+}))
+
+// Mock mongoose for database connection (but allow real connection for integration tests)
+const mockMongooseConnect = vi.fn()
+const mockMongoose = {
+  default: {
+    connect: mockMongooseConnect,
+    connection: {
+      readyState: 0 // Initially disconnected
+    }
+  }
+}
 
 // Note: Socket.IO is not mocked here because we need real Socket.IO functionality for integration tests
 
