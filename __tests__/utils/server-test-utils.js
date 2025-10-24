@@ -1,4 +1,4 @@
-// Test utilities for server.js - extracted functions for integration testing
+// Enhanced server test utilities with minimal mocking for realistic testing
 import {
   HeartCard,
   WindCard,
@@ -8,145 +8,136 @@ import {
   isHeartCard,
   isMagicCard,
   createCardFromData
-} from '../../src/lib/cards.js';
-import mongoose from 'mongoose';
-import { PlayerSession, Room, User } from '../../models.js';
-import { getToken } from 'next-auth/jwt';
+} from '../../src/lib/cards.js'
+import { PlayerSession, Room, User } from '../../models.js'
+import { getToken } from 'next-auth/jwt'
 
-// Database connection functions
+// Database connection functions - real implementation for integration testing
 export async function connectToDatabase() {
-  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/heart-tiles-test?authSource=admin';
+  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/heart-tiles-test?authSource=admin'
+  const mongoose = await import('mongoose')
 
-  // Enhanced connection options for CI environment
+  // Enhanced connection options for test environment
   const connectionOptions = {
-    serverSelectionTimeoutMS: 30000, // Increase timeout to 30s for CI
-    bufferTimeoutMS: 30000, // Increase buffer timeout to 30s
-    maxPoolSize: 10, // Connection pooling
-    retryWrites: true, // Enable retry writes
-    // Additional options for CI reliability
+    serverSelectionTimeoutMS: 30000,
+    bufferTimeoutMS: 30000,
+    maxPoolSize: 10,
+    retryWrites: true,
     connectTimeoutMS: 30000,
     socketTimeoutMS: 45000,
-    // Use only supported Mongoose options
-    bufferCommands: false, // Disable command buffering
-  };
+    bufferCommands: false,
+  }
 
-  // Retry logic for CI environment
-  const maxRetries = process.env.NODE_ENV === 'test' ? 3 : 1;
-  const retryDelay = 2000; // 2 seconds between retries
+  // Retry logic for test environment reliability
+  const maxRetries = process.env.NODE_ENV === 'test' ? 3 : 1
+  const retryDelay = 2000
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Check if already connected
-      if (mongoose.connection.readyState === 1) {
-        console.log('Already connected to test MongoDB');
-        return;
+      if (mongoose.default.connection.readyState === 1) {
+        console.log('Already connected to test MongoDB')
+        return
       }
 
-      // Connect with enhanced options
-      await mongoose.connect(MONGODB_URI, connectionOptions);
-      console.log('Connected to test MongoDB');
-      return; // Success, exit the retry loop
+      await mongoose.default.connect(MONGODB_URI, connectionOptions)
+      console.log('Connected to test MongoDB')
+      return
     } catch (err) {
-      console.error(`MongoDB connection attempt ${attempt} failed:`, err.message);
+      console.error(`MongoDB connection attempt ${attempt} failed:`, err.message)
 
       if (attempt === maxRetries) {
-        console.error('All MongoDB connection attempts failed');
-        throw err;
+        console.error('All MongoDB connection attempts failed')
+        throw err
       }
 
-      console.log(`Retrying MongoDB connection in ${retryDelay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, retryDelay));
+      console.log(`Retrying MongoDB connection in ${retryDelay}ms...`)
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
     }
   }
 }
 
 export async function disconnectDatabase() {
+  const mongoose = await import('mongoose')
   try {
-    // Only disconnect if connected
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.disconnect();
-      console.log('Disconnected from test MongoDB');
+    if (mongoose.default.connection.readyState !== 0) {
+      await mongoose.default.disconnect()
+      console.log('Disconnected from test MongoDB')
     } else {
-      console.log('Already disconnected from test MongoDB');
+      console.log('Already disconnected from test MongoDB')
     }
   } catch (err) {
-    console.error('MongoDB disconnection failed:', err);
-    throw err;
+    console.error('MongoDB disconnection failed:', err)
+    throw err
   }
 }
 
 export async function clearDatabase() {
+  const mongoose = await import('mongoose')
   try {
-    // Check if connected before attempting to clear
-    if (mongoose.connection.readyState !== 1) {
-      console.log('Database not connected, skipping clear');
-      return;
+    if (mongoose.default.connection.readyState !== 1) {
+      console.log('Database not connected, skipping clear')
+      return
     }
 
     await Promise.all([
       Room.deleteMany({}),
       PlayerSession.deleteMany({}),
       User.deleteMany({})
-    ]);
-    console.log('Test database cleared');
+    ])
+    console.log('Test database cleared')
   } catch (err) {
-    console.error('Failed to clear database:', err);
-    // Don't throw error, just log it to avoid breaking tests
+    console.error('Failed to clear database:', err)
+    // Don't throw error to avoid breaking tests
   }
 }
 
-// Room management functions
+// Room management functions - real implementation
 export async function loadRooms() {
   try {
-    const rooms = await Room.find({});
-    const roomsMap = new Map();
+    const rooms = await Room.find({})
+    const roomsMap = new Map()
     rooms.forEach(room => {
-      const roomObj = room.toObject();
+      const roomObj = room.toObject()
       // Convert plain objects back to Maps for game logic
       if (roomObj.gameState) {
         if (roomObj.gameState.playerHands && typeof roomObj.gameState.playerHands === 'object') {
-          roomObj.gameState.playerHands = new Map(Object.entries(roomObj.gameState.playerHands));
+          roomObj.gameState.playerHands = new Map(Object.entries(roomObj.gameState.playerHands))
         }
         if (roomObj.gameState.shields && typeof roomObj.gameState.shields === 'object') {
-          roomObj.gameState.shields = new Map(Object.entries(roomObj.gameState.shields));
+          roomObj.gameState.shields = new Map(Object.entries(roomObj.gameState.shields))
         }
         if (roomObj.gameState.playerActions && typeof roomObj.gameState.playerActions === 'object') {
-          roomObj.gameState.playerActions = new Map(Object.entries(roomObj.gameState.playerActions));
+          roomObj.gameState.playerActions = new Map(Object.entries(roomObj.gameState.playerActions))
         }
       }
-      roomsMap.set(room.code, roomObj);
-    });
-    return roomsMap;
+      roomsMap.set(room.code, roomObj)
+    })
+    return roomsMap
   } catch (err) {
-    console.error('Failed to load rooms:', err);
-    return new Map();
+    console.error('Failed to load rooms:', err)
+    return new Map()
   }
 }
 
 export async function saveRoom(roomData) {
   try {
-    // Validate input
-    if (!roomData) {
-      throw new Error('Room data is required');
-    }
-
-    if (!roomData.code) {
-      throw new Error('Room code is required');
+    if (!roomData || !roomData.code) {
+      throw new Error('Room data and code are required')
     }
 
     // Create a deep copy of the room data
-    const roomDataToSave = JSON.parse(JSON.stringify(roomData));
+    const roomDataToSave = JSON.parse(JSON.stringify(roomData))
 
-    // Convert Map objects to plain objects for database storage (before JSON stringify)
+    // Convert Map objects to plain objects for database storage
     if (roomData.gameState) {
       if (roomData.gameState.playerHands instanceof Map) {
-        roomDataToSave.gameState.playerHands = Object.fromEntries(roomData.gameState.playerHands);
+        roomDataToSave.gameState.playerHands = Object.fromEntries(roomData.gameState.playerHands)
       }
       if (roomData.gameState.shields instanceof Map) {
-        roomDataToSave.gameState.shields = Object.fromEntries(roomData.gameState.shields);
+        roomDataToSave.gameState.shields = Object.fromEntries(roomData.gameState.shields)
       }
       if (roomData.gameState.playerActions instanceof Map) {
-        roomDataToSave.gameState.playerActions = Object.fromEntries(roomData.gameState.playerActions);
+        roomDataToSave.gameState.playerActions = Object.fromEntries(roomData.gameState.playerActions)
       }
     }
 
@@ -154,35 +145,36 @@ export async function saveRoom(roomData) {
       { code: roomData.code },
       roomDataToSave,
       { upsert: true, new: true }
-    );
-      } catch (err) {
-    console.error('Failed to save room:', err);
-    throw err;
+    )
+    return result
+  } catch (err) {
+    console.error('Failed to save room:', err)
+    throw err
   }
 }
 
 export async function deleteRoom(roomCode) {
   try {
-    await Room.deleteOne({ code: roomCode });
+    await Room.deleteOne({ code: roomCode })
   } catch (err) {
-    console.error('Failed to delete room:', err);
-    throw err;
+    console.error('Failed to delete room:', err)
+    throw err
   }
 }
 
-// Player session functions
+// Player session functions - real implementation
 export async function loadPlayerSessions() {
   try {
-    const sessions = await PlayerSession.find({ isActive: true });
-    const sessionsMap = new Map();
+    const sessions = await PlayerSession.find({ isActive: true })
+    const sessionsMap = new Map()
     sessions.forEach(session => {
-      const sessionObj = session.toObject();
-      sessionsMap.set(sessionObj.userId, sessionObj);
-    });
-    return sessionsMap;
+      const sessionObj = session.toObject()
+      sessionsMap.set(sessionObj.userId, sessionObj)
+    })
+    return sessionsMap
   } catch (err) {
-    console.error('Failed to load sessions:', err);
-    return new Map();
+    console.error('Failed to load sessions:', err)
+    return new Map()
   }
 }
 
@@ -192,140 +184,140 @@ export async function savePlayerSession(sessionData) {
       { userId: sessionData.userId },
       sessionData,
       { upsert: true, new: true }
-    );
-      } catch (err) {
-    console.error('Failed to save player session:', err);
-    throw err;
+    )
+    return result
+  } catch (err) {
+    console.error('Failed to save player session:', err)
+    throw err
   }
 }
 
-// Authentication utilities
+// Authentication utilities - real implementation with optional mocking
 export async function authenticateSocket(socket, getTokenFn = getToken, UserModel = User) {
   try {
     const token = await getTokenFn({
       req: socket.handshake,
       secret: process.env.AUTH_SECRET
-    });
+    })
 
     if (!token?.id) {
-      throw new Error('Authentication required');
+      throw new Error('Authentication required')
     }
 
-    const user = await UserModel.findById(token.id);
+    const user = await UserModel.findById(token.id)
     if (!user) {
-      throw new Error('User not found');
+      throw new Error('User not found')
     }
 
-    socket.data.userId = token.id;
-    socket.data.userEmail = user.email;
-    socket.data.userName = user.name;
-    socket.data.userSessionId = token.jti;
+    socket.data.userId = token.id
+    socket.data.userEmail = user.email
+    socket.data.userName = user.name
+    socket.data.userSessionId = token.jti
 
-    return { authenticated: true, user };
+    return { authenticated: true, user }
   } catch (error) {
-    console.error('Socket authentication error:', error);
-    // Re-throw the original error message instead of a generic one
-    throw error;
+    console.error('Socket authentication error:', error)
+    throw error
   }
 }
 
-// Turn lock management
-let turnLocks = new Map();
+// Turn lock management - real implementation
+let turnLocks = new Map()
 
 export function acquireTurnLock(roomCode, userId) {
-  const lockKey = `${roomCode}_${userId}`;
-  if (turnLocks.has(lockKey)) return false;
-  turnLocks.set(lockKey, Date.now());
-  return true;
+  const lockKey = `${roomCode}_${userId}`
+  if (turnLocks.has(lockKey)) return false
+  turnLocks.set(lockKey, Date.now())
+  return true
 }
 
 export function releaseTurnLock(roomCode, userId) {
-  turnLocks.delete(`${roomCode}_${userId}`);
+  turnLocks.delete(`${roomCode}_${userId}`)
 }
 
 export function clearTurnLocks() {
-  turnLocks.clear();
+  turnLocks.clear()
 }
 
-// Connection pool management
+// Connection pool management - real implementation
 export function createConnectionPool() {
-  return new Map();
+  return new Map()
 }
 
 export function canAcceptConnection(connectionPool, ip, maxConnections = 5) {
-  return (connectionPool.get(ip) || 0) < maxConnections;
+  return (connectionPool.get(ip) || 0) < maxConnections
 }
 
 export function incrementConnectionCount(connectionPool, ip) {
-  connectionPool.set(ip, (connectionPool.get(ip) || 0) + 1);
+  connectionPool.set(ip, (connectionPool.get(ip) || 0) + 1)
 }
 
 export function decrementConnectionCount(connectionPool, ip) {
-  const current = connectionPool.get(ip) || 0;
-  if (current > 0) connectionPool.set(ip, current - 1);
+  const current = connectionPool.get(ip) || 0
+  if (current > 0) connectionPool.set(ip, current - 1)
 }
 
-// Validation functions (same as server.js)
+// Validation functions - real implementation (mirroring server.js)
 export function validateRoomCode(roomCode) {
-  if (!roomCode || typeof roomCode !== 'string') return false;
-  const trimmedCode = roomCode.trim();
-  if (trimmedCode.length !== 6) return false;
+  if (!roomCode || typeof roomCode !== 'string') return false
+  const trimmedCode = roomCode.trim()
+  if (trimmedCode.length !== 6) return false
   // Room codes should be: 6 letters, 3 letters + 3 numbers, or 6 numbers
-  return /^[A-Z]{6}$|^[a-z]{6}$|^[A-Z]{3}[0-9]{3}$|^[0-9]{6}|^[a-z]{3}[0-9]{3}$/.test(trimmedCode);
+  return /^[A-Z]{6}$|^[a-z]{6}$|^[A-Z]{3}[0-9]{3}$|^[0-9]{6}|^[a-z]{3}[0-9]{3}$/.test(trimmedCode)
 }
 
 export function validatePlayerName(playerName) {
-  if (!playerName || typeof playerName !== 'string') return false;
-  const trimmedName = playerName.trim();
-  return trimmedName.length > 0 && trimmedName.length <= 20;
+  if (!playerName || typeof playerName !== 'string') return false
+  const trimmedName = playerName.trim()
+  return trimmedName.length > 0 && trimmedName.length <= 20
 }
 
 export function sanitizeInput(input) {
-  return typeof input === 'string' ? input.trim().replace(/[<>]/g, '') : input;
+  return typeof input === 'string' ? input.trim().replace(/[<>]/g, '') : input
 }
 
 export function findPlayerByUserId(room, userId) {
-  return room.players.find(p => p.userId === userId);
+  return room.players.find(p => p.userId === userId)
 }
 
 export function findPlayerByName(room, playerName) {
-  return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase());
+  return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase())
 }
 
 export function validateRoomState(room) {
-  if (!room) return { valid: false, error: "Room not found" };
-  if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
-  if (!room.gameState) return { valid: false, error: "Invalid game state" };
+  if (!room) return { valid: false, error: "Room not found" }
+  if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" }
+  if (!room.gameState) return { valid: false, error: "Invalid game state" }
   if (room.gameState.gameStarted && !room.gameState.currentPlayer) {
-    return { valid: false, error: "Game started but no current player" };
+    return { valid: false, error: "Game started but no current player" }
   }
-  return { valid: true };
+  return { valid: true }
 }
 
 export function validatePlayerInRoom(room, userId) {
-  const playerInRoom = room.players.find(p => p.userId === userId);
-  return playerInRoom ? { valid: true } : { valid: false, error: "Player not in room" };
+  const playerInRoom = room.players.find(p => p.userId === userId)
+  return playerInRoom ? { valid: true } : { valid: false, error: "Player not in room" }
 }
 
 export function validateDeckState(room) {
-  if (!room.gameState.deck) return { valid: false, error: "Invalid deck state" };
+  if (!room.gameState.deck) return { valid: false, error: "Invalid deck state" }
   if (typeof room.gameState.deck.cards !== 'number' || room.gameState.deck.cards < 0) {
-    return { valid: false, error: "Invalid deck count" };
+    return { valid: false, error: "Invalid deck count" }
   }
-  return { valid: true };
+  return { valid: true }
 }
 
 export function validateTurn(room, userId) {
-  if (!room?.gameState.gameStarted) return { valid: false, error: "Game not started" };
+  if (!room?.gameState.gameStarted) return { valid: false, error: "Game not started" }
   if (!room.gameState.currentPlayer || room.gameState.currentPlayer.userId !== userId) {
-    return { valid: false, error: "Not your turn" };
+    return { valid: false, error: "Not your turn" }
   }
-  return { valid: true };
+  return { valid: true }
 }
 
 export function validateCardDrawLimit(room, userId) {
   if (!room.gameState.playerActions) {
-    room.gameState.playerActions = {};
+    room.gameState.playerActions = {}
   }
 
   const playerActions = room.gameState.playerActions[userId] || {
@@ -333,15 +325,15 @@ export function validateCardDrawLimit(room, userId) {
     drawnMagic: false,
     heartsPlaced: 0,
     magicCardsUsed: 0
-  };
+  }
 
-  return { valid: true, currentActions: playerActions };
+  return { valid: true, currentActions: playerActions }
 }
 
-// Game state management
+// Game state management - real implementation
 export function recordCardDraw(room, userId, cardType) {
   if (!room.gameState.playerActions) {
-    room.gameState.playerActions = {};
+    room.gameState.playerActions = {}
   }
 
   if (!room.gameState.playerActions[userId]) {
@@ -350,122 +342,119 @@ export function recordCardDraw(room, userId, cardType) {
       drawnMagic: false,
       heartsPlaced: 0,
       magicCardsUsed: 0
-    };
+    }
   }
 
   if (cardType === 'heart') {
-    room.gameState.playerActions[userId].drawnHeart = true;
+    room.gameState.playerActions[userId].drawnHeart = true
   } else if (cardType === 'magic') {
-    room.gameState.playerActions[userId].drawnMagic = true;
+    room.gameState.playerActions[userId].drawnMagic = true
   }
 }
 
 export function resetPlayerActions(room, userId) {
   if (!room.gameState.playerActions) {
-    room.gameState.playerActions = {};
+    room.gameState.playerActions = {}
   }
   room.gameState.playerActions[userId] = {
     drawnHeart: false,
     drawnMagic: false,
     heartsPlaced: 0,
     magicCardsUsed: 0
-  };
+  }
 }
 
 export function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
-  if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null };
+  if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null }
 
-  // Condition 1: All tiles are filled (have hearts)
-  const allTilesFilled = room.gameState.tiles.every(tile => tile.placedHeart);
+  // Condition 1: All tiles are filled
+  const allTilesFilled = room.gameState.tiles.every(tile => tile.placedHeart)
   if (allTilesFilled) {
-    return { shouldEnd: true, reason: "All tiles are filled" };
+    return { shouldEnd: true, reason: "All tiles are filled" }
   }
 
   // Condition 2: Any deck is empty
-  const heartDeckEmpty = room.gameState.deck.cards <= 0;
-  const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
-  const anyDeckEmpty = heartDeckEmpty || magicDeckEmpty;
+  const heartDeckEmpty = room.gameState.deck.cards <= 0
+  const magicDeckEmpty = room.gameState.magicDeck.cards <= 0
+  const anyDeckEmpty = heartDeckEmpty || magicDeckEmpty
 
-  // If grace period is allowed, don't end game immediately when deck becomes empty
   if (anyDeckEmpty && !allowDeckEmptyGracePeriod) {
     if (heartDeckEmpty && magicDeckEmpty) {
-      return { shouldEnd: true, reason: "Both decks are empty" };
+      return { shouldEnd: true, reason: "Both decks are empty" }
     } else {
-      const emptyDeck = heartDeckEmpty ? "Heart" : "Magic";
-      return { shouldEnd: true, reason: `${emptyDeck} deck is empty` };
+      const emptyDeck = heartDeckEmpty ? "Heart" : "Magic"
+      return { shouldEnd: true, reason: `${emptyDeck} deck is empty` }
     }
   }
 
-  return { shouldEnd: false, reason: null };
+  return { shouldEnd: false, reason: null }
 }
 
 export function checkAndExpireShields(room) {
-  if (!room.gameState.shields) return;
+  if (!room.gameState.shields) return
 
-  // Decrement remaining turns for all active shields at the end of each turn
+  // Decrement remaining turns for all active shields
   for (const [userId, shield] of Object.entries(room.gameState.shields)) {
     if (shield.remainingTurns > 0) {
-      shield.remainingTurns--;
-      console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
+      shield.remainingTurns--
 
       // Remove shield if it has expired
       if (shield.remainingTurns <= 0) {
-        console.log(`Shield expired for ${userId}`);
-        delete room.gameState.shields[userId];
+        delete room.gameState.shields[userId]
       }
     }
   }
 }
 
-// Tile and card generation
+// Tile and card generation - real implementation
 export function generateTiles() {
-  const colors = ["red", "yellow", "green"];
-  const emojis = ["🟥", "🟨", "🟩"];
-  const tiles = [];
+  const colors = ["red", "yellow", "green"]
+  const emojis = ["🟥", "🟨", "🟩"]
+  const tiles = []
 
   for (let i = 0; i < 8; i++) {
     if (Math.random() < 0.3) {
-      tiles.push({ id: i, color: "white", emoji: "⬜" });
+      tiles.push({ id: i, color: "white", emoji: "⬜" })
     } else {
-      const randomIndex = Math.floor(Math.random() * colors.length);
+      const randomIndex = Math.floor(Math.random() * colors.length)
       tiles.push({
         id: i,
         color: colors[randomIndex],
         emoji: emojis[randomIndex]
-      });
+      })
     }
   }
-  return tiles;
+  return tiles
 }
 
 export function calculateScore(heart, tile) {
-  // Check if heart has the calculateScore method (indicating it's a HeartCard instance)
+  // Check if heart has the calculateScore method (HeartCard instance)
   if (typeof heart.calculateScore === 'function') {
-    return heart.calculateScore(tile);
+    return heart.calculateScore(tile)
   }
-  // Fallback for old format (plain objects)
-  if (tile.color === "white") return heart.value;
-  return heart.color === tile.color ? heart.value * 2 : 0;
+  // Fallback for plain objects
+  if (tile.color === "white") return heart.value
+  return heart.color === tile.color ? heart.value * 2 : 0
 }
 
 export function generateSingleHeart() {
-  const heartCard = HeartCard.generateRandom();
-  return heartCard;
+  const heartCard = HeartCard.generateRandom()
+  return heartCard
 }
 
 export function generateSingleMagicCard() {
-  const magicCard = generateRandomMagicCard();
-  return magicCard;
+  const magicCard = generateRandomMagicCard()
+  return magicCard
 }
 
 export function selectRandomStartingPlayer(players) {
-  return players[Math.floor(Math.random() * players.length)];
+  return players[Math.floor(Math.random() * players.length)]
 }
 
-// Game action functions
+// Game action functions - real implementation
 export function recordHeartPlacement(room, userId) {
   if (!room.gameState.playerActions) {
-    room.gameState.playerActions = {};
+    room.gameState.playerActions = {}
   }
 
   if (!room.gameState.playerActions[userId]) {
@@ -474,15 +463,15 @@ export function recordHeartPlacement(room, userId) {
       drawnMagic: false,
       heartsPlaced: 0,
       magicCardsUsed: 0
-    };
+    }
   }
 
-  room.gameState.playerActions[userId].heartsPlaced = (room.gameState.playerActions[userId].heartsPlaced || 0) + 1;
+  room.gameState.playerActions[userId].heartsPlaced = (room.gameState.playerActions[userId].heartsPlaced || 0) + 1
 }
 
 export function recordMagicCardUsage(room, userId) {
   if (!room.gameState.playerActions) {
-    room.gameState.playerActions = {};
+    room.gameState.playerActions = {}
   }
 
   if (!room.gameState.playerActions[userId]) {
@@ -491,63 +480,60 @@ export function recordMagicCardUsage(room, userId) {
       drawnMagic: false,
       heartsPlaced: 0,
       magicCardsUsed: 0
-    };
+    }
   }
 
-  room.gameState.playerActions[userId].magicCardsUsed = (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1;
+  room.gameState.playerActions[userId].magicCardsUsed = (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1
 }
 
 export function canPlaceMoreHearts(room, userId) {
-  const playerActions = room.gameState.playerActions[userId] || { heartsPlaced: 0 };
-  return (playerActions.heartsPlaced || 0) < 2;
+  const playerActions = room.gameState.playerActions[userId] || { heartsPlaced: 0 }
+  return (playerActions.heartsPlaced || 0) < 2
 }
 
 export function canUseMoreMagicCards(room, userId) {
-  const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 };
-  return (playerActions.magicCardsUsed || 0) < 1;
+  const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 }
+  return (playerActions.magicCardsUsed || 0) < 1
 }
 
 export function validateHeartPlacement(room, userId, heartId, tileId) {
-  const playerHand = room.gameState.playerHands[userId] || [];
-  const heart = playerHand.find(card => card.id === heartId);
-  if (!heart) return { valid: false, error: "Card not in player's hand" };
+  const playerHand = room.gameState.playerHands[userId] || []
+  const heart = playerHand.find(card => card.id === heartId)
+  if (!heart) return { valid: false, error: "Card not in player's hand" }
 
-  // Use the new card validation helpers
   if (!isHeartCard(heart)) {
-    return { valid: false, error: "Only heart cards can be placed on tiles" };
+    return { valid: false, error: "Only heart cards can be placed on tiles" }
   }
 
-  // Convert to HeartCard instance if it's a plain object for validation
-  let heartCard = heart;
+  // Convert to HeartCard instance if needed
+  let heartCard = heart
   if (!(heart instanceof HeartCard)) {
-    heartCard = createCardFromData(heart);
+    heartCard = createCardFromData(heart)
   }
 
-  const tile = room.gameState.tiles.find(tile => tile.id == tileId);
-  if (!tile) return { valid: false, error: "Tile not found" };
+  const tile = room.gameState.tiles.find(tile => tile.id == tileId)
+  if (!tile) return { valid: false, error: "Tile not found" }
 
-  // Check if tile is already occupied by a heart
-  if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" };
+  if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" }
 
-  // Use HeartCard's canTargetTile method for additional validation
   if (!heartCard.canTargetTile(tile)) {
-    return { valid: false, error: "This heart cannot be placed on this tile" };
+    return { valid: false, error: "This heart cannot be placed on this tile" }
   }
 
-  return { valid: true };
+  return { valid: true }
 }
 
-// Game end and scoring
+// Game end and scoring - real implementation
 export async function endGame(room, roomCode, io, allowDeckEmptyGracePeriod = true) {
-  const gameEndResult = checkGameEndConditions(room, allowDeckEmptyGracePeriod);
-  if (!gameEndResult.shouldEnd) return false;
+  const gameEndResult = checkGameEndConditions(room, allowDeckEmptyGracePeriod)
+  if (!gameEndResult.shouldEnd) return false
 
-  console.log(`Game ending in room ${roomCode}: ${gameEndResult.reason}`);
+  console.log(`Game ending in room ${roomCode}: ${gameEndResult.reason}`)
 
   // Determine winner based on scores
-  const sortedPlayers = [...room.players].sort((a, b) => (b.score || 0) - (a.score || 0));
-  const winner = sortedPlayers[0];
-  const isTie = sortedPlayers.length > 1 && sortedPlayers[0].score === sortedPlayers[1].score;
+  const sortedPlayers = [...room.players].sort((a, b) => (b.score || 0) - (a.score || 0))
+  const winner = sortedPlayers[0]
+  const isTie = sortedPlayers.length > 1 && sortedPlayers[0].score === sortedPlayers[1].score
 
   const gameEndData = {
     reason: gameEndResult.reason,
@@ -562,218 +548,190 @@ export async function endGame(room, roomCode, io, allowDeckEmptyGracePeriod = tr
       name: player.name,
       score: player.score || 0
     }))
-  };
+  }
 
   // Broadcast game over to all players
   if (io) {
-    io.to(roomCode).emit("game-over", gameEndData);
+    io.to(roomCode).emit("game-over", gameEndData)
   }
 
   // Mark game as ended
-  room.gameState.gameStarted = false;
-  room.gameState.gameEnded = true;
-  room.gameState.endReason = gameEndResult.reason;
+  room.gameState.gameStarted = false
+  room.gameState.gameEnded = true
+  room.gameState.endReason = gameEndResult.reason
 
   if (roomCode) {
-    await saveRoom(room);
+    await saveRoom(room)
   }
 
-  return true;
+  return true
 }
 
-// Player session utilities
+// Player session utilities - real implementation
 export async function getPlayerSession(playerSessions, userId, userSessionId, userName, userEmail) {
-  let session = playerSessions.get(userId);
+  let session = playerSessions.get(userId)
 
   if (!session) {
     const newSession = {
       userId, userSessionId, name: userName, email: userEmail,
       currentSocketId: null, lastSeen: new Date(), isActive: true
-    };
-    playerSessions.set(userId, newSession);
-    await savePlayerSession(newSession);
-    session = newSession;
+    }
+    playerSessions.set(userId, newSession)
+    await savePlayerSession(newSession)
+    session = newSession
   } else {
-    session.lastSeen = new Date();
-    session.isActive = true;
-    await savePlayerSession(session);
+    session.lastSeen = new Date()
+    session.isActive = true
+    await savePlayerSession(session)
   }
 
-  return session;
+  return session
 }
 
 export async function updatePlayerSocket(playerSessions, userId, socketId, userSessionId, userName, userEmail) {
-  const session = await getPlayerSession(playerSessions, userId, userSessionId, userName, userEmail);
-  session.currentSocketId = socketId;
-  session.lastSeen = new Date();
-  session.isActive = true;
-  await savePlayerSession(session);
-  return session;
+  const session = await getPlayerSession(playerSessions, userId, userSessionId, userName, userEmail)
+  session.currentSocketId = socketId
+  session.lastSeen = new Date()
+  session.isActive = true
+  await savePlayerSession(session)
+  return session
 }
 
-// Migration utilities
+// Migration utilities - real implementation
 export async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail) {
-  const playerIndex = room.players.findIndex(p => p.userId === oldUserId);
+  const playerIndex = room.players.findIndex(p => p.userId === oldUserId)
   if (playerIndex !== -1) {
     room.players[playerIndex] = {
       ...room.players[playerIndex],
       userId: newUserId, name: userName, email: userEmail,
       score: room.players[playerIndex].score || 0
-    };
+    }
   } else {
     room.players.push({
       userId: newUserId, name: userName, email: userEmail,
       isReady: false, score: 0, joinedAt: new Date()
-    });
+    })
   }
 
   if (room.gameState.playerHands[oldUserId]) {
-    room.gameState.playerHands[newUserId] = room.gameState.playerHands[oldUserId];
-    delete room.gameState.playerHands[oldUserId];
+    room.gameState.playerHands[newUserId] = room.gameState.playerHands[oldUserId]
+    delete room.gameState.playerHands[oldUserId]
   }
 
   // Migrate shield state
   if (room.gameState.shields && room.gameState.shields[oldUserId]) {
-    room.gameState.shields[newUserId] = room.gameState.shields[oldUserId];
-    delete room.gameState.shields[oldUserId];
+    room.gameState.shields[newUserId] = room.gameState.shields[oldUserId]
+    delete room.gameState.shields[oldUserId]
   }
 
   if (room.gameState.currentPlayer?.userId === oldUserId) {
     room.gameState.currentPlayer = {
       userId: newUserId, name: userName, email: userEmail,
       isReady: room.players.find(p => p.userId === newUserId)?.isReady || false
-    };
+    }
   }
 
+  // Clean up turn locks
   for (const lockKey of turnLocks.keys()) {
-    if (lockKey.includes(oldUserId)) turnLocks.delete(lockKey);
+    if (lockKey.includes(oldUserId)) turnLocks.delete(lockKey)
   }
 }
 
-// IP utilities
+// IP utilities - real implementation
 export function getClientIP(socket) {
-  return socket.handshake.address || socket.conn.remoteAddress || 'unknown';
+  return socket.handshake.address || socket.conn.remoteAddress || 'unknown'
 }
 
-// Magic card execution
+// Magic card execution - real implementation
 export async function executeMagicCard(room, userId, cardId, targetTileId) {
-  const playerHand = room.gameState.playerHands[userId] || [];
-  const cardIndex = playerHand.findIndex(card => card.id === cardId);
+  const playerHand = room.gameState.playerHands[userId] || []
+  const cardIndex = playerHand.findIndex(card => card.id === cardId)
 
   if (cardIndex === -1) {
-    throw new Error("Magic card not found in your hand");
+    throw new Error("Magic card not found in your hand")
   }
 
-  const card = playerHand[cardIndex];
-  let actionResult = null;
+  const card = playerHand[cardIndex]
+  let actionResult = null
 
-  // Convert plain object cards to MagicCard instances if needed
-  let magicCard = card;
+  // Convert plain object cards to instances if needed
+  let magicCard = card
   if (!(card instanceof WindCard || card instanceof RecycleCard || card instanceof ShieldCard)) {
-    magicCard = createCardFromData(card);
+    magicCard = createCardFromData(card)
   }
 
-  // Validate target based on card type
+  // Validate and execute based on card type
   if (magicCard.type === 'shield') {
-    // Shield cards don't need a target tile, targetTileId should be 'self' or undefined
     if (targetTileId && targetTileId !== 'self') {
-      throw new Error("Shield cards don't target tiles");
+      throw new Error("Shield cards don't target tiles")
     }
 
-    // Shield can only be activated for the current player
     if (room.gameState.currentPlayer.userId !== userId) {
-      throw new Error("You can only use Shield cards on your own turn");
+      throw new Error("You can only use Shield cards on your own turn")
     }
 
-    try {
-      actionResult = magicCard.executeEffect(room.gameState, userId);
-      const actionType = actionResult.reinforced ? 'reinforced' : 'activated';
-      console.log(`Shield card ${actionType} by ${userId} - protection for ${actionResult.remainingTurns} turns`);
-    } catch (error) {
-      console.log(`Shield card error for ${userId}: ${error.message}`);
-      throw error;
-    }
+    actionResult = magicCard.executeEffect(room.gameState, userId)
   } else {
-    // For non-shield cards, validate that targetTileId is provided and valid
     if (targetTileId === null || targetTileId === undefined || targetTileId === 'self') {
-      throw new Error("Target tile is required for this card");
+      throw new Error("Target tile is required for this card")
     }
 
-    const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == targetTileId);
-
-    if (tileIndex === -1) {
-      throw new Error("Target tile not found");
+    const tile = room.gameState.tiles.find(t => t.id == targetTileId)
+    if (!tile) {
+      throw new Error("Target tile not found")
     }
-
-    const tile = room.gameState.tiles[tileIndex];
 
     if (magicCard.type === 'wind') {
-      // Use WindCard's canTargetTile method for validation
       if (!magicCard.canTargetTile(tile, userId)) {
-        throw new Error("Invalid target for Wind card - you can only target opponent's hearts");
+        throw new Error("Invalid target for Wind card - you can only target opponent's hearts")
       }
 
-      // IMPORTANT: Check shield protection BEFORE subtracting score
-      const opponentId = tile.placedHeart.placedBy;
-      const currentTurnCount = room.gameState.turnCount || 1;
+      // Check shield protection
+      const opponentId = tile.placedHeart.placedBy
+      const currentTurnCount = room.gameState.turnCount || 1
       if (room.gameState.shields && room.gameState.shields[opponentId]) {
-        const shield = room.gameState.shields[opponentId];
+        const shield = room.gameState.shields[opponentId]
         if (ShieldCard.isActive(shield, currentTurnCount)) {
-          const remainingTurns = ShieldCard.getRemainingTurns(shield, currentTurnCount);
-          throw new Error(`Opponent is protected by Shield (${remainingTurns} turns remaining)`);
+          const remainingTurns = ShieldCard.getRemainingTurns(shield, currentTurnCount)
+          throw new Error(`Opponent is protected by Shield (${remainingTurns} turns remaining)`)
         }
       }
 
-      // Get the heart data before executing the effect to calculate score subtraction
-      const placedHeart = tile.placedHeart;
+      // Subtract score from opponent
+      const placedHeart = tile.placedHeart
       if (placedHeart && placedHeart.score) {
-        // Find the player who placed the heart and subtract the points
-        const playerIndex = room.players.findIndex(p => p.userId === placedHeart.placedBy);
+        const playerIndex = room.players.findIndex(p => p.userId === placedHeart.placedBy)
         if (playerIndex !== -1) {
-          room.players[playerIndex].score -= placedHeart.score;
-          console.log(`Wind card: subtracted ${placedHeart.score} points from player ${placedHeart.placedBy}`);
+          room.players[playerIndex].score -= placedHeart.score
         }
       }
 
-      // Execute the Wind card effect using the new class method
-      actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId);
-
-      // Apply the result to the game state
+      actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId)
       if (actionResult) {
-        room.gameState.tiles[tileIndex] = actionResult.newTileState;
-        console.log(`Wind card used by ${userId} to remove heart from tile ${targetTileId}`);
-      } else {
-        throw new Error("Failed to execute Wind card effect");
+        const tileIndex = room.gameState.tiles.findIndex(t => t.id == targetTileId)
+        room.gameState.tiles[tileIndex] = actionResult.newTileState
       }
     } else if (magicCard.type === 'recycle') {
-      // Use RecycleCard's canTargetTile method for validation
       if (!magicCard.canTargetTile(tile)) {
-        throw new Error("Invalid target for Recycle card");
+        throw new Error("Invalid target for Recycle card")
       }
 
-      // Execute the Recycle card effect using the new class method
-      actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId);
-
-      // Apply the result to the game state
+      actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId)
       if (actionResult) {
-        room.gameState.tiles[tileIndex] = actionResult.newTileState;
-        console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${actionResult.previousColor} to white`);
-      } else {
-        throw new Error("Failed to execute Recycle card effect");
+        const tileIndex = room.gameState.tiles.findIndex(t => t.id == targetTileId)
+        room.gameState.tiles[tileIndex] = actionResult.newTileState
       }
     }
   }
 
-  // Remove the used magic card from player's hand
-  room.gameState.playerHands[userId].splice(cardIndex, 1);
+  // Remove used card and record usage
+  room.gameState.playerHands[userId].splice(cardIndex, 1)
+  recordMagicCardUsage(room, userId)
 
-  // Record this magic card usage for turn tracking
-  recordMagicCardUsage(room, userId);
-
-  return actionResult;
+  return actionResult
 }
 
-// Create default room
+// Room creation utilities - real implementation
 export function createDefaultRoom(roomCode) {
   return {
     code: roomCode,
@@ -790,30 +748,104 @@ export function createDefaultRoom(roomCode) {
       turnCount: 0,
       playerActions: {}
     }
-  };
+  }
 }
 
-// Start game utility
 export function startGame(room) {
-  room.gameState.tiles = generateTiles();
-  room.gameState.gameStarted = true;
-  room.gameState.deck.cards = 16;
-  room.gameState.magicDeck.cards = 16;
-  room.gameState.playerActions = {};
+  room.gameState.tiles = generateTiles()
+  room.gameState.gameStarted = true
+  room.gameState.deck.cards = 16
+  room.gameState.magicDeck.cards = 16
+  room.gameState.playerActions = {}
 
   // Deal initial cards
   room.players.forEach(player => {
-    room.gameState.playerHands[player.userId] = [];
+    room.gameState.playerHands[player.userId] = []
     for (let i = 0; i < 3; i++) {
-      room.gameState.playerHands[player.userId].push(generateSingleHeart());
+      room.gameState.playerHands[player.userId].push(generateSingleHeart())
     }
     for (let i = 0; i < 2; i++) {
-      room.gameState.playerHands[player.userId].push(generateSingleMagicCard());
+      room.gameState.playerHands[player.userId].push(generateSingleMagicCard())
     }
-  });
+  })
 
-  room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
-  room.gameState.turnCount = 1;
+  room.gameState.currentPlayer = selectRandomStartingPlayer(room.players)
+  room.gameState.turnCount = 1
 
-  return room;
+  return room
+}
+
+// Test helpers for creating realistic test data
+export function createTestUser(userData = {}) {
+  return {
+    _id: userData._id || 'test-user-' + Math.random().toString(36).substr(2, 9),
+    email: userData.email || 'test@example.com',
+    name: userData.name || 'TestUser',
+    ...userData
+  }
+}
+
+export function createTestRoom(roomData = {}) {
+  return {
+    code: roomData.code || 'TEST123',
+    players: roomData.players || [],
+    maxPlayers: 2,
+    gameState: {
+      tiles: roomData.tiles || generateTiles(),
+      gameStarted: roomData.gameStarted || false,
+      currentPlayer: roomData.currentPlayer || null,
+      deck: { emoji: "💌", cards: 16, type: 'hearts' },
+      magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
+      playerHands: roomData.playerHands || {},
+      shields: roomData.shields || {},
+      turnCount: roomData.turnCount || 0,
+      playerActions: roomData.playerActions || {},
+      ...roomData.gameState
+    }
+  }
+}
+
+export function createTestPlayer(playerData = {}) {
+  return {
+    userId: playerData.userId || 'player-' + Math.random().toString(36).substr(2, 9),
+    name: playerData.name || 'TestPlayer',
+    email: playerData.email || 'player@example.com',
+    isReady: playerData.isReady || false,
+    score: playerData.score || 0,
+    joinedAt: new Date(),
+    ...playerData
+  }
+}
+
+// Performance monitoring utilities for tests
+export function createPerformanceMonitor() {
+  const metrics = new Map()
+
+  return {
+    startTimer(name) {
+      metrics.set(name, process.hrtime.bigint())
+    },
+
+    endTimer(name) {
+      const start = metrics.get(name)
+      if (!start) return null
+
+      const end = process.hrtime.bigint()
+      const duration = Number(end - start) / 1000000 // Convert to milliseconds
+      metrics.set(name + '_duration', duration)
+      return duration
+    },
+
+    getMetric(name) {
+      return metrics.get(name)
+    },
+
+    getAllMetrics() {
+      return Object.fromEntries(metrics)
+    },
+
+    clear() {
+      metrics.clear()
+    }
+  }
 }
