@@ -221,7 +221,7 @@ describe('Database Operations', () => {
       }
 
       // Should throw an error for invalid data
-      await expect(saveRoom(invalidRoomData)).rejects.toThrow('Room code is required')
+      await expect(saveRoom(invalidRoomData)).rejects.toThrow('Room data and code are required')
     })
   })
 
