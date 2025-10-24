@@ -169,7 +169,7 @@ describe('Server Socket.IO Event Handlers (lines 353-1529)', () => {
       expect(ip1).toBe('127.0.0.1')
 
       // Test connection pool logic
-      const canAcceptConnection = (ip) => (connectionPool.get(ip) || 0) < 5
+      const canAcceptConnection = (ip) => (connectionPool.get(ip) || 0) <= 5
       const incrementConnectionCount = (ip) => {
         connectionPool.set(ip, (connectionPool.get(ip) || 0) + 1)
       }
@@ -299,7 +299,9 @@ describe('Server Socket.IO Event Handlers (lines 353-1529)', () => {
         ],
         gameState: {
           gameStarted: false,
-          playerHands: {}
+          playerHands: {},
+          deck: { emoji: "💌", cards: 16, type: 'hearts' },
+          magicDeck: { emoji: "🔮", cards: 16, type: 'magic' }
         }
       }
 
@@ -634,6 +636,8 @@ describe('Server Socket.IO Event Handlers (lines 353-1529)', () => {
     })
 
     it('should switch to next player correctly', async () => {
+      const { resetPlayerActions } = await import('../../server.js')
+
       const room = {
         players: [
           { userId: 'user1', name: 'Player1' },

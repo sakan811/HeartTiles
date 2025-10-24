@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 describe('Server Turn Management Functions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Set up global turnLocks for testing
+    global.turnLocks = new Map()
   })
 
   afterEach(() => {
