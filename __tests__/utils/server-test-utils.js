@@ -12,24 +12,42 @@ import {
 import { PlayerSession, Room, User } from '../../models.js'
 import { getToken } from 'next-auth/jwt'
 
+// Test environment utilities
+export function ensureTestEnvironment() {
+  if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'integration') {
+    console.warn(`Warning: NODE_ENV is "${process.env.NODE_ENV}", should be "test" or "integration" for testing`)
+  }
+  return process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'integration'
+}
+
 // Database connection functions - real implementation for integration testing
 export async function connectToDatabase() {
-  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/heart-tiles-test?authSource=admin'
+  // Ensure we're using test environment for integration tests
+  const isTestEnvironment = ensureTestEnvironment()
+
+  // Default to test database if not specified or in test environment
+  const defaultTestUri = 'mongodb://root:example@localhost:27017/heart-tiles-test?authSource=admin'
+  const MONGODB_URI = process.env.MONGODB_URI || defaultTestUri
+
   const mongoose = await import('mongoose')
+
+  // Log environment for debugging
+  console.log(`Connecting to test MongoDB in ${process.env.NODE_ENV} environment`)
 
   // Enhanced connection options for test environment
   const connectionOptions = {
-    serverSelectionTimeoutMS: 30000,
-    bufferTimeoutMS: 30000,
-    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 15000, // Reduced for faster feedback
+    bufferTimeoutMS: 5000, // Reduced to prevent long buffering
+    maxPoolSize: 5, // Reduced for test environment
     retryWrites: true,
-    connectTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    bufferCommands: false,
+    connectTimeoutMS: 10000, // Reduced for faster connection
+    socketTimeoutMS: 20000, // Reduced for better test isolation
+    bufferCommands: false, // Keep false to prevent buffering issues
+    bufferMaxEntries: 0, // Disable buffering entirely
   }
 
   // Retry logic for test environment reliability
-  const maxRetries = process.env.NODE_ENV === 'test' ? 3 : 1
+  const maxRetries = isTestEnvironment ? 3 : 1
   const retryDelay = 2000
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -40,7 +58,7 @@ export async function connectToDatabase() {
       }
 
       await mongoose.default.connect(MONGODB_URI, connectionOptions)
-      console.log('Connected to test MongoDB')
+      console.log(`Connected to test MongoDB in ${process.env.NODE_ENV} environment`)
       return
     } catch (err) {
       console.error(`MongoDB connection attempt ${attempt} failed:`, err.message)
@@ -58,33 +76,78 @@ export async function connectToDatabase() {
 
 export async function disconnectDatabase() {
   const mongoose = await import('mongoose')
+  ensureTestEnvironment()
+
   try {
-    if (mongoose.default.connection.readyState !== 0) {
-      await mongoose.default.disconnect()
-      console.log('Disconnected from test MongoDB')
+    const readyState = mongoose.default.connection.readyState
+    console.log(`Disconnecting from MongoDB (readyState: ${readyState}) in ${process.env.NODE_ENV} environment`)
+
+    if (readyState !== 0) {
+      // Force close all connections to prevent hanging
+      await mongoose.default.connection.close()
+      console.log(`Disconnected from test MongoDB in ${process.env.NODE_ENV} environment`)
     } else {
       console.log('Already disconnected from test MongoDB')
     }
   } catch (err) {
     console.error('MongoDB disconnection failed:', err)
-    throw err
+    // Don't throw error to avoid breaking test teardown
+    try {
+      await mongoose.default.disconnect()
+    } catch (forceErr) {
+      console.warn('Force disconnect also failed:', forceErr.message)
+    }
   }
 }
 
 export async function clearDatabase() {
   const mongoose = await import('mongoose')
+  ensureTestEnvironment()
+
   try {
+    // Check connection state more thoroughly
     if (mongoose.default.connection.readyState !== 1) {
-      console.log('Database not connected, skipping clear')
+      console.log('Database not connected (readyState:', mongoose.default.connection.readyState, '), skipping clear')
       return
     }
 
-    await Promise.all([
-      Room.deleteMany({}),
-      PlayerSession.deleteMany({}),
-      User.deleteMany({})
+    // Verify connection is actually working with a ping
+    try {
+      if (!mongoose.default.connection.db) {
+        console.warn('Database connection not available, skipping clear')
+        return
+      }
+      await mongoose.default.connection.db.admin().ping()
+      console.log('Database connection verified, proceeding with clear')
+    } catch (pingError) {
+      console.warn('Database ping failed, skipping clear:', pingError.message)
+      return
+    }
+
+    // Add timeout and better error handling for delete operations
+    const deleteTimeout = 5000 // 5 seconds
+
+    await Promise.race([
+      Promise.all([
+        Room.deleteMany({}).catch(err => {
+          console.warn('Failed to clear Room collection:', err.message)
+          return null
+        }),
+        PlayerSession.deleteMany({}).catch(err => {
+          console.warn('Failed to clear PlayerSession collection:', err.message)
+          return null
+        }),
+        User.deleteMany({}).catch(err => {
+          console.warn('Failed to clear User collection:', err.message)
+          return null
+        })
+      ]),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Database clear operation timeout')), deleteTimeout)
+      )
     ])
-    console.log('Test database cleared')
+
+    console.log(`Test database cleared in ${process.env.NODE_ENV} environment`)
   } catch (err) {
     console.error('Failed to clear database:', err)
     // Don't throw error to avoid breaking tests
@@ -194,10 +257,12 @@ export async function savePlayerSession(sessionData) {
 
 // Authentication utilities - real implementation with optional mocking
 export async function authenticateSocket(socket, getTokenFn = getToken, UserModel = User) {
+  ensureTestEnvironment()
+
   try {
     const token = await getTokenFn({
       req: socket.handshake,
-      secret: process.env.AUTH_SECRET
+      secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'test-secret'
     })
 
     if (!token?.id) {
