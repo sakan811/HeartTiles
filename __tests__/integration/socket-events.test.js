@@ -92,12 +92,9 @@ describe('Socket.IO Events Integration Tests', () => {
     mockServer = new MockSocketServer();
     port = await mockServer.start();
 
-    // Wait a bit more to ensure server is fully ready
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     console.log(`Test suite: Mock server ready on port ${port}`);
     roomCodeGenerator = createRoomCodeGenerator();
-  }, 30000); // Increased timeout for server setup
+  }, 15000); // Increased timeout for server setup
 
   // Cleanup after all tests
   afterAll(async () => {
@@ -137,9 +134,6 @@ describe('Socket.IO Events Integration Tests', () => {
         const client = createAuthenticatedClient(port, userId);
         clientSockets.push(client);
 
-        // Add a small delay before waiting for connection to let the client initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
-
         await waitForConnection(client);
         console.log(`Test helper: Successfully created client ${userId} on attempt ${attempt}`);
         return client;
@@ -161,7 +155,7 @@ describe('Socket.IO Events Integration Tests', () => {
           }
 
           // Wait before retry with exponential backoff
-          const delay = Math.min(500 * Math.pow(2, attempt - 1), 2000);
+          const delay = Math.min(100 * Math.pow(2, attempt - 1), 500);
           console.log(`Test helper: Waiting ${delay}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }

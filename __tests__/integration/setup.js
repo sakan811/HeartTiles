@@ -1,5 +1,8 @@
 // Integration test setup for server testing
 import { vi } from 'vitest'
+import dotenv from 'dotenv'
+
+dotenv.config({ path: '.env.test' })
 
 // Important: Unmock mongoose to use real database for integration tests
 vi.unmock('mongoose')
@@ -147,15 +150,6 @@ const mockMongoose = {
     }
   }
 }
-
-// Note: Socket.IO is not mocked here because we need real Socket.IO functionality for integration tests
-
-// Set up environment variables for integration testing
-process.env.NODE_ENV = 'test'
-process.env.NEXTAUTH_SECRET = 'test-secret-nextauth'
-process.env.NEXTAUTH_URL = 'http://localhost:3000'
-process.env.AUTH_SECRET = 'test-secret-auth'
-process.env.MONGODB_URI = `mongodb://root:example@localhost:27017/heart-tiles-integration-test-${Date.now()}?authSource=admin`
 
 // Global test hooks
 beforeAll(async () => {
