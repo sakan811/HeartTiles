@@ -52,6 +52,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
+      // Handle null/undefined token by creating a new one
+      if (!token) {
+        token = {}
+      }
+
       if (user) {
         token.id = user.id
       }

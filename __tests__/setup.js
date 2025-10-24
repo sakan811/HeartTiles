@@ -65,8 +65,40 @@ vi.mock('mongoose', () => ({
   ...mockMongoose
 }))
 
-// Note: Removed global models mock to allow actual models.js execution for coverage
-// Individual tests will mock models as needed
+// Mock models.js to provide mocked User model for testing
+// This is needed for auth tests that need to mock User.findOne
+vi.mock('../models.js', () => ({
+  User: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+  },
+  PlayerSession: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  Room: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  deleteRoom: vi.fn(),
+}))
 
 // Make React available globally for all tests
 vi.stubGlobal('React', React)
