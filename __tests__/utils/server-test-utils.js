@@ -43,7 +43,6 @@ export async function connectToDatabase() {
     connectTimeoutMS: 10000, // Reduced for faster connection
     socketTimeoutMS: 20000, // Reduced for better test isolation
     bufferCommands: false, // Keep false to prevent buffering issues
-    bufferMaxEntries: 0, // Disable buffering entirely
   }
 
   // Retry logic for test environment reliability
@@ -54,10 +53,39 @@ export async function connectToDatabase() {
     try {
       if (mongoose.default.connection.readyState === 1) {
         console.log('Already connected to test MongoDB')
-        return
+        // Verify connection with a ping
+        try {
+          await mongoose.default.connection.db.admin().ping()
+          console.log('MongoDB connection verified with ping')
+          return
+        } catch (pingError) {
+          console.warn('MongoDB ping failed, reconnecting...', pingError.message)
+          await mongoose.default.connection.close()
+        }
       }
 
       await mongoose.default.connect(MONGODB_URI, connectionOptions)
+
+      // Wait for connection to be fully established
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection establishment timeout'))
+        }, 10000)
+
+        mongoose.default.connection.once('connected', () => {
+          clearTimeout(timeout)
+          resolve()
+        })
+
+        mongoose.default.connection.once('error', (err) => {
+          clearTimeout(timeout)
+          reject(err)
+        })
+      })
+
+      // Verify connection is working with a ping
+      await mongoose.default.connection.db.admin().ping()
+
       console.log(`Connected to test MongoDB in ${process.env.NODE_ENV} environment`)
       return
     } catch (err) {
