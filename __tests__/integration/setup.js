@@ -129,15 +129,52 @@ vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn(),
 }))
 
-// NOTE: For integration tests, we want to use REAL models and database operations
-// Models will NOT be mocked here to allow for proper integration testing
-// Individual tests can mock models as needed for specific scenarios
+// NOTE: For integration tests, we provide flexible mocking approach
+// Models are mocked by default, but individual tests can unmock them for real database operations
+// This allows both pure integration tests and mixed scenario tests
 
 // Mock bcryptjs
 vi.mock('bcryptjs', () => ({
   default: {
-    compare: vi.fn()
+    compare: vi.fn(),
+    hash: vi.fn().mockResolvedValue('hashed_password'),
+    genSalt: vi.fn().mockResolvedValue('salt')
   }
+}))
+
+// Mock models for integration tests (can be unmocked by individual tests)
+vi.mock('../../models.js', () => ({
+  User: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  PlayerSession: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  Room: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  deleteRoom: vi.fn(),
 }))
 
 // Mock mongoose for database connection (but allow real connection for integration tests)

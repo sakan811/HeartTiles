@@ -153,21 +153,49 @@ export async function clearDatabase() {
     }
 
     // Add timeout and better error handling for delete operations
-    const deleteTimeout = 5000 // 5 seconds
+    const deleteTimeout = 10000 // 10 seconds
+
+    // Force complete database clearing with drop() for thorough cleanup
+    const db = mongoose.default.connection.db
 
     await Promise.race([
       Promise.all([
-        Room.deleteMany({}).catch(err => {
-          console.warn('Failed to clear Room collection:', err.message)
-          return null
+        // More aggressive clearing - drop collections entirely to reset indexes
+        db.dropCollection('rooms').catch(err => {
+          if (err.code === 26) {
+            // Namespace not found - collection doesn't exist, which is fine
+            return null
+          }
+          console.warn('Failed to drop rooms collection:', err.message)
+          // Fallback to deleteMany if drop fails
+          return Room.deleteMany({}).catch(deleteErr => {
+            console.warn('Fallback deleteMany for rooms failed:', deleteErr.message)
+            return null
+          })
         }),
-        PlayerSession.deleteMany({}).catch(err => {
-          console.warn('Failed to clear PlayerSession collection:', err.message)
-          return null
+        db.dropCollection('playersessions').catch(err => {
+          if (err.code === 26) {
+            // Namespace not found - collection doesn't exist, which is fine
+            return null
+          }
+          console.warn('Failed to drop playersessions collection:', err.message)
+          // Fallback to deleteMany if drop fails
+          return PlayerSession.deleteMany({}).catch(deleteErr => {
+            console.warn('Fallback deleteMany for playersessions failed:', deleteErr.message)
+            return null
+          })
         }),
-        User.deleteMany({}).catch(err => {
-          console.warn('Failed to clear User collection:', err.message)
-          return null
+        db.dropCollection('users').catch(err => {
+          if (err.code === 26) {
+            // Namespace not found - collection doesn't exist, which is fine
+            return null
+          }
+          console.warn('Failed to drop users collection:', err.message)
+          // Fallback to deleteMany if drop fails
+          return User.deleteMany({}).catch(deleteErr => {
+            console.warn('Fallback deleteMany for users failed:', deleteErr.message)
+            return null
+          })
         })
       ]),
       new Promise((_, reject) =>
@@ -188,7 +216,18 @@ export async function loadRooms() {
     const rooms = await Room.find({})
     const roomsMap = new Map()
     rooms.forEach(room => {
-      const roomObj = room.toObject()
+      const roomObj = room.toObject ? room.toObject() : room
+      // Ensure roomObj has required properties
+      if (!roomObj) {
+        console.warn('Found null/undefined room, skipping')
+        return
+      }
+
+      if (!roomObj.code) {
+        console.warn('Found room without code, skipping:', roomObj)
+        return
+      }
+
       // Convert plain objects back to Maps for game logic
       if (roomObj.gameState) {
         if (roomObj.gameState.playerHands && typeof roomObj.gameState.playerHands === 'object') {
@@ -201,8 +240,9 @@ export async function loadRooms() {
           roomObj.gameState.playerActions = new Map(Object.entries(roomObj.gameState.playerActions))
         }
       }
-      roomsMap.set(room.code, roomObj)
+      roomsMap.set(roomObj.code, roomObj)
     })
+    console.log(`Loaded ${roomsMap.size} rooms from database`)
     return roomsMap
   } catch (err) {
     console.error('Failed to load rooms:', err)

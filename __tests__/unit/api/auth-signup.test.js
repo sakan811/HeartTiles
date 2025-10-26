@@ -1,32 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock Next.js server components
-vi.mock('next/server', () => ({
-  NextRequest: vi.fn(),
-  NextResponse: {
-    json: vi.fn()
-  }
-}))
-
-// Mock mongoose
-const mockMongoose = {
-  default: {
-    connection: {
-      readyState: 1
-    },
-    connect: vi.fn().mockResolvedValue()
-  }
-}
-
-vi.mock('mongoose', () => mockMongoose)
-
-// Also mock the dynamic import of mongoose
-vi.mocked('mongoose', () => mockMongoose.default)
-
-// Mock the User model
-let mockUser = {
-  findOne: vi.fn(),
-}
+// Mock User model methods that will be properly set up in beforeEach
+const mockUserFindOne = vi.fn()
+const mockUserCreate = vi.fn()
 
 // Create a User constructor mock
 function MockUser(userData) {
@@ -37,12 +13,33 @@ function MockUser(userData) {
   this._id = 'mock-user-id'
 }
 
-MockUser.findOne = mockUser.findOne
+MockUser.findOne = mockUserFindOne
+MockUser.create = mockUserCreate
 
+// Mock the models with proper function structure
 vi.mock('../../../models.js', () => ({
   User: MockUser,
-  PlayerSession: {},
-  Room: {}
+  PlayerSession: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  Room: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  deleteRoom: vi.fn(),
 }))
 
 describe('Signup API Route Tests', () => {
@@ -50,17 +47,22 @@ describe('Signup API Route Tests', () => {
   let POST
   let mockNextResponse
 
+  // Helper function to get mongoose mock
+  async function getMongooseMock() {
+    return (await import('mongoose')).default
+  }
+
   beforeEach(async () => {
     vi.clearAllMocks()
+
+    // Reset User model mocks
+    mockUserFindOne.mockClear()
+    mockUserCreate.mockClear()
 
     // Get the NextResponse mock from the module
     const nextServer = await import('next/server')
     mockNextResponse = nextServer.NextResponse
     mockNextResponse.json.mockClear()
-
-    // Reset User model mock
-    mockUser.findOne.mockClear()
-    MockUser.findOne = mockUser.findOne
 
     mockRequest = {
       json: vi.fn().mockResolvedValue({})
@@ -149,7 +151,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should accept password of exactly 6 characters', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -168,7 +170,7 @@ describe('Signup API Route Tests', () => {
 
   describe('Database Connection', () => {
     it('should handle database connection successfully', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -186,8 +188,9 @@ describe('Signup API Route Tests', () => {
 
     it('should not connect to MongoDB when already connected', async () => {
       // Mock mongoose connection as already connected (readyState = 1)
-      mockMongoose.default.connection.readyState = 1
-      mockUser.findOne.mockResolvedValue(null)
+      const mongooseMock = await getMongooseMock()
+      mongooseMock.connection.readyState = 1
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -198,7 +201,7 @@ describe('Signup API Route Tests', () => {
       await POST(mockRequest)
 
       // Should not attempt to connect since already connected
-      expect(mockMongoose.default.connect).not.toHaveBeenCalled()
+      expect(mongooseMock.connect).not.toHaveBeenCalled()
 
       expect(mockNextResponse.json).toHaveBeenCalledWith(
         { message: "User created successfully" },
@@ -208,8 +211,9 @@ describe('Signup API Route Tests', () => {
 
     it('should connect to MongoDB when not connected', async () => {
       // Mock mongoose connection as disconnected (readyState = 0)
-      mockMongoose.default.connection.readyState = 0
-      mockUser.findOne.mockResolvedValue(null)
+      const mongooseMock = await getMongooseMock()
+      mongooseMock.connection.readyState = 0
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -220,7 +224,7 @@ describe('Signup API Route Tests', () => {
       await POST(mockRequest)
 
       // Should attempt to connect since not connected
-      expect(mockMongoose.default.connect).toHaveBeenCalledWith('mongodb://localhost:27017/test')
+      expect(mongooseMock.connect).toHaveBeenCalledWith('mongodb://localhost:27017/test')
 
       expect(mockNextResponse.json).toHaveBeenCalledWith(
         { message: "User created successfully" },
@@ -233,8 +237,9 @@ describe('Signup API Route Tests', () => {
       const originalEnv = process.env.MONGODB_URI
       process.env.MONGODB_URI = 'mongodb://custom:27017/custom-db'
 
-      mockMongoose.default.connection.readyState = 0
-      mockUser.findOne.mockResolvedValue(null)
+      const mongooseMock = await getMongooseMock()
+      mongooseMock.connection.readyState = 0
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -244,15 +249,16 @@ describe('Signup API Route Tests', () => {
 
       await POST(mockRequest)
 
-      expect(mockMongoose.default.connect).toHaveBeenCalledWith('mongodb://custom:27017/custom-db')
+      expect(mongooseMock.connect).toHaveBeenCalledWith('mongodb://custom:27017/custom-db')
 
       // Restore original env
       process.env.MONGODB_URI = originalEnv
     })
 
     it('should handle MongoDB connection errors', async () => {
-      mockMongoose.default.connection.readyState = 0
-      mockMongoose.default.connect.mockRejectedValue(new Error('MongoDB connection failed'))
+      const mongooseMock = await getMongooseMock()
+      mongooseMock.connection.readyState = 0
+      mongooseMock.connect.mockRejectedValue(new Error('MongoDB connection failed'))
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -271,7 +277,7 @@ describe('Signup API Route Tests', () => {
 
   describe('User Creation', () => {
     it('should return 400 when user already exists', async () => {
-      mockUser.findOne.mockResolvedValue({
+      mockUserFindOne.mockResolvedValue({
         _id: '123',
         email: 'test@example.com',
         name: 'Existing User'
@@ -285,7 +291,7 @@ describe('Signup API Route Tests', () => {
 
       await POST(mockRequest)
 
-      expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+      expect(mockUserFindOne).toHaveBeenCalledWith({ email: 'test@example.com' })
       expect(mockNextResponse.json).toHaveBeenCalledWith(
         { error: "User with this email already exists" },
         { status: 400 }
@@ -293,7 +299,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should create new user when email is unique', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -303,7 +309,7 @@ describe('Signup API Route Tests', () => {
 
       await POST(mockRequest)
 
-      expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+      expect(mockUserFindOne).toHaveBeenCalledWith({ email: 'test@example.com' })
       expect(mockNextResponse.json).toHaveBeenCalledWith(
         { message: "User created successfully" },
         { status: 201 }
@@ -311,7 +317,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle database errors gracefully', async () => {
-      mockUser.findOne.mockRejectedValue(new Error('Database connection failed'))
+      mockUserFindOne.mockRejectedValue(new Error('Database connection failed'))
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -330,7 +336,7 @@ describe('Signup API Route Tests', () => {
     it('should handle user save errors gracefully', async () => {
       // This test verifies error handling but the mocking is complex
       // The core error handling is tested in other tests
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -350,7 +356,7 @@ describe('Signup API Route Tests', () => {
     it('should handle duplicate key error (MongoDB error code 11000)', async () => {
       // This test verifies duplicate key error handling
       // The core functionality is tested by checking existing users first
-      mockUser.findOne.mockResolvedValue({
+      mockUserFindOne.mockResolvedValue({
         _id: 'existing-user',
         email: 'test@example.com',
         name: 'Existing User'
@@ -371,7 +377,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle malformed error objects', async () => {
-      mockUser.findOne.mockRejectedValue('String error')
+      mockUserFindOne.mockRejectedValue('String error')
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -388,7 +394,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle null error objects', async () => {
-      mockUser.findOne.mockRejectedValue(null)
+      mockUserFindOne.mockRejectedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -407,7 +413,7 @@ describe('Signup API Route Tests', () => {
 
   describe('Input Sanitization and Validation', () => {
     it('should handle valid email formats', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const validEmails = [
         'test@example.com',
@@ -432,7 +438,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should create user with valid names', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const validNames = [
         'Test User',
@@ -474,7 +480,7 @@ describe('Signup API Route Tests', () => {
     it('should handle whitespace-only strings as missing fields', async () => {
       // The route trims whitespace, so let's test the actual validation logic
       // This test focuses on core validation functionality
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -504,7 +510,7 @@ describe('Signup API Route Tests', () => {
 
   describe('Response Headers and Status Codes', () => {
     it('should return correct status code for successful signup', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -536,7 +542,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return correct status code for duplicate user', async () => {
-      mockUser.findOne.mockResolvedValue({
+      mockUserFindOne.mockResolvedValue({
         _id: '123',
         email: 'test@example.com',
         name: 'Existing User'
@@ -557,7 +563,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should return correct status code for server errors', async () => {
-      mockUser.findOne.mockRejectedValue(new Error('Database error'))
+      mockUserFindOne.mockRejectedValue(new Error('Database error'))
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -585,7 +591,7 @@ describe('Signup API Route Tests', () => {
         message: 'E11000 duplicate key error collection'
       }
 
-      mockUser.findOne.mockRejectedValue(duplicateKeyError)
+      mockUserFindOne.mockRejectedValue(duplicateKeyError)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -606,7 +612,7 @@ describe('Signup API Route Tests', () => {
       errorWithNullPrototype.code = 11000
       errorWithNullPrototype.message = 'Duplicate key error'
 
-      mockUser.findOne.mockRejectedValue(errorWithNullPrototype)
+      mockUserFindOne.mockRejectedValue(errorWithNullPrototype)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -623,7 +629,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle error objects without code property', async () => {
-      mockUser.findOne.mockRejectedValue({
+      mockUserFindOne.mockRejectedValue({
         message: 'Some database error without code',
         name: 'DatabaseError'
       })
@@ -643,7 +649,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle undefined error in catch block', async () => {
-      mockUser.findOne.mockRejectedValue(undefined)
+      mockUserFindOne.mockRejectedValue(undefined)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -660,7 +666,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle null error in catch block', async () => {
-      mockUser.findOne.mockRejectedValue(null)
+      mockUserFindOne.mockRejectedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -677,7 +683,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle error objects that are not objects (string)', async () => {
-      mockUser.findOne.mockRejectedValue('string error that is not an object')
+      mockUserFindOne.mockRejectedValue('string error that is not an object')
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -694,7 +700,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle error objects that are not objects (number)', async () => {
-      mockUser.findOne.mockRejectedValue(12345)
+      mockUserFindOne.mockRejectedValue(12345)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -711,7 +717,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle error objects with nested properties', async () => {
-      mockUser.findOne.mockRejectedValue({
+      mockUserFindOne.mockRejectedValue({
         name: 'ValidationError',
         message: 'User validation failed',
         errors: {
@@ -742,7 +748,7 @@ describe('Signup API Route Tests', () => {
 
   describe('Additional Error Scenarios', () => {
     it('should handle database connection errors during user creation', async () => {
-      mockUser.findOne.mockRejectedValue({
+      mockUserFindOne.mockRejectedValue({
         name: 'MongoNetworkError',
         message: 'failed to connect to server',
         code: 'ECONNREFUSED'
@@ -763,7 +769,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle database timeout errors', async () => {
-      mockUser.findOne.mockRejectedValue({
+      mockUserFindOne.mockRejectedValue({
         name: 'MongoTimeoutError',
         message: 'Server selection timed out after 30000 ms',
         code: 'MONGODB_SERVER_SELECTION_TIMEOUT'
@@ -784,7 +790,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle bcrypt-related errors', async () => {
-      mockUser.findOne.mockRejectedValue({
+      mockUserFindOne.mockRejectedValue({
         name: 'Error',
         message: 'data and salt arguments required',
         code: 'EINVAL'
@@ -805,7 +811,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle validation errors from mongoose', async () => {
-      mockUser.findOne.mockRejectedValue({
+      mockUserFindOne.mockRejectedValue({
         name: 'ValidationError',
         message: 'User validation failed: password: Path `password` is required.'
       })
@@ -827,7 +833,7 @@ describe('Signup API Route Tests', () => {
 
   describe('Security and Input Validation Edge Cases', () => {
     it('should handle extremely long email addresses', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const longEmail = 'a'.repeat(300) + '@example.com'
 
@@ -840,11 +846,11 @@ describe('Signup API Route Tests', () => {
       await POST(mockRequest)
 
       // Should still attempt to process, letting database handle validation
-      expect(mockUser.findOne).toHaveBeenCalledWith({ email: longEmail })
+      expect(mockUserFindOne).toHaveBeenCalledWith({ email: longEmail })
     })
 
     it('should handle extremely long passwords', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const longPassword = 'a'.repeat(10000)
 
@@ -856,11 +862,11 @@ describe('Signup API Route Tests', () => {
 
       await POST(mockRequest)
 
-      expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+      expect(mockUserFindOne).toHaveBeenCalledWith({ email: 'test@example.com' })
     })
 
     it('should handle special characters in email addresses', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const specialEmails = [
         'test+tag@example.com',
@@ -878,12 +884,12 @@ describe('Signup API Route Tests', () => {
 
         await POST(mockRequest)
 
-        expect(mockUser.findOne).toHaveBeenCalledWith({ email: email })
+        expect(mockUserFindOne).toHaveBeenCalledWith({ email: email })
       }
     })
 
     it('should handle Unicode characters in name', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const unicodeNames = [
         '用户测试',  // Chinese characters
@@ -901,7 +907,7 @@ describe('Signup API Route Tests', () => {
 
         await POST(mockRequest)
 
-        expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+        expect(mockUserFindOne).toHaveBeenCalledWith({ email: 'test@example.com' })
       }
     })
 
@@ -932,7 +938,7 @@ describe('Signup API Route Tests', () => {
     })
 
     it('should handle request body with additional properties', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
@@ -945,11 +951,11 @@ describe('Signup API Route Tests', () => {
 
       await POST(mockRequest)
 
-      expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+      expect(mockUserFindOne).toHaveBeenCalledWith({ email: 'test@example.com' })
     })
 
     it('should handle SQL injection attempts in email', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const maliciousEmails = [
         "'; DROP TABLE users; --",
@@ -967,12 +973,12 @@ describe('Signup API Route Tests', () => {
 
         await POST(mockRequest)
 
-        expect(mockUser.findOne).toHaveBeenCalledWith({ email: email })
+        expect(mockUserFindOne).toHaveBeenCalledWith({ email: email })
       }
     })
 
     it('should handle XSS attempts in name field', async () => {
-      mockUser.findOne.mockResolvedValue(null)
+      mockUserFindOne.mockResolvedValue(null)
 
       const xssAttempts = [
         '<script>alert("xss")</script>',
@@ -990,7 +996,7 @@ describe('Signup API Route Tests', () => {
 
         await POST(mockRequest)
 
-        expect(mockUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' })
+        expect(mockUserFindOne).toHaveBeenCalledWith({ email: 'test@example.com' })
       }
     })
   })
@@ -1031,7 +1037,7 @@ describe('Signup API Route Tests', () => {
       )
 
       // Test duplicate user error (400)
-      mockUser.findOne.mockResolvedValue({ _id: 'existing' })
+      mockUserFindOne.mockResolvedValue({ _id: 'existing' })
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
         email: 'test@example.com',
@@ -1044,7 +1050,7 @@ describe('Signup API Route Tests', () => {
       )
 
       // Test server error (500)
-      mockUser.findOne.mockRejectedValue(new Error('Database error'))
+      mockUserFindOne.mockRejectedValue(new Error('Database error'))
       mockRequest.json.mockResolvedValue({
         name: 'Test User',
         email: 'test@example.com',
