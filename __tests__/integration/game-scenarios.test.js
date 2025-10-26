@@ -464,12 +464,21 @@ describe('Complete Game Scenario Tests', () => {
         ['player-2', { drawnHeart: false, drawnMagic: true, heartsPlaced: 0, magicCardsUsed: 1 }]
       ])
 
-      // Save to database
-      await saveRoom(room)
+      // Save to database with verification
+      const saveResult = await saveRoom(room)
+      expect(saveResult).toBeDefined()
+      expect(saveResult.code).toBe(testRoomCode)
 
-      // Load from database
+      // Load from database with defensive checks
       const loadedRooms = await loadRooms()
+      expect(loadedRooms).toBeDefined()
+      expect(loadedRooms.size).toBeGreaterThan(0)
+
       const loadedRoom = loadedRooms.get(testRoomCode)
+
+      // Defensive check to prevent undefined gameState error
+      expect(loadedRoom).toBeDefined()
+      expect(loadedRoom.gameState).toBeDefined()
 
       // Verify all state is preserved
       expect(loadedRoom.gameState.gameStarted).toBe(true)
@@ -558,12 +567,21 @@ describe('Complete Game Scenario Tests', () => {
       room.gameState.deck.cards = 10
       room.gameState.magicDeck.cards = 10
 
-      // Simulate game interruption (server restart)
-      await saveRoom(room)
+      // Simulate game interruption (server restart) with verification
+      const saveResult = await saveRoom(room)
+      expect(saveResult).toBeDefined()
+      expect(saveResult.code).toBe(testRoomCode)
 
-      // Simulate recovery by loading the room
+      // Simulate recovery by loading the room with defensive checks
       const recoveredRooms = await loadRooms()
+      expect(recoveredRooms).toBeDefined()
+      expect(recoveredRooms.size).toBeGreaterThan(0)
+
       const recoveredRoom = recoveredRooms.get(testRoomCode)
+
+      // Defensive check to prevent undefined gameState error
+      expect(recoveredRoom).toBeDefined()
+      expect(recoveredRoom.gameState).toBeDefined()
 
       // Verify game can continue
       expect(recoveredRoom.gameState.gameStarted).toBe(true)

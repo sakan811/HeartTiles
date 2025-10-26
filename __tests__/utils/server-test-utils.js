@@ -239,6 +239,12 @@ export async function loadRooms() {
         return
       }
 
+      // Validate critical gameState properties
+      if (typeof roomObj.gameState.gameStarted !== 'boolean') {
+        console.warn('Found room with invalid gameStarted state, skipping:', roomObj.code)
+        return
+      }
+
       // Convert plain objects back to Maps for game logic
       if (roomObj.gameState) {
         if (roomObj.gameState.playerHands && typeof roomObj.gameState.playerHands === 'object') {
