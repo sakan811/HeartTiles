@@ -1,15 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock User model methods that will be set up in beforeEach
-let mockUserFindOne, mockUserCreate, User
-
-// The models are already mocked in setup.js, so we don't need to re-mock them here
-// We'll just get references to the mocked functions
-
 describe('Signup API Route Tests', () => {
   let mockRequest
   let POST
   let mockNextResponse
+  let mockUserFindOne, mockUserCreate
 
   // Helper function to get mongoose mock
   async function getMongooseMock() {
@@ -19,21 +14,36 @@ describe('Signup API Route Tests', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
 
+    // Mock mongoose to prevent real database connections in unit tests
+    const mongooseMock = await getMongooseMock()
+    mongooseMock.connection.readyState = 1 // Pretend we're already connected
+    mongooseMock.connect.mockResolvedValue()
+
     // Get the mocked User model from setup
     const { User: MockedUser } = await import('../../../../models.js')
-    User = MockedUser
-    mockUserFindOne = User.findOne
-    mockUserCreate = User.create
+    mockUserFindOne = MockedUser.findOne
+    mockUserCreate = MockedUser.create
 
     // Reset User model mocks
-    mockUserFindOne.mockClear()
-    mockUserCreate.mockClear()
+    mockUserFindOne.mockReset()
+    mockUserCreate.mockReset()
+
+    // Mock User constructor for the 'new User()' call in the API
+    const MockUserConstructor = vi.fn().mockImplementation(function(data) {
+      this.data = data
+      this.save = vi.fn().mockResolvedValue({ ...data, _id: 'mock-user-id' })
+    })
+
+    // Replace the User mock with constructor
+    Object.setPrototypeOf(MockedUser, MockUserConstructor)
+    MockedUser.mockImplementation(MockUserConstructor)
 
     // Get the NextResponse mock from the module
     const nextServer = await import('next/server')
     mockNextResponse = nextServer.NextResponse
-    mockNextResponse.json.mockClear()
+    mockNextResponse.json.mockReset()
 
+    // Set up mock request
     mockRequest = {
       json: vi.fn().mockResolvedValue({})
     }
