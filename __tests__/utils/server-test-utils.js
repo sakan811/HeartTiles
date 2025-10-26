@@ -228,6 +228,17 @@ export async function loadRooms() {
         return
       }
 
+      // Validate that required properties exist
+      if (!roomObj.players || !Array.isArray(roomObj.players)) {
+        console.warn('Found room without valid players array, skipping:', roomObj.code)
+        return
+      }
+
+      if (!roomObj.gameState) {
+        console.warn('Found room without gameState, skipping:', roomObj.code)
+        return
+      }
+
       // Convert plain objects back to Maps for game logic
       if (roomObj.gameState) {
         if (roomObj.gameState.playerHands && typeof roomObj.gameState.playerHands === 'object') {
@@ -254,6 +265,15 @@ export async function saveRoom(roomData) {
   try {
     if (!roomData || !roomData.code) {
       throw new Error('Room data and code are required')
+    }
+
+    // Validate that required fields exist
+    if (!roomData.players || !Array.isArray(roomData.players)) {
+      throw new Error('Room data must include a valid players array')
+    }
+
+    if (!roomData.gameState) {
+      throw new Error('Room data must include gameState')
     }
 
     // Create a deep copy of the room data
@@ -299,9 +319,27 @@ export async function loadPlayerSessions() {
     const sessions = await PlayerSession.find({ isActive: true })
     const sessionsMap = new Map()
     sessions.forEach(session => {
-      const sessionObj = session.toObject()
+      const sessionObj = session.toObject ? session.toObject() : session
+      // Ensure sessionObj has required properties
+      if (!sessionObj) {
+        console.warn('Found null/undefined session, skipping')
+        return
+      }
+
+      if (!sessionObj.userId) {
+        console.warn('Found session without userId, skipping:', sessionObj)
+        return
+      }
+
+      // Double-check that session is actually active (in case of query issues)
+      if (sessionObj.isActive !== true) {
+        console.warn('Found inactive session in active query results, skipping:', sessionObj.userId)
+        return
+      }
+
       sessionsMap.set(sessionObj.userId, sessionObj)
     })
+    console.log(`Loaded ${sessionsMap.size} active sessions from database`)
     return sessionsMap
   } catch (err) {
     console.error('Failed to load sessions:', err)
@@ -911,7 +949,7 @@ export function startGame(room) {
 // Test helpers for creating realistic test data
 export function createTestUser(userData = {}) {
   return {
-    _id: userData._id || 'test-user-' + Math.random().toString(36).substr(2, 9),
+    _id: userData._id || 'test-user-' + Math.random().toString(36).substring(2, 11),
     email: userData.email || 'test@example.com',
     name: userData.name || 'TestUser',
     ...userData
@@ -940,7 +978,7 @@ export function createTestRoom(roomData = {}) {
 
 export function createTestPlayer(playerData = {}) {
   return {
-    userId: playerData.userId || 'player-' + Math.random().toString(36).substr(2, 9),
+    userId: playerData.userId || 'player-' + Math.random().toString(36).substring(2, 11),
     name: playerData.name || 'TestPlayer',
     email: playerData.email || 'player@example.com',
     isReady: playerData.isReady || false,
