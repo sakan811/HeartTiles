@@ -578,17 +578,40 @@ export async function loadPlayerSessions() {
     const sessionsMap = new Map()
 
     sessions.forEach(session => {
-      // Ensure session has required properties
-      if (!session || !session.userId) {
+      // Ensure session has required properties with comprehensive validation
+      if (!session) {
+        console.warn('Found null/undefined session, skipping')
+        return
+      }
+
+      if (!session.userId) {
         console.warn('Found session without userId, skipping:', session)
         return
       }
 
+      // Ensure all expected properties exist, even if they might be null
+      const normalizedSession = {
+        userId: session.userId,
+        userSessionId: session.userSessionId || null,
+        name: session.name || 'Unknown',
+        email: session.email || '',
+        currentSocketId: session.currentSocketId || null,
+        lastSeen: session.lastSeen || new Date(),
+        isActive: session.isActive || false,
+        // Preserve any additional properties
+        ...Object.fromEntries(
+          Object.entries(session).filter(([key]) =>
+            !['userId', 'userSessionId', 'name', 'email', 'currentSocketId', 'lastSeen', 'isActive'].includes(key)
+          )
+        )
+      }
+
       // Double-check that session is actually active (in case of query issues)
-      if (session.isActive === true) {
-        sessionsMap.set(session.userId, session)
+      // Use strict boolean check to avoid truthy/falsy issues
+      if (normalizedSession.isActive === true) {
+        sessionsMap.set(normalizedSession.userId, normalizedSession)
       } else {
-        console.warn(`Skipping inactive session: ${session.userId}, isActive: ${session.isActive}`)
+        console.warn(`Skipping inactive session: ${normalizedSession.userId}, isActive: ${normalizedSession.isActive}`)
       }
     })
 
@@ -611,6 +634,23 @@ export async function savePlayerSession(sessionData) {
       throw new Error('Session data and userId are required')
     }
 
+    // Normalize session data to ensure consistent structure
+    const normalizedSessionData = {
+      userId: sessionData.userId,
+      userSessionId: sessionData.userSessionId || `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      name: sessionData.name || 'Unknown',
+      email: sessionData.email || '',
+      currentSocketId: sessionData.currentSocketId || null,
+      lastSeen: sessionData.lastSeen instanceof Date ? sessionData.lastSeen : new Date(),
+      isActive: sessionData.isActive === true, // Ensure strict boolean
+      // Preserve any additional properties but don't overwrite core fields
+      ...Object.fromEntries(
+        Object.entries(sessionData).filter(([key]) =>
+          !['userId', 'userSessionId', 'name', 'email', 'currentSocketId', 'lastSeen', 'isActive'].includes(key)
+        )
+      )
+    }
+
     // Ensure database connection before saving session
     const mongoose = await import('mongoose')
     if (mongoose.connection.readyState !== 1) {
@@ -629,8 +669,8 @@ export async function savePlayerSession(sessionData) {
     while (retryCount < maxRetries && !result) {
       try {
         result = await PlayerSession.findOneAndUpdate(
-          { userId: sessionData.userId },
-          sessionData,
+          { userId: normalizedSessionData.userId },
+          normalizedSessionData,
           {
             upsert: true,
             new: true,
@@ -642,25 +682,25 @@ export async function savePlayerSession(sessionData) {
 
         // Verify the save was successful
         if (!result) {
-          throw new Error(`Failed to save player session: Session not found after save operation for userId ${sessionData.userId}`)
+          throw new Error(`Failed to save player session: Session not found after save operation for userId ${normalizedSessionData.userId}`)
         }
 
-        if (result.userId !== sessionData.userId) {
-          throw new Error(`Save verification failed: Expected userId ${sessionData.userId}, got ${result.userId}`)
+        if (result.userId !== normalizedSessionData.userId) {
+          throw new Error(`Save verification failed: Expected userId ${normalizedSessionData.userId}, got ${result.userId}`)
         }
 
         // Additional verification: ensure the document was actually written
-        const verification = await PlayerSession.findOne({ userId: sessionData.userId }).maxTimeMS(2000)
-        if (!verification || verification.userId !== sessionData.userId) {
-          throw new Error(`Save verification failed: Document not found after save for userId ${sessionData.userId}`)
+        const verification = await PlayerSession.findOne({ userId: normalizedSessionData.userId }).maxTimeMS(2000)
+        if (!verification || verification.userId !== normalizedSessionData.userId) {
+          throw new Error(`Save verification failed: Document not found after save for userId ${normalizedSessionData.userId}`)
         }
 
-        console.log(`Successfully saved player session ${sessionData.userId} on attempt ${retryCount + 1}`)
+        console.log(`Successfully saved player session ${normalizedSessionData.userId} on attempt ${retryCount + 1}`)
         break
 
       } catch (saveError) {
         retryCount++
-        console.warn(`Player session save attempt ${retryCount} failed for ${sessionData.userId}:`, saveError.message)
+        console.warn(`Player session save attempt ${retryCount} failed for ${normalizedSessionData.userId}:`, saveError.message)
 
         if (retryCount >= maxRetries) {
           throw saveError
@@ -673,7 +713,7 @@ export async function savePlayerSession(sessionData) {
     }
 
     if (!result) {
-      throw new Error(`Failed to save player session after ${maxRetries} attempts: ${sessionData.userId}`)
+      throw new Error(`Failed to save player session after ${maxRetries} attempts: ${normalizedSessionData.userId}`)
     }
 
     // Final delay to ensure MongoDB operation is fully committed
