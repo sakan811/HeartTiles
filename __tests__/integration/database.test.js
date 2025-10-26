@@ -102,7 +102,13 @@ describe('Database Operations', () => {
       expect(rooms.has(`TEST${testTimestamp}`)).toBe(true)
 
       const loadedRoom = rooms.get(`TEST${testTimestamp}`)
+
+      // Defensive check to ensure room was loaded properly
+      expect(loadedRoom).toBeDefined()
+      expect(loadedRoom).not.toBeNull()
+
       expect(loadedRoom.code).toBe(`TEST${testTimestamp}`)
+      expect(loadedRoom.players).toBeDefined()
       expect(loadedRoom.players).toHaveLength(2)
       expect(loadedRoom.players[0].name).toBe('Player 1')
       expect(loadedRoom.players[0].score).toBe(10)
@@ -165,10 +171,17 @@ describe('Database Operations', () => {
       // Load and verify updated room
       const rooms = await loadRooms()
       const loadedRoom = rooms.get(`TESTUPD${testTimestamp}`)
+
+      // Defensive check to ensure room was loaded properly
+      expect(loadedRoom).toBeDefined()
+      expect(loadedRoom).not.toBeNull()
+
+      expect(loadedRoom.players).toBeDefined()
       expect(loadedRoom.players).toHaveLength(2)
       expect(loadedRoom.players[0].isReady).toBe(true)
       expect(loadedRoom.players[0].score).toBe(15)
       expect(loadedRoom.players[1].name).toBe('Player 2')
+      expect(loadedRoom.gameState).toBeDefined()
       expect(loadedRoom.gameState.gameStarted).toBe(true)
       expect(loadedRoom.gameState.turnCount).toBe(2)
     })
@@ -488,6 +501,11 @@ describe('Database Operations', () => {
       // Load and verify complex room
       const rooms = await loadRooms()
       const loadedRoom = rooms.get('COMPLEX')
+
+      // Defensive check to ensure room was loaded properly
+      expect(loadedRoom).toBeDefined()
+      expect(loadedRoom).not.toBeNull()
+      expect(loadedRoom.gameState).toBeDefined()
 
       expect(loadedRoom.gameState.tiles).toHaveLength(4)
       expect(loadedRoom.gameState.tiles[0].placedHeart).toBeDefined()
