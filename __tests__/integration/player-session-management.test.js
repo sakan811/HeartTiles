@@ -1,35 +1,62 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock dependencies
-vi.mock('../../../models', () => ({
+// Mock dependencies with proper function structure
+const mockPlayerSessionFind = vi.fn()
+const mockPlayerSessionFindOneAndUpdate = vi.fn()
+const mockPlayerSessionDeleteOne = vi.fn()
+const mockRoomFind = vi.fn()
+const mockRoomFindOneAndUpdate = vi.fn()
+const mockRoomDeleteOne = vi.fn()
+const mockUserFindById = vi.fn()
+const mockGetToken = vi.fn()
+const mockDeleteRoom = vi.fn().mockImplementation(async (roomCode) => {
+  // Mimic the actual deleteRoom behavior from models.js
+  try {
+    // Mock the Room.deleteOne call - in real implementation this would delete from DB
+    // In our mock, this just logs the action for debugging
+    console.log(`Mock: Deleted room ${roomCode}`)
+  } catch (err) {
+    console.error('Mock: Failed to delete room:', err)
+  }
+})
+
+vi.mock('../../../models.js', () => ({
   PlayerSession: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
+    find: mockPlayerSessionFind,
+    findOneAndUpdate: mockPlayerSessionFindOneAndUpdate,
+    deleteOne: mockPlayerSessionDeleteOne,
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    findOne: vi.fn(),
   },
   Room: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn(),
-    deleteRoom: vi.fn()
+    find: mockRoomFind,
+    findOneAndUpdate: mockRoomFindOneAndUpdate,
+    deleteOne: mockRoomDeleteOne,
+    deleteRoom: mockDeleteRoom,
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    findOne: vi.fn(),
   },
   User: {
-    findById: vi.fn()
+    findById: mockUserFindById,
+    create: vi.fn(),
+    findOne: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
   },
-  deleteRoom: vi.fn().mockImplementation(async (roomCode) => {
-    // Mimic the actual deleteRoom behavior from models.js
-    try {
-      // Mock the Room.deleteOne call - in real implementation this would delete from DB
-      // In our mock, this just logs the action for debugging
-      console.log(`Mock: Deleted room ${roomCode}`)
-    } catch (err) {
-      console.error('Mock: Failed to delete room:', err)
-    }
-  })
+  deleteRoom: mockDeleteRoom
 }))
 
 vi.mock('next-auth/jwt', () => ({
-  getToken: vi.fn()
+  getToken: mockGetToken
 }))
 
 // Set environment
@@ -70,8 +97,6 @@ describe('Player Session Management and Reconnection Logic', () => {
 
   describe('Player Session Creation and Management', () => {
     it('should create new player session when none exists', async () => {
-      const { PlayerSession } = await import('../../../models')
-
       const newSession = {
         userId: 'user123',
         userSessionId: 'session123',
@@ -82,7 +107,7 @@ describe('Player Session Management and Reconnection Logic', () => {
         isActive: true
       }
 
-      PlayerSession.findOneAndUpdate.mockResolvedValue(newSession)
+      mockPlayerSessionFindOneAndUpdate.mockResolvedValue(newSession)
 
       // Simulate getPlayerSession function
       async function getPlayerSession(userId, userSessionId, userName, userEmail) {
@@ -94,7 +119,7 @@ describe('Player Session Management and Reconnection Logic', () => {
             currentSocketId: null, lastSeen: new Date(), isActive: true
           }
           playerSessions.set(userId, newSession)
-          await PlayerSession.findOneAndUpdate(
+          await mockPlayerSessionFindOneAndUpdate(
             { userId: newSession.userId },
             newSession,
             { upsert: true, new: true }
@@ -103,7 +128,7 @@ describe('Player Session Management and Reconnection Logic', () => {
         } else {
           session.lastSeen = new Date()
           session.isActive = true
-          await PlayerSession.findOneAndUpdate(
+          await mockPlayerSessionFindOneAndUpdate(
             { userId: session.userId },
             session,
             { upsert: true, new: true }
@@ -124,7 +149,7 @@ describe('Player Session Management and Reconnection Logic', () => {
       expect(session.name).toBe('TestUser')
       expect(session.email).toBe('test@example.com')
       expect(session.isActive).toBe(true)
-      expect(PlayerSession.findOneAndUpdate).toHaveBeenCalledWith(
+      expect(mockPlayerSessionFindOneAndUpdate).toHaveBeenCalledWith(
         { userId: 'user123' },
         expect.objectContaining({
           userId: 'user123',
@@ -137,8 +162,6 @@ describe('Player Session Management and Reconnection Logic', () => {
     })
 
     it('should update existing player session', async () => {
-      const { PlayerSession } = await import('../../../models')
-
       const existingSession = {
         userId: 'user123',
         userSessionId: 'session123',
@@ -150,7 +173,7 @@ describe('Player Session Management and Reconnection Logic', () => {
       }
 
       playerSessions.set('user123', existingSession)
-      PlayerSession.findOneAndUpdate.mockResolvedValue(existingSession)
+      mockPlayerSessionFindOneAndUpdate.mockResolvedValue(existingSession)
 
       // Simulate getPlayerSession function
       async function getPlayerSession(userId, userSessionId, userName, userEmail) {
@@ -162,7 +185,7 @@ describe('Player Session Management and Reconnection Logic', () => {
             currentSocketId: null, lastSeen: new Date(), isActive: true
           }
           playerSessions.set(userId, newSession)
-          await PlayerSession.findOneAndUpdate(
+          await mockPlayerSessionFindOneAndUpdate(
             { userId: newSession.userId },
             newSession,
             { upsert: true, new: true }
@@ -171,7 +194,7 @@ describe('Player Session Management and Reconnection Logic', () => {
         } else {
           session.lastSeen = new Date()
           session.isActive = true
-          await PlayerSession.findOneAndUpdate(
+          await mockPlayerSessionFindOneAndUpdate(
             { userId: session.userId },
             session,
             { upsert: true, new: true }
@@ -190,12 +213,10 @@ describe('Player Session Management and Reconnection Logic', () => {
 
       expect(session.isActive).toBe(true)
       expect(session.lastSeen).toBeInstanceOf(Date)
-      expect(PlayerSession.findOneAndUpdate).toHaveBeenCalledTimes(1)
+      expect(mockPlayerSessionFindOneAndUpdate).toHaveBeenCalledTimes(1)
     })
 
     it('should update player socket information', async () => {
-      const { PlayerSession } = await import('../../../models')
-
       const sessionData = {
         userId: 'user123',
         userSessionId: 'session123',
@@ -206,7 +227,7 @@ describe('Player Session Management and Reconnection Logic', () => {
         isActive: true
       }
 
-      PlayerSession.findOneAndUpdate.mockResolvedValue(sessionData)
+      mockPlayerSessionFindOneAndUpdate.mockResolvedValue(sessionData)
 
       // Simulate updatePlayerSocket function
       async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail) {
@@ -215,7 +236,7 @@ describe('Player Session Management and Reconnection Logic', () => {
           currentSocketId: socketId, lastSeen: new Date(), isActive: true
         }
 
-        await PlayerSession.findOneAndUpdate(
+        await mockPlayerSessionFindOneAndUpdate(
           { userId: session.userId },
           session,
           { upsert: true, new: true }
@@ -233,7 +254,7 @@ describe('Player Session Management and Reconnection Logic', () => {
 
       expect(updatedSession.currentSocketId).toBe('socket789')
       expect(updatedSession.isActive).toBe(true)
-      expect(PlayerSession.findOneAndUpdate).toHaveBeenCalledWith(
+      expect(mockPlayerSessionFindOneAndUpdate).toHaveBeenCalledWith(
         { userId: 'user123' },
         expect.objectContaining({
           currentSocketId: 'socket789',
@@ -391,8 +412,6 @@ describe('Player Session Management and Reconnection Logic', () => {
 
   describe('Session Loading and Persistence', () => {
     it('should load active player sessions from database', async () => {
-      const { PlayerSession } = await import('../../../models')
-
       const mockSessions = [
         {
           userId: 'user1',
@@ -414,12 +433,12 @@ describe('Player Session Management and Reconnection Logic', () => {
         }
       ]
 
-      PlayerSession.find.mockResolvedValue(mockSessions)
+      mockPlayerSessionFind.mockResolvedValue(mockSessions)
 
       // Simulate loadPlayerSessions function
       async function loadPlayerSessions() {
         try {
-          const sessions = await PlayerSession.find({ isActive: true })
+          const sessions = await mockPlayerSessionFind({ isActive: true })
           const sessionsMap = new Map()
           sessions.forEach(session => {
             const sessionObj = session.toObject ? session.toObject() : session
@@ -434,7 +453,7 @@ describe('Player Session Management and Reconnection Logic', () => {
 
       const loadedSessions = await loadPlayerSessions()
 
-      expect(PlayerSession.find).toHaveBeenCalledWith({ isActive: true })
+      expect(mockPlayerSessionFind).toHaveBeenCalledWith({ isActive: true })
       expect(loadedSessions.size).toBe(2)
       expect(loadedSessions.get('user1')).toBeDefined()
       expect(loadedSessions.get('user2')).toBeDefined()
@@ -443,14 +462,12 @@ describe('Player Session Management and Reconnection Logic', () => {
     })
 
     it('should handle database errors during session loading', async () => {
-      const { PlayerSession } = await import('../../../models')
-
-      PlayerSession.find.mockRejectedValue(new Error('Database connection failed'))
+      mockPlayerSessionFind.mockRejectedValue(new Error('Database connection failed'))
 
       // Simulate loadPlayerSessions function with error handling
       async function loadPlayerSessions() {
         try {
-          const sessions = await PlayerSession.find({ isActive: true })
+          const sessions = await mockPlayerSessionFind({ isActive: true })
           return new Map()
         } catch (err) {
           console.error('Failed to load sessions:', err)
@@ -460,13 +477,11 @@ describe('Player Session Management and Reconnection Logic', () => {
 
       const loadedSessions = await loadPlayerSessions()
 
-      expect(PlayerSession.find).toHaveBeenCalledWith({ isActive: true })
+      expect(mockPlayerSessionFind).toHaveBeenCalledWith({ isActive: true })
       expect(loadedSessions.size).toBe(0)
     })
 
     it('should save player session to database', async () => {
-      const { PlayerSession } = await import('../../../models')
-
       const sessionData = {
         userId: 'user123',
         userSessionId: 'session123',
@@ -477,12 +492,12 @@ describe('Player Session Management and Reconnection Logic', () => {
         isActive: true
       }
 
-      PlayerSession.findOneAndUpdate.mockResolvedValue(sessionData)
+      mockPlayerSessionFindOneAndUpdate.mockResolvedValue(sessionData)
 
       // Simulate savePlayerSession function
       async function savePlayerSession(sessionData) {
         try {
-          await PlayerSession.findOneAndUpdate(
+          await mockPlayerSessionFindOneAndUpdate(
             { userId: sessionData.userId },
             sessionData,
             { upsert: true, new: true }
@@ -494,7 +509,7 @@ describe('Player Session Management and Reconnection Logic', () => {
 
       await savePlayerSession(sessionData)
 
-      expect(PlayerSession.findOneAndUpdate).toHaveBeenCalledWith(
+      expect(mockPlayerSessionFindOneAndUpdate).toHaveBeenCalledWith(
         { userId: 'user123' },
         sessionData,
         { upsert: true, new: true }
@@ -502,15 +517,13 @@ describe('Player Session Management and Reconnection Logic', () => {
     })
 
     it('should handle save errors gracefully', async () => {
-      const { PlayerSession } = await import('../../../models')
-
       const sessionData = { userId: 'user123' }
-      PlayerSession.findOneAndUpdate.mockRejectedValue(new Error('Save failed'))
+      mockPlayerSessionFindOneAndUpdate.mockRejectedValue(new Error('Save failed'))
 
       // Simulate savePlayerSession function with error handling
       async function savePlayerSession(sessionData) {
         try {
-          await PlayerSession.findOneAndUpdate(
+          await mockPlayerSessionFindOneAndUpdate(
             { userId: sessionData.userId },
             sessionData,
             { upsert: true, new: true }
@@ -753,8 +766,6 @@ describe('Player Session Management and Reconnection Logic', () => {
     })
 
     it('should delete room when last player disconnects', async () => {
-      const { Room, deleteRoom } = await import('../../../models')
-
       const roomCode = 'EMPTYROOM123'
       const userId = 'user123'
 
@@ -769,15 +780,15 @@ describe('Player Session Management and Reconnection Logic', () => {
       expect(rooms.has(roomCode)).toBe(true)
 
       // Mock deleteRoom function
-      const mockDeleteRoom = vi.fn()
-      vi.mocked(deleteRoom).mockImplementation(mockDeleteRoom)
+      const mockDeleteRoomFn = vi.fn()
+      mockDeleteRoom.mockImplementation(mockDeleteRoomFn)
 
       // Simulate last player disconnect
       room.players = room.players.filter(player => player.userId !== userId)
 
       if (room.players.length === 0) {
         rooms.delete(roomCode)
-        await mockDeleteRoom(roomCode)
+        await mockDeleteRoomFn(roomCode)
       }
 
       expect(rooms.has(roomCode)).toBe(false)
@@ -785,8 +796,6 @@ describe('Player Session Management and Reconnection Logic', () => {
     })
 
     it('should handle session expiration and cleanup', async () => {
-      const { PlayerSession } = await import('../../../models')
-
       const oldSession = {
         userId: 'user123',
         lastSeen: new Date('2024-01-01'), // Very old
@@ -803,11 +812,11 @@ describe('Player Session Management and Reconnection Logic', () => {
       if (sessionAge > maxAge && !oldSession.isActive) {
         playerSessions.delete('user123')
         // In real implementation, also remove from database
-        await PlayerSession.deleteOne({ userId: 'user123' })
+        await mockPlayerSessionDeleteOne({ userId: 'user123' })
       }
 
       expect(playerSessions.has('user123')).toBe(false)
-      expect(PlayerSession.deleteOne).toHaveBeenCalledWith({ userId: 'user123' })
+      expect(mockPlayerSessionDeleteOne).toHaveBeenCalledWith({ userId: 'user123' })
     })
   })
 })

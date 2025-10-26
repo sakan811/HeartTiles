@@ -1,24 +1,50 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock all dependencies before importing server
-vi.mock('../../../models', () => ({
+// Mock all dependencies with proper function structure
+const mockPlayerSessionFind = vi.fn()
+const mockPlayerSessionFindOneAndUpdate = vi.fn()
+const mockPlayerSessionDeleteOne = vi.fn()
+const mockRoomFind = vi.fn()
+const mockRoomFindOneAndUpdate = vi.fn()
+const mockRoomDeleteOne = vi.fn()
+const mockUserFindById = vi.fn()
+const mockGetToken = vi.fn()
+
+vi.mock('../../../models.js', () => ({
   PlayerSession: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
+    find: mockPlayerSessionFind,
+    findOneAndUpdate: mockPlayerSessionFindOneAndUpdate,
+    deleteOne: mockPlayerSessionDeleteOne,
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    findOne: vi.fn(),
   },
   Room: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
+    find: mockRoomFind,
+    findOneAndUpdate: mockRoomFindOneAndUpdate,
+    deleteOne: mockRoomDeleteOne,
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    findOne: vi.fn(),
   },
   User: {
-    findById: vi.fn()
+    findById: mockUserFindById,
+    create: vi.fn(),
+    findOne: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
   }
 }))
 
 vi.mock('next-auth/jwt', () => ({
-  getToken: vi.fn()
+  getToken: mockGetToken
 }))
 
 vi.mock('../../src/lib/cards.js', () => ({
@@ -137,21 +163,19 @@ describe('Socket.IO Room Management Events', () => {
     }
 
     // Mock database functions
-    const { Room, PlayerSession, User } = await import('../../../models')
-    Room.find.mockResolvedValue([])
-    Room.findOneAndUpdate.mockResolvedValue({})
-    Room.deleteOne.mockResolvedValue({})
-    PlayerSession.find.mockResolvedValue([])
-    PlayerSession.findOneAndUpdate.mockResolvedValue({})
-    User.findById.mockResolvedValue({
+    mockRoomFind.mockResolvedValue([])
+    mockRoomFindOneAndUpdate.mockResolvedValue({})
+    mockRoomDeleteOne.mockResolvedValue({})
+    mockPlayerSessionFind.mockResolvedValue([])
+    mockPlayerSessionFindOneAndUpdate.mockResolvedValue({})
+    mockUserFindById.mockResolvedValue({
       _id: 'user123',
       email: 'test@example.com',
       name: 'TestUser'
     })
 
     // Mock authentication
-    const { getToken } = await import('next-auth/jwt')
-    getToken.mockResolvedValue({
+    mockGetToken.mockResolvedValue({
       id: 'user123',
       email: 'test@example.com',
       name: 'TestUser',

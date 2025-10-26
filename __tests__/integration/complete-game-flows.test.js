@@ -125,8 +125,8 @@ describe('Complete Game Flows Integration Tests', () => {
 
       // Step 1: Room Creation - use unique room code to avoid duplicates
       const roomCode = `GAM${Date.now()}`
-      expect(validateRoomCode(roomCode)).toBe(true)
       const sanitizedCode = sanitizeInput(roomCode.toUpperCase().slice(0, 6)) // Ensure 6 characters
+      expect(validateRoomCode(sanitizedCode)).toBe(true)
 
       const room = {
         code: sanitizedCode,

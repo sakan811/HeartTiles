@@ -67,8 +67,22 @@ vi.mock('mongoose', () => ({
 
 // Mock models.js to provide mocked User model for testing
 // This is needed for auth tests that need to mock User.findOne
+// Create User mock that can be used as a constructor
+const MockUser = vi.fn().mockImplementation(function(data) {
+  this.data = data
+  this.save = vi.fn().mockResolvedValue({ ...data, _id: 'mock-id' })
+})
+MockUser.findOne = vi.fn()
+MockUser.create = vi.fn()
+MockUser.findById = vi.fn()
+MockUser.findByIdAndUpdate = vi.fn()
+MockUser.findByIdAndDelete = vi.fn()
+MockUser.deleteOne = vi.fn()
+MockUser.findOneAndUpdate = vi.fn()
+
 vi.mock('../models.js', () => ({
-  User: {
+  User: MockUser,
+  PlayerSession: {
     findOne: vi.fn(),
     create: vi.fn(),
     findById: vi.fn(),
@@ -76,7 +90,76 @@ vi.mock('../models.js', () => ({
     findByIdAndDelete: vi.fn(),
     deleteOne: vi.fn(),
     findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
   },
+  Room: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  deleteRoom: vi.fn(),
+}))
+
+// Also mock the path used by API routes
+vi.mock('../../../models.js', () => ({
+  User: MockUser,
+  PlayerSession: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  Room: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  deleteRoom: vi.fn(),
+}))
+
+// Also mock the path used by API routes in src/app/api/
+vi.mock('../../../../models.js', () => ({
+  User: MockUser,
+  PlayerSession: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  Room: {
+    findOne: vi.fn(),
+    create: vi.fn(),
+    findById: vi.fn(),
+    findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
+    deleteOne: vi.fn(),
+    findOneAndUpdate: vi.fn(),
+    find: vi.fn(),
+  },
+  deleteRoom: vi.fn(),
+}))
+
+// Also mock the path used by API routes without .js extension
+vi.mock('../../../../models', () => ({
+  User: MockUser,
   PlayerSession: {
     findOne: vi.fn(),
     create: vi.fn(),
@@ -367,16 +450,7 @@ vi.mock('../src/lib/cards.js', async (importOriginal) => {
     MagicCard: ActualMagicCard,
     WindCard: ActualWindCard,
     RecycleCard: ActualRecycleCard,
-    ShieldCard: ActualShieldCard,
-    createHeartCard: actualCreateHeartCard,
-    createMagicCard: actualCreateMagicCard,
-    generateHeartDeck: actualGenerateHeartDeck,
-    generateMagicDeck: actualGenerateMagicDeck,
-    generateRandomMagicCard: actualGenerateRandomMagicCard,
-    createCardFromData: actualCreateCardFromData,
-    isHeartCard: actualIsHeartCard,
-    isMagicCard: actualIsMagicCard,
-    getCardType: actualGetCardType
+    ShieldCard: ActualShieldCard
   } = actual;
 
   // Mock BaseCard class to fix executeEffect behavior
@@ -682,7 +756,7 @@ vi.mock('../src/lib/cards.js', async (importOriginal) => {
 
     // Use high-precision timestamp + random to ensure unique IDs
     const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substr(2, 9);
+    const randomSuffix = Math.random().toString(36).substring(2, 11);
     const cardId = timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
     return mockCreateMagicCard(cardId, selectedType);
   });

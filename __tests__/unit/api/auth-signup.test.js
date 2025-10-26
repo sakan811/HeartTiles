@@ -1,46 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock User model methods that will be properly set up in beforeEach
-const mockUserFindOne = vi.fn()
-const mockUserCreate = vi.fn()
+// Mock User model methods that will be set up in beforeEach
+let mockUserFindOne, mockUserCreate, User
 
-// Create a User constructor mock
-function MockUser(userData) {
-  this.name = userData?.name || ''
-  this.email = userData?.email || ''
-  this.password = userData?.password || ''
-  this.save = vi.fn().mockResolvedValue(this)
-  this._id = 'mock-user-id'
-}
-
-MockUser.findOne = mockUserFindOne
-MockUser.create = mockUserCreate
-
-// Mock the models with proper function structure
-vi.mock('../../../models.js', () => ({
-  User: MockUser,
-  PlayerSession: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  Room: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  deleteRoom: vi.fn(),
-}))
+// The models are already mocked in setup.js, so we don't need to re-mock them here
+// We'll just get references to the mocked functions
 
 describe('Signup API Route Tests', () => {
   let mockRequest
@@ -54,6 +18,12 @@ describe('Signup API Route Tests', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+
+    // Get the mocked User model from setup
+    const { User: MockedUser } = await import('../../../../models.js')
+    User = MockedUser
+    mockUserFindOne = User.findOne
+    mockUserCreate = User.create
 
     // Reset User model mocks
     mockUserFindOne.mockClear()
