@@ -23,6 +23,7 @@ export default defineConfig({
       ]
     },
     setupFiles: ['./__tests__/setup.js'],
+    globalSetup: ['./__tests__/global-setup.js'],
     testTimeout: 10000,
     hookTimeout: 10000,
     alias: {
@@ -63,8 +64,6 @@ export default defineConfig({
           css: false,
           // Skip integration tests if MongoDB is not available
           bail: 0,
-          // Run integration tests sequentially to avoid database conflicts
-          pool: 'forks',
         },
         resolve: {
           alias: {

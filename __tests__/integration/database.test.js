@@ -366,9 +366,6 @@ describe('Database Operations', () => {
         throw error
       }
 
-      // Wait a moment to ensure database writes complete
-      await new Promise(resolve => setTimeout(resolve, 50))
-
       // Verify sessions were saved by checking directly in database
       const allSessions = await PlayerSession.find({ userId: { $regex: testSuffix } }).sort({ userId: 1 })
       console.log('All sessions in DB:', allSessions.map(s => ({ userId: s.userId, isActive: s.isActive })))

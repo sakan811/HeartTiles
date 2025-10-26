@@ -2,10 +2,15 @@
 import { vi } from 'vitest'
 import dotenv from 'dotenv'
 
+vi.mock('mongoose', async () => {
+  const actual = await vi.importActual('mongoose')
+  return actual
+})
+
 dotenv.config({ path: '.env.test' })
 
 // Important: Unmock mongoose to use real database for integration tests
-vi.unmock('mongoose')
+vi.unmock('mongoose');
 
 // Mock Math.random() for consistent testing (same as main setup)
 // Create a predictable sequence that still allows for unique IDs
@@ -142,79 +147,9 @@ vi.mock('bcryptjs', () => ({
 // The models will be imported directly for real database operations
 // Only mock for unit tests, not integration tests
 
-// Mock mongoose for database connection (but allow real connection for integration tests)
-const mockMongooseConnect = vi.fn()
-const mockMongoose = {
-  default: {
-    connect: mockMongooseConnect,
-    connection: {
-      readyState: 0 // Initially disconnected
-    }
-  }
-}
 
-// Global test hooks
-beforeAll(async () => {
-  try {
-    // Connect to test database
-    await connectToDatabase()
-    console.log('Integration test database connected')
-  } catch (error) {
-    console.warn('Failed to connect to test database, skipping integration tests:', error.message)
-    // Don't fail the test suite if MongoDB is not available
-  }
-})
 
-afterAll(async () => {
-  try {
-    // Disconnect from test database
-    await disconnectDatabase()
-    console.log('Integration test database disconnected')
-  } catch (error) {
-    console.warn('Failed to disconnect from test database:', error.message)
-  }
-})
 
-beforeEach(async () => {
-  try {
-    // Clear database before each test
-    await clearDatabase()
-
-    // Clear turn locks
-    clearTurnLocks()
-
-    // Clear all mocks
-    vi.clearAllMocks()
-  } catch (error) {
-    console.warn('Failed to clear database in beforeEach:', error.message)
-    // Don't fail tests if database operations fail
-  }
-})
-
-afterEach(async () => {
-  try {
-    // Clear database after each test
-    await clearDatabase()
-
-    // Clear turn locks
-    clearTurnLocks()
-
-    // Reset all mocks
-    vi.restoreAllMocks()
-
-    // Reset Math.random() call count for test isolation
-    mathRandomCallCount = 0
-
-    // Re-apply the Math.random() mock to ensure it's always available
-    global.Math.random = robustMathRandom
-    Math.random = robustMathRandom
-
-    // Re-apply Date.now mock
-    global.Date.now = vi.fn(() => mockDate.getTime())
-  } catch (error) {
-    console.warn('Failed to clear database in afterEach:', error.message)
-  }
-})
 
 // Helper function to create mock socket for testing
 export function createMockSocket(userId = 'test-user-1', userName = 'Test User', userEmail = 'test@example.com') {

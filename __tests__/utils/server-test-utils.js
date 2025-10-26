@@ -34,71 +34,72 @@ export async function connectToDatabase() {
   // Log environment for debugging
   console.log(`Connecting to test MongoDB in ${process.env.NODE_ENV} environment`)
 
-  // Enhanced connection options for test environment
+  // Enhanced connection options for test environment - optimized to prevent buffering timeouts
   const connectionOptions = {
-    serverSelectionTimeoutMS: 15000, // Reduced for faster feedback
-    bufferTimeoutMS: 5000, // Reduced to prevent long buffering
-    maxPoolSize: 5, // Reduced for test environment
+    serverSelectionTimeoutMS: 10000, // Timeout for server selection
+    bufferTimeoutMS: 3000, // Reduced buffer timeout to fail fast
+    maxPoolSize: 3, // Smaller pool for test environment
     retryWrites: true,
-    connectTimeoutMS: 10000, // Reduced for faster connection
-    socketTimeoutMS: 20000, // Reduced for better test isolation
-    bufferCommands: false, // Keep false to prevent buffering issues
+    connectTimeoutMS: 8000, // Connection timeout
+    socketTimeoutMS: 15000, // Socket timeout
+    bufferCommands: false, // Disable command buffering
+    // Add additional options for better error handling
+    heartbeatFrequencyMS: 10000, // Keep connection alive
+    maxIdleTimeMS: 30000, // Close idle connections
   }
 
-  // Retry logic for test environment reliability
-  const maxRetries = isTestEnvironment ? 3 : 1
-  const retryDelay = 2000
+  try {
+    const readyState = mongoose.connection.readyState
+    console.log(`MongoDB readyState: ${readyState} (0=disconnected, 1=connected, 2=connecting, 3=disconnecting)`)
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      if (mongoose.default.connection.readyState === 1) {
-        console.log('Already connected to test MongoDB')
-        // Verify connection with a ping
-        try {
-          await mongoose.default.connection.db.admin().ping()
-          console.log('MongoDB connection verified with ping')
-          return
-        } catch (pingError) {
-          console.warn('MongoDB ping failed, reconnecting...', pingError.message)
-          await mongoose.default.connection.close()
-        }
-      }
+    if (readyState === 1) {
+      console.log('Already connected to test MongoDB')
+      // Test the connection with a ping
+      await mongoose.connection.db.admin().ping()
+      console.log('MongoDB connection verified with ping')
+      return
+    }
 
-      await mongoose.default.connect(MONGODB_URI, connectionOptions)
-
-      // Wait for connection to be fully established
+    if (readyState === 2) {
+      console.log('MongoDB connection in progress, waiting...')
+      // Wait for connection to complete
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('Connection establishment timeout'))
+          reject(new Error('Connection timeout during existing connection attempt'))
         }, 10000)
 
-        mongoose.default.connection.once('connected', () => {
+        mongoose.connection.once('connected', () => {
           clearTimeout(timeout)
           resolve()
         })
-
-        mongoose.default.connection.once('error', (err) => {
+        mongoose.connection.once('error', (err) => {
           clearTimeout(timeout)
           reject(err)
         })
       })
-
-      // Verify connection is working with a ping
-      await mongoose.default.connection.db.admin().ping()
-
-      console.log(`Connected to test MongoDB in ${process.env.NODE_ENV} environment`)
+      console.log('MongoDB connection completed')
       return
-    } catch (err) {
-      console.error(`MongoDB connection attempt ${attempt} failed:`, err.message)
-
-      if (attempt === maxRetries) {
-        console.error('All MongoDB connection attempts failed')
-        throw err
-      }
-
-      console.log(`Retrying MongoDB connection in ${retryDelay}ms...`)
-      await new Promise(resolve => setTimeout(resolve, retryDelay))
     }
+
+    console.log('Connecting to test MongoDB...')
+
+    // Clear any existing connection handlers to avoid duplicates
+    mongoose.connection.removeAllListeners()
+
+    await mongoose.connect(MONGODB_URI, connectionOptions)
+
+    // Verify connection with ping
+    await mongoose.connection.db.admin().ping()
+    console.log('Connected and verified test MongoDB connection')
+  } catch (error) {
+    console.error('MongoDB connection failed:', error.message)
+    // Ensure we're in a clean state
+    try {
+      await mongoose.disconnect()
+    } catch (disconnectError) {
+      console.warn('Error during cleanup disconnect:', disconnectError.message)
+    }
+    throw error
   }
 }
 
@@ -107,13 +108,17 @@ export async function disconnectDatabase() {
   ensureTestEnvironment()
 
   try {
-    const readyState = mongoose.default.connection.readyState
+    const readyState = mongoose.connection.readyState
     console.log(`Disconnecting from MongoDB (readyState: ${readyState}) in ${process.env.NODE_ENV} environment`)
 
     if (readyState !== 0) {
       // Force close all connections to prevent hanging
-      await mongoose.default.connection.close()
-      console.log(`Disconnected from test MongoDB in ${process.env.NODE_ENV} environment`)
+      try {
+        await mongoose.connection.close(true)
+        console.log(`Disconnected from test MongoDB in ${process.env.NODE_ENV} environment`)
+      } catch (e) {
+        console.error('Error in mongoose.connection.close():', e);
+      }
     } else {
       console.log('Already disconnected from test MongoDB')
     }
@@ -121,7 +126,7 @@ export async function disconnectDatabase() {
     console.error('MongoDB disconnection failed:', err)
     // Don't throw error to avoid breaking test teardown
     try {
-      await mongoose.default.disconnect()
+      await mongoose.disconnect()
     } catch (forceErr) {
       console.warn('Force disconnect also failed:', forceErr.message)
     }
@@ -133,75 +138,48 @@ export async function clearDatabase() {
   ensureTestEnvironment()
 
   try {
-    // Check connection state more thoroughly
-    if (mongoose.default.connection.readyState !== 1) {
-      console.log('Database not connected (readyState:', mongoose.default.connection.readyState, '), skipping clear')
-      return
-    }
+    console.log('Clearing database...')
+    await connectToDatabase()
 
-    // Verify connection is actually working with a ping
-    try {
-      if (!mongoose.default.connection.db) {
-        console.warn('Database connection not available, skipping clear')
-        return
-      }
-      await mongoose.default.connection.db.admin().ping()
-      console.log('Database connection verified, proceeding with clear')
-    } catch (pingError) {
-      console.warn('Database ping failed, skipping clear:', pingError.message)
-      return
+    // Ensure we have a valid connection
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('Database not connected, attempting to reconnect...')
+      await connectToDatabase()
     }
-
-    // Add timeout and better error handling for delete operations
-    const deleteTimeout = 10000 // 10 seconds
 
     // Force complete database clearing with drop() for thorough cleanup
-    const db = mongoose.default.connection.db
+    const db = mongoose.connection.db
+    if (!db) {
+      console.warn('Database connection not available, skipping clear')
+      return
+    }
 
-    await Promise.race([
-      Promise.all([
-        // More aggressive clearing - drop collections entirely to reset indexes
-        db.dropCollection('rooms').catch(err => {
-          if (err.code === 26) {
-            // Namespace not found - collection doesn't exist, which is fine
-            return null
-          }
-          console.warn('Failed to drop rooms collection:', err.message)
+    // Sequential clearing to avoid conflicts
+    const collections = ['rooms', 'playersessions', 'users']
+
+    for (const collectionName of collections) {
+      try {
+        console.log(`Dropping collection: ${collectionName}`)
+        await db.dropCollection(collectionName)
+        console.log(`Successfully dropped: ${collectionName}`)
+      } catch (err) {
+        if (err.code === 26) {
+          // Namespace not found - collection doesn't exist, which is fine
+          console.log(`Collection ${collectionName} does not exist, skipping`)
+        } else {
+          console.warn(`Failed to drop ${collectionName} collection:`, err.message)
           // Fallback to deleteMany if drop fails
-          return Room.deleteMany({}).catch(deleteErr => {
-            console.warn('Fallback deleteMany for rooms failed:', deleteErr.message)
-            return null
-          })
-        }),
-        db.dropCollection('playersessions').catch(err => {
-          if (err.code === 26) {
-            // Namespace not found - collection doesn't exist, which is fine
-            return null
+          try {
+            const Model = collectionName === 'rooms' ? Room :
+                          collectionName === 'playersessions' ? PlayerSession : User
+            const result = await Model.deleteMany({})
+            console.log(`Fallback deleteMany for ${collectionName}: deleted ${result.deletedCount} documents`)
+          } catch (deleteErr) {
+            console.warn(`Fallback deleteMany for ${collectionName} failed:`, deleteErr.message)
           }
-          console.warn('Failed to drop playersessions collection:', err.message)
-          // Fallback to deleteMany if drop fails
-          return PlayerSession.deleteMany({}).catch(deleteErr => {
-            console.warn('Fallback deleteMany for playersessions failed:', deleteErr.message)
-            return null
-          })
-        }),
-        db.dropCollection('users').catch(err => {
-          if (err.code === 26) {
-            // Namespace not found - collection doesn't exist, which is fine
-            return null
-          }
-          console.warn('Failed to drop users collection:', err.message)
-          // Fallback to deleteMany if drop fails
-          return User.deleteMany({}).catch(deleteErr => {
-            console.warn('Fallback deleteMany for users failed:', deleteErr.message)
-            return null
-          })
-        })
-      ]),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Database clear operation timeout')), deleteTimeout)
-      )
-    ])
+        }
+      }
+    }
 
     console.log(`Test database cleared in ${process.env.NODE_ENV} environment`)
   } catch (err) {
@@ -213,6 +191,13 @@ export async function clearDatabase() {
 // Room management functions - real implementation
 export async function loadRooms() {
   try {
+    // Ensure database connection before loading rooms
+    const mongoose = await import('mongoose')
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Database not connected, connecting before loading rooms...')
+      await connectToDatabase()
+    }
+
     const rooms = await Room.find({})
     const roomsMap = new Map()
     rooms.forEach(room => {
@@ -269,6 +254,13 @@ export async function loadRooms() {
 
 export async function saveRoom(roomData) {
   try {
+    // Ensure database connection before saving
+    const mongoose = await import('mongoose')
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Database not connected, connecting before saving room...')
+      await connectToDatabase()
+    }
+
     if (!roomData || !roomData.code) {
       throw new Error('Room data and code are required')
     }
@@ -286,15 +278,15 @@ export async function saveRoom(roomData) {
     const roomDataToSave = JSON.parse(JSON.stringify(roomData))
 
     // Convert Map objects to plain objects for database storage
-    if (roomData.gameState) {
-      if (roomData.gameState.playerHands instanceof Map) {
-        roomDataToSave.gameState.playerHands = Object.fromEntries(roomData.gameState.playerHands)
+    if (roomDataToSave.gameState) {
+      if (roomDataToSave.gameState.playerHands instanceof Map) {
+        roomDataToSave.gameState.playerHands = Object.fromEntries(roomDataToSave.gameState.playerHands)
       }
-      if (roomData.gameState.shields instanceof Map) {
-        roomDataToSave.gameState.shields = Object.fromEntries(roomData.gameState.shields)
+      if (roomDataToSave.gameState.shields instanceof Map) {
+        roomDataToSave.gameState.shields = Object.fromEntries(roomDataToSave.gameState.shields)
       }
-      if (roomData.gameState.playerActions instanceof Map) {
-        roomDataToSave.gameState.playerActions = Object.fromEntries(roomData.gameState.playerActions)
+      if (roomDataToSave.gameState.playerActions instanceof Map) {
+        roomDataToSave.gameState.playerActions = Object.fromEntries(roomDataToSave.gameState.playerActions)
       }
     }
 
@@ -322,28 +314,27 @@ export async function deleteRoom(roomCode) {
 // Player session functions - real implementation
 export async function loadPlayerSessions() {
   try {
+    // Ensure database connection before loading sessions
+    const mongoose = await import('mongoose')
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Database not connected, connecting before loading sessions...')
+      await connectToDatabase()
+    }
+
     const sessions = await PlayerSession.find({ isActive: true })
     const sessionsMap = new Map()
     sessions.forEach(session => {
       const sessionObj = session.toObject ? session.toObject() : session
       // Ensure sessionObj has required properties
-      if (!sessionObj) {
-        console.warn('Found null/undefined session, skipping')
-        return
-      }
-
-      if (!sessionObj.userId) {
+      if (!sessionObj || !sessionObj.userId) {
         console.warn('Found session without userId, skipping:', sessionObj)
         return
       }
 
       // Double-check that session is actually active (in case of query issues)
-      if (sessionObj.isActive !== true) {
-        console.warn('Found inactive session in active query results, skipping:', sessionObj.userId)
-        return
+      if (sessionObj.isActive === true) {
+        sessionsMap.set(sessionObj.userId, sessionObj)
       }
-
-      sessionsMap.set(sessionObj.userId, sessionObj)
     })
     console.log(`Loaded ${sessionsMap.size} active sessions from database`)
     return sessionsMap
@@ -355,6 +346,13 @@ export async function loadPlayerSessions() {
 
 export async function savePlayerSession(sessionData) {
   try {
+    // Ensure database connection before saving session
+    const mongoose = await import('mongoose')
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Database not connected, connecting before saving session...')
+      await connectToDatabase()
+    }
+
     const result = await PlayerSession.findOneAndUpdate(
       { userId: sessionData.userId },
       sessionData,

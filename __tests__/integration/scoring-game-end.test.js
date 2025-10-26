@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 
 // Set environment
 process.env.NODE_ENV = 'test'
@@ -6,7 +6,32 @@ process.env.NODE_ENV = 'test'
 describe('Scoring System and Game End Conditions', () => {
   let rooms, mockIo
 
-  beforeEach(() => {
+  beforeAll(async () => {
+    try {
+      const { connectToDatabase } = await import('../utils/server-test-utils.js')
+      await connectToDatabase()
+    } catch (error) {
+      console.warn('Database connection failed for scoring tests:', error.message)
+    }
+  })
+
+  afterAll(async () => {
+    try {
+      const { disconnectDatabase } = await import('../utils/server-test-utils.js')
+      await disconnectDatabase()
+    } catch (error) {
+      console.warn('Database disconnection failed for scoring tests:', error.message)
+    }
+  })
+
+  beforeEach(async () => {
+    try {
+      const { clearDatabase } = await import('../utils/server-test-utils.js')
+      await clearDatabase()
+    } catch (error) {
+      console.warn('Database clear failed for scoring tests:', error.message)
+    }
+
     vi.clearAllMocks()
     rooms = new Map()
     global.turnLocks = new Map()

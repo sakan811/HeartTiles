@@ -158,6 +158,12 @@ describe('Error Handling and Edge Cases', () => {
       // Import mongoose and mock its connect method
       const mongoose = await import('mongoose')
       const mockConnect = vi.spyOn(mongoose.default, 'connect').mockRejectedValue(new Error('Connection failed'))
+      const mockConnection = {
+        readyState: 0,
+        close: vi.fn().mockResolvedValue(true),
+      }
+      vi.spyOn(mongoose.default, 'connection', 'get').mockReturnValue(mockConnection)
+
 
       try {
         // Disconnect first to force a new connection attempt
@@ -165,6 +171,7 @@ describe('Error Handling and Edge Cases', () => {
         await expect(connectToDatabase()).rejects.toThrow()
       } finally {
         mockConnect.mockRestore()
+        vi.restoreAllMocks()
       }
     })
 
