@@ -17,7 +17,9 @@ export default defineConfig({
         '*.config.{js,ts,mjs}',
         '.next/',
         'dist/',
-        'next-env.d.ts'
+        'next-env.d.ts',
+        'src/socket.ts',
+        'src/app/globals.css'
       ]
     },
     setupFiles: ['./__tests__/setup.js'],
@@ -63,11 +65,6 @@ export default defineConfig({
           bail: 0,
           // Run integration tests sequentially to avoid database conflicts
           pool: 'forks',
-          poolOptions: {
-            forks: {
-              singleFork: true
-            }
-          }
         },
         resolve: {
           alias: {
