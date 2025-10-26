@@ -26,6 +26,8 @@ export default defineConfig({
     globalSetup: ['./__tests__/global-setup.js'],
     testTimeout: 10000,
     hookTimeout: 10000,
+    // Allow projects to override fileParallelism for integration tests
+    fileParallelism: true,
     alias: {
       '@': resolve(__dirname, './src'),
     },
@@ -62,6 +64,8 @@ export default defineConfig({
           testTimeout: 25000,
           hookTimeout: 20000,
           css: false,
+          // Disable file parallelism for integration tests to prevent MongoDB race conditions
+          fileParallelism: false,
           // Skip integration tests if MongoDB is not available
           bail: 0,
         },

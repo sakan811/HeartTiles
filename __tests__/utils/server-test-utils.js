@@ -26,7 +26,10 @@ export async function connectToDatabase() {
   const isTestEnvironment = ensureTestEnvironment()
 
   // Default to test database if not specified or in test environment
-  const defaultTestUri = 'mongodb://root:example@localhost:27017/heart-tiles-test?authSource=admin'
+  // Add process-specific suffix to avoid conflicts when running in parallel
+  const processId = process.pid || 0
+  const testSuffix = process.env.VITEST_POOL_ID || processId
+  const defaultTestUri = `mongodb://root:example@localhost:27017/heart-tiles-test-${testSuffix}?authSource=admin`
   const MONGODB_URI = process.env.MONGODB_URI || defaultTestUri
 
   const mongoose = await import('mongoose')
@@ -147,6 +150,12 @@ export async function clearDatabase() {
       await connectToDatabase()
     }
 
+    // Verify connection with a ping before clearing
+    await mongoose.connection.db.admin().ping()
+
+    // Add delay to ensure database is ready after connection and previous operations complete
+    await new Promise(resolve => setTimeout(resolve, 200))
+
     // Force complete database clearing with drop() for thorough cleanup
     const db = mongoose.connection.db
     if (!db) {
@@ -154,34 +163,93 @@ export async function clearDatabase() {
       return
     }
 
-    // Sequential clearing to avoid conflicts
+    // Sequential clearing to avoid conflicts with retry logic
     const collections = ['rooms', 'playersessions', 'users']
+    let clearedCount = 0
 
     for (const collectionName of collections) {
-      try {
-        console.log(`Dropping collection: ${collectionName}`)
-        await db.dropCollection(collectionName)
-        console.log(`Successfully dropped: ${collectionName}`)
-      } catch (err) {
-        if (err.code === 26) {
-          // Namespace not found - collection doesn't exist, which is fine
-          console.log(`Collection ${collectionName} does not exist, skipping`)
-        } else {
-          console.warn(`Failed to drop ${collectionName} collection:`, err.message)
-          // Fallback to deleteMany if drop fails
-          try {
-            const Model = collectionName === 'rooms' ? Room :
-                          collectionName === 'playersessions' ? PlayerSession : User
-            const result = await Model.deleteMany({})
-            console.log(`Fallback deleteMany for ${collectionName}: deleted ${result.deletedCount} documents`)
-          } catch (deleteErr) {
-            console.warn(`Fallback deleteMany for ${collectionName} failed:`, deleteErr.message)
+      let retryCount = 0
+      const maxRetries = 3
+      let cleared = false
+
+      while (retryCount < maxRetries && !cleared) {
+        try {
+          console.log(`Dropping collection: ${collectionName} (attempt ${retryCount + 1})`)
+          await db.dropCollection(collectionName)
+          console.log(`Successfully dropped: ${collectionName}`)
+          cleared = true
+          clearedCount++
+          break
+        } catch (err) {
+          retryCount++
+          console.warn(`Drop attempt ${retryCount} failed for ${collectionName}:`, err.message)
+
+          if (err.code === 26) {
+            // Namespace not found - collection doesn't exist, which is fine
+            console.log(`Collection ${collectionName} does not exist, skipping`)
+            cleared = true
+            clearedCount++
+            break
           }
+
+          if (retryCount >= maxRetries) {
+            console.warn(`All drop attempts failed for ${collectionName}, trying fallback deleteMany`)
+            // Fallback to deleteMany if drop fails
+            try {
+              const Model = collectionName === 'rooms' ? Room :
+                            collectionName === 'playersessions' ? PlayerSession : User
+              const result = await Model.deleteMany({}).maxTimeMS(5000)
+              console.log(`Fallback deleteMany for ${collectionName}: deleted ${result.deletedCount} documents`)
+              cleared = true
+              clearedCount++
+            } catch (deleteErr) {
+              console.error(`Fallback deleteMany for ${collectionName} also failed:`, deleteErr.message)
+            }
+            break
+          }
+
+          // Add exponential backoff delay between retries
+          const delay = Math.min(100 * Math.pow(2, retryCount - 1), 500)
+          await new Promise(resolve => setTimeout(resolve, delay))
         }
+      }
+
+      // Add delay between collections for better reliability
+      if (cleared) {
+        await new Promise(resolve => setTimeout(resolve, 100))
       }
     }
 
-    console.log(`Test database cleared in ${process.env.NODE_ENV} environment`)
+    // Verification step - ensure collections are actually empty
+    if (clearedCount === collections.length) {
+      console.log('Verifying all collections are empty...')
+      let verificationPassed = true
+
+      for (const collectionName of collections) {
+        try {
+          const count = await db.collection(collectionName).countDocuments()
+          if (count > 0) {
+            console.warn(`Collection ${collectionName} still has ${count} documents after clearing`)
+            verificationPassed = false
+          }
+        } catch (err) {
+          if (err.code !== 26) { // Ignore "namespace not found" errors
+            console.warn(`Could not verify collection ${collectionName}:`, err.message)
+          }
+        }
+      }
+
+      if (verificationPassed) {
+        console.log('All collections verified as empty')
+      } else {
+        console.warn('Some collections may still contain documents')
+      }
+    }
+
+    // Final delay to ensure all operations complete
+    await new Promise(resolve => setTimeout(resolve, 150))
+
+    console.log(`Test database cleared in ${process.env.NODE_ENV} environment (${clearedCount}/${collections.length} collections cleared)`)
   } catch (err) {
     console.error('Failed to clear database:', err)
     // Don't throw error to avoid breaking tests
@@ -198,53 +266,86 @@ export async function loadRooms() {
       await connectToDatabase()
     }
 
-    const rooms = await Room.find({})
+    // Add delay to ensure database is ready after connection and previous operations complete
+    await new Promise(resolve => setTimeout(resolve, 150))
+
+    // Verify connection with a ping before querying
+    await mongoose.connection.db.admin().ping()
+
+    // Add timeout to prevent hanging with retry logic
+    let retryCount = 0
+    const maxRetries = 3
+    let rooms = []
+
+    while (retryCount < maxRetries) {
+      try {
+        rooms = await Room.find({}).maxTimeMS(5000).exec()
+        break
+      } catch (findError) {
+        retryCount++
+        console.warn(`Room load attempt ${retryCount} failed:`, findError.message)
+
+        if (retryCount >= maxRetries) {
+          throw findError
+        }
+
+        // Add exponential backoff delay between retries
+        const delay = Math.min(100 * Math.pow(2, retryCount - 1), 500)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
     const roomsMap = new Map()
+
     rooms.forEach(room => {
-      const roomObj = room.toObject ? room.toObject() : room
-      // Ensure roomObj has required properties
-      if (!roomObj) {
+      // Ensure room has required properties
+      if (!room) {
         console.warn('Found null/undefined room, skipping')
         return
       }
 
-      if (!roomObj.code) {
-        console.warn('Found room without code, skipping:', roomObj)
+      if (!room.code) {
+        console.warn('Found room without code, skipping:', room)
         return
       }
 
       // Validate that required properties exist
-      if (!roomObj.players || !Array.isArray(roomObj.players)) {
-        console.warn('Found room without valid players array, skipping:', roomObj.code)
+      if (!room.players || !Array.isArray(room.players)) {
+        console.warn('Found room without valid players array, skipping:', room.code)
         return
       }
 
-      if (!roomObj.gameState) {
-        console.warn('Found room without gameState, skipping:', roomObj.code)
+      if (!room.gameState) {
+        console.warn('Found room without gameState, skipping:', room.code)
         return
       }
 
       // Validate critical gameState properties
-      if (typeof roomObj.gameState.gameStarted !== 'boolean') {
-        console.warn('Found room with invalid gameStarted state, skipping:', roomObj.code)
+      if (typeof room.gameState.gameStarted !== 'boolean') {
+        console.warn('Found room with invalid gameStarted state, skipping:', room.code)
         return
       }
 
       // Convert plain objects back to Maps for game logic
-      if (roomObj.gameState) {
-        if (roomObj.gameState.playerHands && typeof roomObj.gameState.playerHands === 'object') {
-          roomObj.gameState.playerHands = new Map(Object.entries(roomObj.gameState.playerHands))
+      if (room.gameState) {
+        if (room.gameState.playerHands && typeof room.gameState.playerHands === 'object') {
+          room.gameState.playerHands = new Map(Object.entries(room.gameState.playerHands))
         }
-        if (roomObj.gameState.shields && typeof roomObj.gameState.shields === 'object') {
-          roomObj.gameState.shields = new Map(Object.entries(roomObj.gameState.shields))
+        if (room.gameState.shields && typeof room.gameState.shields === 'object') {
+          room.gameState.shields = new Map(Object.entries(room.gameState.shields))
         }
-        if (roomObj.gameState.playerActions && typeof roomObj.gameState.playerActions === 'object') {
-          roomObj.gameState.playerActions = new Map(Object.entries(roomObj.gameState.playerActions))
+        if (room.gameState.playerActions && typeof room.gameState.playerActions === 'object') {
+          room.gameState.playerActions = new Map(Object.entries(room.gameState.playerActions))
         }
       }
-      roomsMap.set(roomObj.code, roomObj)
+      roomsMap.set(room.code, room)
     })
-    console.log(`Loaded ${roomsMap.size} rooms from database`)
+
+    console.log(`Loaded ${roomsMap.size} rooms from database (found ${rooms.length} total)`)
+
+    // Final delay to ensure all operations are completed
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     return roomsMap
   } catch (err) {
     console.error('Failed to load rooms:', err)
@@ -261,6 +362,9 @@ export async function saveRoom(roomData) {
       await connectToDatabase()
     }
 
+    // Add delay to ensure database is ready after connection and previous operations complete
+    await new Promise(resolve => setTimeout(resolve, 150))
+
     if (!roomData || !roomData.code) {
       throw new Error('Room data and code are required')
     }
@@ -274,27 +378,81 @@ export async function saveRoom(roomData) {
       throw new Error('Room data must include gameState')
     }
 
-    // Create a deep copy of the room data
-    const roomDataToSave = JSON.parse(JSON.stringify(roomData))
-
-    // Convert Map objects to plain objects for database storage
-    if (roomDataToSave.gameState) {
-      if (roomDataToSave.gameState.playerHands instanceof Map) {
-        roomDataToSave.gameState.playerHands = Object.fromEntries(roomDataToSave.gameState.playerHands)
+    // Convert Map objects to plain objects before deep copy to preserve data
+    const roomDataCopy = { ...roomData }
+    if (roomDataCopy.gameState) {
+      if (roomDataCopy.gameState.playerHands instanceof Map) {
+        roomDataCopy.gameState.playerHands = Object.fromEntries(roomDataCopy.gameState.playerHands)
       }
-      if (roomDataToSave.gameState.shields instanceof Map) {
-        roomDataToSave.gameState.shields = Object.fromEntries(roomDataToSave.gameState.shields)
+      if (roomDataCopy.gameState.shields instanceof Map) {
+        roomDataCopy.gameState.shields = Object.fromEntries(roomDataCopy.gameState.shields)
       }
-      if (roomDataToSave.gameState.playerActions instanceof Map) {
-        roomDataToSave.gameState.playerActions = Object.fromEntries(roomDataToSave.gameState.playerActions)
+      if (roomDataCopy.gameState.playerActions instanceof Map) {
+        roomDataCopy.gameState.playerActions = Object.fromEntries(roomDataCopy.gameState.playerActions)
       }
     }
 
-    const result = await Room.findOneAndUpdate(
-      { code: roomData.code },
-      roomDataToSave,
-      { upsert: true, new: true }
-    )
+    // Create a deep copy of the room data after Map conversion
+    const roomDataToSave = JSON.parse(JSON.stringify(roomDataCopy))
+
+    // Use findOneAndUpdate with atomic operation and comprehensive verification
+    let retryCount = 0
+    const maxRetries = 3
+    let result = null
+
+    while (retryCount < maxRetries && !result) {
+      try {
+        result = await Room.findOneAndUpdate(
+          { code: roomData.code },
+          roomDataToSave,
+          {
+            upsert: true,
+            new: true,
+            runValidators: false, // Disable strict validation for test flexibility
+            maxTimeMS: 5000, // Add timeout to prevent hanging
+            writeConcern: { w: 1, j: true } // Ensure write acknowledgment
+          }
+        )
+
+        // Verify the save was successful
+        if (!result) {
+          throw new Error(`Failed to save room: Room not found after save operation for code ${roomData.code}`)
+        }
+
+        if (result.code !== roomData.code) {
+          throw new Error(`Save verification failed: Expected room code ${roomData.code}, got ${result.code}`)
+        }
+
+        // Additional verification: ensure the document was actually written
+        const verification = await Room.findOne({ code: roomData.code }).maxTimeMS(2000)
+        if (!verification || verification.code !== roomData.code) {
+          throw new Error(`Save verification failed: Document not found after save for code ${roomData.code}`)
+        }
+
+        console.log(`Successfully saved room ${roomData.code} on attempt ${retryCount + 1}`)
+        break
+
+      } catch (saveError) {
+        retryCount++
+        console.warn(`Room save attempt ${retryCount} failed for ${roomData.code}:`, saveError.message)
+
+        if (retryCount >= maxRetries) {
+          throw saveError
+        }
+
+        // Add exponential backoff delay between retries
+        const delay = Math.min(100 * Math.pow(2, retryCount - 1), 500)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
+    if (!result) {
+      throw new Error(`Failed to save room after ${maxRetries} attempts: ${roomData.code}`)
+    }
+
+    // Final delay to ensure MongoDB operation is fully committed
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     return result
   } catch (err) {
     console.error('Failed to save room:', err)
@@ -304,7 +462,74 @@ export async function saveRoom(roomData) {
 
 export async function deleteRoom(roomCode) {
   try {
-    await Room.deleteOne({ code: roomCode })
+    // Ensure database connection before deleting
+    const mongoose = await import('mongoose')
+    if (mongoose.connection.readyState !== 1) {
+      console.log('Database not connected, connecting before deleting room...')
+      await connectToDatabase()
+    }
+
+    // Add delay to ensure database is ready after connection and previous operations complete
+    await new Promise(resolve => setTimeout(resolve, 150))
+
+    if (!roomCode) {
+      throw new Error('Room code is required for deletion')
+    }
+
+    // Verify the room exists before attempting deletion
+    const existingRoom = await Room.findOne({ code: roomCode }).maxTimeMS(3000)
+    if (!existingRoom) {
+      console.log(`Room ${roomCode} does not exist, nothing to delete`)
+      return
+    }
+
+    // Use deleteOne with write concern and verification
+    let retryCount = 0
+    const maxRetries = 3
+    let deleted = false
+
+    while (retryCount < maxRetries && !deleted) {
+      try {
+        const result = await Room.deleteOne(
+          { code: roomCode },
+          { writeConcern: { w: 1, j: true } }
+        ).maxTimeMS(5000)
+
+        if (result.deletedCount === 0) {
+          throw new Error(`No room was deleted for code ${roomCode}`)
+        }
+
+        // Verify the deletion was successful
+        const verification = await Room.findOne({ code: roomCode }).maxTimeMS(2000)
+        if (verification) {
+          throw new Error(`Room ${roomCode} still exists after deletion`)
+        }
+
+        console.log(`Successfully deleted room ${roomCode} on attempt ${retryCount + 1}`)
+        deleted = true
+        break
+
+      } catch (deleteError) {
+        retryCount++
+        console.warn(`Room delete attempt ${retryCount} failed for ${roomCode}:`, deleteError.message)
+
+        if (retryCount >= maxRetries) {
+          throw deleteError
+        }
+
+        // Add exponential backoff delay between retries
+        const delay = Math.min(100 * Math.pow(2, retryCount - 1), 500)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
+    if (!deleted) {
+      throw new Error(`Failed to delete room after ${maxRetries} attempts: ${roomCode}`)
+    }
+
+    // Final delay to ensure MongoDB operation is fully committed
+    await new Promise(resolve => setTimeout(resolve, 50))
+
   } catch (err) {
     console.error('Failed to delete room:', err)
     throw err
@@ -321,22 +546,57 @@ export async function loadPlayerSessions() {
       await connectToDatabase()
     }
 
-    const sessions = await PlayerSession.find({ isActive: true })
+    // Add delay to ensure database is ready after connection and previous operations complete
+    await new Promise(resolve => setTimeout(resolve, 150))
+
+    // Verify connection with a ping before querying
+    await mongoose.connection.db.admin().ping()
+
+    // Add timeout with retry logic
+    let retryCount = 0
+    const maxRetries = 3
+    let sessions = []
+
+    while (retryCount < maxRetries) {
+      try {
+        sessions = await PlayerSession.find({ isActive: true }).maxTimeMS(5000).exec()
+        break
+      } catch (findError) {
+        retryCount++
+        console.warn(`Session load attempt ${retryCount} failed:`, findError.message)
+
+        if (retryCount >= maxRetries) {
+          throw findError
+        }
+
+        // Add exponential backoff delay between retries
+        const delay = Math.min(100 * Math.pow(2, retryCount - 1), 500)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
     const sessionsMap = new Map()
+
     sessions.forEach(session => {
-      const sessionObj = session.toObject ? session.toObject() : session
-      // Ensure sessionObj has required properties
-      if (!sessionObj || !sessionObj.userId) {
-        console.warn('Found session without userId, skipping:', sessionObj)
+      // Ensure session has required properties
+      if (!session || !session.userId) {
+        console.warn('Found session without userId, skipping:', session)
         return
       }
 
       // Double-check that session is actually active (in case of query issues)
-      if (sessionObj.isActive === true) {
-        sessionsMap.set(sessionObj.userId, sessionObj)
+      if (session.isActive === true) {
+        sessionsMap.set(session.userId, session)
+      } else {
+        console.warn(`Skipping inactive session: ${session.userId}, isActive: ${session.isActive}`)
       }
     })
-    console.log(`Loaded ${sessionsMap.size} active sessions from database`)
+
+    console.log(`Loaded ${sessionsMap.size} active sessions from database (found ${sessions.length} total)`)
+
+    // Final delay to ensure all operations are completed
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     return sessionsMap
   } catch (err) {
     console.error('Failed to load sessions:', err)
@@ -346,6 +606,11 @@ export async function loadPlayerSessions() {
 
 export async function savePlayerSession(sessionData) {
   try {
+    // Validate input data
+    if (!sessionData || !sessionData.userId) {
+      throw new Error('Session data and userId are required')
+    }
+
     // Ensure database connection before saving session
     const mongoose = await import('mongoose')
     if (mongoose.connection.readyState !== 1) {
@@ -353,11 +618,67 @@ export async function savePlayerSession(sessionData) {
       await connectToDatabase()
     }
 
-    const result = await PlayerSession.findOneAndUpdate(
-      { userId: sessionData.userId },
-      sessionData,
-      { upsert: true, new: true }
-    )
+    // Add delay to ensure database is ready after connection and previous operations complete
+    await new Promise(resolve => setTimeout(resolve, 150))
+
+    // Use findOneAndUpdate with atomic operation and comprehensive verification
+    let retryCount = 0
+    const maxRetries = 3
+    let result = null
+
+    while (retryCount < maxRetries && !result) {
+      try {
+        result = await PlayerSession.findOneAndUpdate(
+          { userId: sessionData.userId },
+          sessionData,
+          {
+            upsert: true,
+            new: true,
+            runValidators: false, // Disable strict validation for test flexibility
+            maxTimeMS: 5000, // Add timeout to prevent hanging
+            writeConcern: { w: 1, j: true } // Ensure write acknowledgment
+          }
+        )
+
+        // Verify the save was successful
+        if (!result) {
+          throw new Error(`Failed to save player session: Session not found after save operation for userId ${sessionData.userId}`)
+        }
+
+        if (result.userId !== sessionData.userId) {
+          throw new Error(`Save verification failed: Expected userId ${sessionData.userId}, got ${result.userId}`)
+        }
+
+        // Additional verification: ensure the document was actually written
+        const verification = await PlayerSession.findOne({ userId: sessionData.userId }).maxTimeMS(2000)
+        if (!verification || verification.userId !== sessionData.userId) {
+          throw new Error(`Save verification failed: Document not found after save for userId ${sessionData.userId}`)
+        }
+
+        console.log(`Successfully saved player session ${sessionData.userId} on attempt ${retryCount + 1}`)
+        break
+
+      } catch (saveError) {
+        retryCount++
+        console.warn(`Player session save attempt ${retryCount} failed for ${sessionData.userId}:`, saveError.message)
+
+        if (retryCount >= maxRetries) {
+          throw saveError
+        }
+
+        // Add exponential backoff delay between retries
+        const delay = Math.min(100 * Math.pow(2, retryCount - 1), 500)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
+    if (!result) {
+      throw new Error(`Failed to save player session after ${maxRetries} attempts: ${sessionData.userId}`)
+    }
+
+    // Final delay to ensure MongoDB operation is fully committed
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     return result
   } catch (err) {
     console.error('Failed to save player session:', err)

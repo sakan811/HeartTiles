@@ -96,6 +96,9 @@ describe('Database Operations', () => {
       // Save room
       await saveRoom(roomData)
 
+      // Add strategic delay to ensure MongoDB operation completes
+      await new Promise(resolve => setTimeout(resolve, 100))
+
       // Load rooms
       const rooms = await loadRooms()
       expect(rooms.size).toBe(1)
@@ -152,6 +155,9 @@ describe('Database Operations', () => {
       // Save initial room
       await saveRoom(initialRoomData)
 
+      // Add strategic delay to ensure MongoDB operation completes
+      await new Promise(resolve => setTimeout(resolve, 100))
+
       // Update room
       const updatedRoomData = {
         ...initialRoomData,
@@ -167,6 +173,9 @@ describe('Database Operations', () => {
       }
 
       await saveRoom(updatedRoomData)
+
+      // Add strategic delay to ensure MongoDB operation completes
+      await new Promise(resolve => setTimeout(resolve, 100))
 
       // Load and verify updated room
       const rooms = await loadRooms()
@@ -214,11 +223,19 @@ describe('Database Operations', () => {
 
       // Save room
       await saveRoom(roomData)
+
+      // Add strategic delay to ensure MongoDB operation completes
+      await new Promise(resolve => setTimeout(resolve, 100))
+
       let rooms = await loadRooms()
       expect(rooms.has(`TESTDEL${testTimestamp}`)).toBe(true)
 
       // Delete room
       await deleteRoom(`TESTDEL${testTimestamp}`)
+
+      // Add strategic delay to ensure MongoDB operation completes
+      await new Promise(resolve => setTimeout(resolve, 100))
+
       rooms = await loadRooms()
       expect(rooms.has(`TESTDEL${testTimestamp}`)).toBe(false)
     })
@@ -359,8 +376,14 @@ describe('Database Operations', () => {
         await savePlayerSession(activeSessionData)
         console.log('Active session saved successfully')
 
+        // Add strategic delay to ensure MongoDB operation completes
+        await new Promise(resolve => setTimeout(resolve, 100))
+
         await savePlayerSession(inactiveSessionData)
         console.log('Inactive session saved successfully')
+
+        // Add strategic delay to ensure MongoDB operation completes
+        await new Promise(resolve => setTimeout(resolve, 100))
       } catch (error) {
         console.error('Error saving sessions:', error)
         throw error
@@ -423,8 +446,8 @@ describe('Database Operations', () => {
         email: 'invalid@test.com'
       }
 
-      // Should not throw an error, but handle it gracefully
-      await expect(savePlayerSession(invalidSessionData)).resolves.not.toThrow()
+      // Should throw a validation error for invalid data (improved behavior)
+      await expect(savePlayerSession(invalidSessionData)).rejects.toThrow('Session data and userId are required')
     })
   })
 
