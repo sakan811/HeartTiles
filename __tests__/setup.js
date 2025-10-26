@@ -45,7 +45,12 @@ const mockMongoose = {
     readyState: 1,
     on: vi.fn(),
     once: vi.fn(),
-    close: vi.fn()
+    close: vi.fn(),
+    db: {
+      admin: vi.fn().mockResolvedValue({
+        ping: vi.fn().mockResolvedValue(true)
+      })
+    }
   }
 }
 
