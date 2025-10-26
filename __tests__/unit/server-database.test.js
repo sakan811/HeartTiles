@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-describe('Server Database Functions (lines 26-93) - Testing Internal Functions', () => {
+describe('Server Database Operations and Logic', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Set test environment
     process.env.NODE_ENV = 'test'
     process.env.MONGODB_URI = 'mongodb://localhost:27017/test-db'
+
+    // Mock console methods to test error handling behavior
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -182,7 +186,6 @@ describe('Server Database Functions (lines 26-93) - Testing Internal Functions',
     it('should demonstrate fallback to empty collections on errors', async () => {
       // Test the fallback pattern used when database operations fail
       const mockOperation = vi.fn()
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
       // Simulate database error
       mockOperation.mockRejectedValue(new Error('Connection failed'))
@@ -197,9 +200,241 @@ describe('Server Database Functions (lines 26-93) - Testing Internal Functions',
         result = new Map() // Fallback to empty map
       }
 
-      expect(consoleSpy).toHaveBeenCalled()
+      expect(console.error).toHaveBeenCalled()
       expect(result).toBeInstanceOf(Map)
       expect(result.size).toBe(0)
+    })
+  })
+
+  describe('MongoDB Connection Logic', () => {
+    it('should log successful MongoDB connection', async () => {
+      // Set environment for testing
+      process.env.NODE_ENV = 'test'
+      process.env.MONGODB_URI = 'mongodb://test'
+
+      // Import and test the connectToDatabase function
+      const { connectToDatabase } = await import('../../server.js')
+
+      // Reset console.log mock to track new calls
+      console.log.mockClear()
+
+      await connectToDatabase()
+
+      // Verify success logging was called
+      expect(console.log).toHaveBeenCalledWith('Connected to MongoDB')
+    })
+
+    it('should handle connection errors in test environment', async () => {
+      // Set environment for testing
+      process.env.NODE_ENV = 'test'
+
+      // Mock mongoose.connect to throw an error
+      const mongoose = await import('mongoose')
+      mongoose.default.connect.mockRejectedValueOnce(new Error('Connection failed'))
+
+      const { connectToDatabase } = await import('../../server.js')
+
+      // Should throw in test environment instead of calling process.exit
+      await expect(connectToDatabase()).rejects.toThrow('process.exit called')
+    })
+  })
+
+  describe('Database Error Handling Logic', () => {
+    describe('loadRooms function error handling', () => {
+      it('should handle database errors gracefully', async () => {
+        const { Room } = await import('../../models.js')
+        Room.find.mockRejectedValue(new Error('Database connection lost'))
+
+        const { loadRooms } = await import('../../server.js')
+        const result = await loadRooms()
+
+        // Should return empty Map on error
+        expect(result).toBeInstanceOf(Map)
+        expect(result.size).toBe(0)
+        expect(console.error).toHaveBeenCalledWith('Failed to load rooms:', expect.any(Error))
+      })
+
+      it('should handle null/undefined values in database results', async () => {
+        const { Room } = await import('../../models.js')
+        // Simulate database returning null/undefined values
+        Room.find.mockResolvedValue([null, undefined, { code: 'VALID', players: [], gameState: { gameStarted: false } }])
+
+        const { loadRooms } = await import('../../server.js')
+        const result = await loadRooms()
+
+        // Should handle errors and return empty map when null values cause issues
+        expect(result).toBeInstanceOf(Map)
+        expect(result.size).toBe(0)
+        expect(console.error).toHaveBeenCalledWith('Failed to load rooms:', expect.any(Error))
+      })
+
+      it('should load all rooms regardless of structure', async () => {
+        const { Room } = await import('../../models.js')
+        const mockRooms = [
+          {
+            code: 'VALID',
+            players: [],
+            gameState: { gameStarted: false },
+            toObject: () => ({ code: 'VALID', players: [], gameState: { gameStarted: false } })
+          },
+          {
+            code: 'INVALID',
+            players: [], // Missing gameState
+            toObject: () => ({ code: 'INVALID', players: [] })
+          }
+        ]
+
+        Room.find.mockResolvedValue(mockRooms)
+
+        const { loadRooms } = await import('../../server.js')
+        const result = await loadRooms()
+
+        // loadRooms doesn't validate structure - it loads all rooms
+        expect(result).toBeInstanceOf(Map)
+        expect(result.size).toBe(2)
+        expect(result.has('VALID')).toBe(true)
+        expect(result.has('INVALID')).toBe(true)
+      })
+    })
+
+    describe('saveRoom function error handling', () => {
+      it('should handle save errors gracefully', async () => {
+        const { Room } = await import('../../models.js')
+        Room.findOneAndUpdate.mockRejectedValue(new Error('Database write failed'))
+
+        const { saveRoom } = await import('../../server.js')
+        const roomData = { code: 'TEST', players: [], gameState: {} }
+
+        // Should not throw, but should log error
+        await expect(saveRoom(roomData)).resolves.toBeUndefined()
+        expect(console.error).toHaveBeenCalledWith('Failed to save room:', expect.any(Error))
+      })
+    })
+
+    describe('deleteRoom function error handling', () => {
+      it('should handle deletion errors gracefully', async () => {
+        const { Room } = await import('../../models.js')
+        Room.deleteOne.mockRejectedValue(new Error('Database delete failed'))
+
+        const { deleteRoom } = await import('../../server.js')
+
+        // Should not throw, but should log error
+        await expect(deleteRoom('TEST')).resolves.toBeUndefined()
+        expect(console.error).toHaveBeenCalledWith('Failed to delete room:', expect.any(Error))
+      })
+    })
+
+    describe('loadPlayerSessions function error handling', () => {
+      it('should handle database errors gracefully', async () => {
+        const { PlayerSession } = await import('../../models.js')
+        PlayerSession.find.mockRejectedValue(new Error('Session database connection lost'))
+
+        const { loadPlayerSessions } = await import('../../server.js')
+        const result = await loadPlayerSessions()
+
+        // Should return empty Map on error
+        expect(result).toBeInstanceOf(Map)
+        expect(result.size).toBe(0)
+        expect(console.error).toHaveBeenCalledWith('Failed to load sessions:', expect.any(Error))
+      })
+
+      it('should handle null/undefined values in session results', async () => {
+        const { PlayerSession } = await import('../../models.js')
+        // Simulate database returning null/undefined values
+        PlayerSession.find.mockResolvedValue([null, undefined])
+
+        const { loadPlayerSessions } = await import('../../server.js')
+        const result = await loadPlayerSessions()
+
+        // Should handle errors and return empty map when null values cause issues
+        expect(result).toBeInstanceOf(Map)
+        expect(result.size).toBe(0)
+        expect(console.error).toHaveBeenCalledWith('Failed to load sessions:', expect.any(Error))
+      })
+
+      it('should load all active sessions regardless of structure', async () => {
+        const { PlayerSession } = await import('../../models.js')
+        const mockSessions = [
+          {
+            userId: 'validUser',
+            isActive: true,
+            name: 'Valid Player',
+            toObject: () => ({ userId: 'validUser', isActive: true, name: 'Valid Player' })
+          },
+          {
+            isActive: true,
+            name: 'Invalid Player', // Missing userId
+            toObject: () => ({ isActive: true, name: 'Invalid Player' })
+          }
+        ]
+
+        PlayerSession.find.mockResolvedValue(mockSessions)
+
+        const { loadPlayerSessions } = await import('../../server.js')
+        const result = await loadPlayerSessions()
+
+        // loadPlayerSessions doesn't validate structure - it loads all active sessions
+        expect(result).toBeInstanceOf(Map)
+        expect(result.size).toBe(2) // Both sessions are added, one with undefined key
+        expect(result.has('validUser')).toBe(true)
+        expect(result.has(undefined)).toBe(true) // Session without userId is mapped to undefined key
+      })
+    })
+
+    describe('savePlayerSession function error handling', () => {
+      it('should handle save errors gracefully', async () => {
+        const { PlayerSession } = await import('../../models.js')
+        PlayerSession.findOneAndUpdate.mockRejectedValue(new Error('Session save failed'))
+
+        const { savePlayerSession } = await import('../../server.js')
+        const sessionData = { userId: 'testUser', name: 'Test Player' }
+
+        // Should not throw, but should log error
+        await expect(savePlayerSession(sessionData)).resolves.toBeUndefined()
+        expect(console.error).toHaveBeenCalledWith('Failed to save player session:', expect.any(Error))
+      })
+    })
+  })
+
+  describe('Data Validation Logic', () => {
+    it('should validate room code format', async () => {
+      // Test that room code validation works correctly
+      const { validateRoomCode } = await import('../../server.js')
+
+      // Test valid room codes
+      expect(validateRoomCode('ABC123')).toBe(true)
+      expect(validateRoomCode('123456')).toBe(true)
+      expect(validateRoomCode('XYZ987')).toBe(true)
+
+      // Test invalid room codes
+      expect(validateRoomCode('123')).toBe(false) // too short
+      expect(validateRoomCode('1234567')).toBe(false) // too long
+      expect(validateRoomCode('ABC12!')).toBe(false) // special character
+      expect(validateRoomCode('')).toBe(false) // empty
+      expect(validateRoomCode(null)).toBe(false) // null
+      expect(validateRoomCode(undefined)).toBe(false) // undefined
+    })
+
+    it('should handle invalid room data gracefully', async () => {
+      const { Room } = await import('../../models.js')
+      Room.findOneAndUpdate.mockRejectedValue(new Error('Validation failed'))
+
+      const { saveRoom } = await import('../../server.js')
+
+      // Test with undefined room data
+      await expect(saveRoom(undefined)).resolves.toBeUndefined()
+      expect(console.error).toHaveBeenCalledWith('Failed to save room:', expect.any(Error))
+    })
+
+    it('should handle invalid session data gracefully', async () => {
+      const { PlayerSession } = await import('../../models.js')
+      PlayerSession.findOneAndUpdate.mockRejectedValue(new Error('Session validation failed'))
+
+      const { savePlayerSession } = await import('../../server.js')
+
+      // Test with undefined session data
+      await expect(savePlayerSession(undefined)).resolves.toBeUndefined()
+      expect(console.error).toHaveBeenCalledWith('Failed to save player session:', expect.any(Error))
     })
   })
 })

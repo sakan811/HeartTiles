@@ -39,6 +39,7 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: 'unit',
           include: ['__tests__/unit/**/*.{test,spec}.{js,ts}'],
           exclude: ['**/integration/**', '**/e2e/**', '**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
           environment: 'node',
@@ -56,6 +57,7 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'integration',
           include: ['__tests__/integration/**/*.{test,spec}.{js,ts}'],
           exclude: ['**/unit/**', '**/e2e/**', '**/components/**/*.test.*', '**/contexts/**/*.test.*', '**/*.test.jsx', '**/*.test.tsx'],
           environment: 'node',
@@ -77,6 +79,7 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'other',
           include: ['**/*.test.jsx', '**/*.test.tsx', '**/components/**/*.test.*', '**/contexts/**/*.test.*'],
           exclude: ['node_modules', '**/integration/**', '**/unit/**'],
           environment: 'happy-dom',

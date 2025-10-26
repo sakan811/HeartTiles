@@ -1641,6 +1641,11 @@ if (process.env.NODE_ENV !== 'test') {
 export {
   // Database and connection functions
   connectToDatabase,
+  loadRooms,
+  saveRoom,
+  deleteRoom,
+  loadPlayerSessions,
+  savePlayerSession,
 
   // Room and player management
   validateRoomCode,

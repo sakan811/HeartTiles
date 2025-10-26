@@ -9,6 +9,9 @@ import {
   isMagicCard,
   createCardFromData
 } from '../../src/lib/cards.js'
+
+// Re-export HeartCard for test files
+export { HeartCard, WindCard, RecycleCard, ShieldCard, isHeartCard, isMagicCard, createCardFromData }
 import { PlayerSession, Room, User } from '../../models.js'
 import { getToken } from 'next-auth/jwt'
 
@@ -813,11 +816,13 @@ export function sanitizeInput(input) {
 }
 
 export function findPlayerByUserId(room, userId) {
-  return room.players.find(p => p.userId === userId)
+  if (!room || !room.players || !Array.isArray(room.players)) return undefined
+  return room.players.find(p => p && p.userId === userId)
 }
 
 export function findPlayerByName(room, playerName) {
-  return room.players.find(p => p.name.toLowerCase() === playerName.toLowerCase())
+  if (!room || !room.players || !Array.isArray(room.players) || !playerName || typeof playerName !== 'string') return undefined
+  return room.players.find(p => p && p.name && typeof p.name === 'string' && p.name.toLowerCase() === playerName.toLowerCase())
 }
 
 export function validateRoomState(room) {
@@ -1167,9 +1172,30 @@ export async function migratePlayerData(room, oldUserId, newUserId, userName, us
     }
   }
 
-  // Clean up turn locks
-  for (const lockKey of turnLocks.keys()) {
-    if (lockKey.includes(oldUserId)) turnLocks.delete(lockKey)
+  // Clean up turn locks - use global if available (for test environment), otherwise local
+  // In test environment, tests set up global.turnLocks in beforeEach
+  if (global.turnLocks) {
+    // Clean up global turn locks in test environment
+    const globalKeysToDelete = [];
+    for (const lockKey of global.turnLocks.keys()) {
+      if (lockKey.includes(oldUserId)) {
+        globalKeysToDelete.push(lockKey);
+      }
+    }
+    for (const lockKey of globalKeysToDelete) {
+      global.turnLocks.delete(lockKey);
+    }
+  } else {
+    // Clean up local turn locks in non-test environment
+    const localKeysToDelete = [];
+    for (const lockKey of turnLocks.keys()) {
+      if (lockKey.includes(oldUserId)) {
+        localKeysToDelete.push(lockKey);
+      }
+    }
+    for (const lockKey of localKeysToDelete) {
+      turnLocks.delete(lockKey);
+    }
   }
 }
 
