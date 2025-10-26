@@ -129,10 +129,6 @@ vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn(),
 }))
 
-// NOTE: For integration tests, we provide flexible mocking approach
-// Models are mocked by default, but individual tests can unmock them for real database operations
-// This allows both pure integration tests and mixed scenario tests
-
 // Mock bcryptjs
 vi.mock('bcryptjs', () => ({
   default: {
@@ -142,40 +138,9 @@ vi.mock('bcryptjs', () => ({
   }
 }))
 
-// Mock models for integration tests (can be unmocked by individual tests)
-vi.mock('../../models.js', () => ({
-  User: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  PlayerSession: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  Room: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  deleteRoom: vi.fn(),
-}))
+// NOTE: For integration tests, we need real models, not mocked ones
+// The models will be imported directly for real database operations
+// Only mock for unit tests, not integration tests
 
 // Mock mongoose for database connection (but allow real connection for integration tests)
 const mockMongooseConnect = vi.fn()

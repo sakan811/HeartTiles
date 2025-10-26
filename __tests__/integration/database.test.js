@@ -74,21 +74,21 @@ describe('Database Operations', () => {
             { id: 1, color: 'white', emoji: '⬜' }
           ],
           gameStarted: true,
-          currentPlayer: { userId: 'user-1', name: 'Player 1' },
+          currentPlayer: { userId: `user-1-${testTimestamp}`, name: 'Player 1' },
           deck: { emoji: '💌', cards: 12, },
           magicDeck: { emoji: '🔮', cards: 10, },
           playerHands: {
-            'user-1': [
+            [`user-1-${testTimestamp}`]: [
               { id: 'heart-1', type: 'heart', color: 'red', value: 2, emoji: '❤️' }
             ],
-            'user-2': [
+            [`user-2-${testTimestamp}`]: [
               { id: 'heart-2', type: 'heart', color: 'yellow', value: 1, emoji: '💛' }
             ]
           },
           turnCount: 3,
           playerActions: {
-            'user-1': { drawnHeart: true, drawnMagic: false, heartsPlaced: 1, magicCardsUsed: 0 },
-            'user-2': { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
+            [`user-1-${testTimestamp}`]: { drawnHeart: true, drawnMagic: false, heartsPlaced: 1, magicCardsUsed: 0 },
+            [`user-2-${testTimestamp}`]: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
           }
         }
       }
@@ -341,8 +341,14 @@ describe('Database Operations', () => {
       await savePlayerSession(activeSessionData)
       await savePlayerSession(inactiveSessionData)
 
+      // Verify sessions were saved by checking directly in database
+      const allSessions = await PlayerSession.find({})
+      console.log('All sessions in DB:', allSessions.map(s => ({ userId: s.userId, isActive: s.isActive })))
+
       // Load sessions - should only return active ones
       const sessions = await loadPlayerSessions()
+      console.log('Loaded sessions count:', sessions.size, 'expected: 1')
+
       expect(sessions.size).toBe(1)
       expect(sessions.has(`user-active-${testTimestamp}`)).toBe(true)
       expect(sessions.has(`user-inactive-${testTimestamp}`)).toBe(false)
