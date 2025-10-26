@@ -13,22 +13,7 @@ vi.mock('../../src/lib/cards', () => ({
   }
 }))
 
-// Mock dependencies
-vi.mock('../../../models', () => ({
-  PlayerSession: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
-  },
-  Room: {
-    find: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    deleteOne: vi.fn()
-  },
-  User: {
-    findById: vi.fn()
-  }
-}))
+// Note: Models are not mocked for integration tests to use real database operations
 
 vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn()
@@ -103,18 +88,22 @@ describe('Complete Game Flows Integration Tests', () => {
 
   describe('Complete Game Lifecycle', () => {
     it('should handle full game from room creation to game end', async () => {
+      // Unmock models for this test to use real database operations
+      vi.unmock('../../models.js')
+
       const { Room, PlayerSession, User } = await import('../../../models')
       const { generateTiles, validateRoomCode, sanitizeInput } = await import('../../server.js')
             const { calculateScore } = await import('../../server.js')
 
-      // Mock database operations
-      Room.findOneAndUpdate.mockResolvedValue({})
-      PlayerSession.findOneAndUpdate.mockResolvedValue({})
-      User.findById.mockResolvedValue({
-        _id: 'user1',
-        email: 'user1@example.com',
-        name: 'User1'
-      })
+      // Setup test user in real database for integration testing - use unique email to avoid duplicates
+      const uniqueEmail = `user1-${Date.now()}@example.com`
+      const testUser = {
+        email: uniqueEmail,
+        name: 'User1',
+        password: 'password123' // Required field
+      }
+      // Create test user in real database - let MongoDB generate the _id
+      const createdUser = await User.create(testUser)
 
       // Mock card generation
       const mockHeartCard = {
@@ -134,10 +123,10 @@ describe('Complete Game Flows Integration Tests', () => {
       HeartCard.generateRandom.mockReturnValue(mockHeartCard)
       generateRandomMagicCard.mockReturnValue(mockMagicCard)
 
-      // Step 1: Room Creation
-      const roomCode = 'GAM123'
+      // Step 1: Room Creation - use unique room code to avoid duplicates
+      const roomCode = `GAM${Date.now()}`
       expect(validateRoomCode(roomCode)).toBe(true)
-      const sanitizedCode = sanitizeInput(roomCode.toUpperCase())
+      const sanitizedCode = sanitizeInput(roomCode.toUpperCase().slice(0, 6)) // Ensure 6 characters
 
       const room = {
         code: sanitizedCode,
@@ -159,10 +148,11 @@ describe('Complete Game Flows Integration Tests', () => {
       rooms.set(sanitizedCode, room)
 
       // Step 2: First Player Joins
+      const user1Id = createdUser._id || createdUser.id || `user1-${Date.now()}`
       const player1 = {
-        userId: 'user1',
+        userId: user1Id,
         name: 'User1',
-        email: 'user1@example.com',
+        email: uniqueEmail,
         isReady: false,
         score: 0,
         joinedAt: new Date()
@@ -170,13 +160,14 @@ describe('Complete Game Flows Integration Tests', () => {
       room.players.push(player1)
 
       expect(room.players).toHaveLength(1)
-      expect(room.players[0].userId).toBe('user1')
+      expect(room.players[0].userId).toBe(user1Id)
 
       // Step 3: Second Player Joins
+      const user2Id = `user2-${Date.now()}`
       const player2 = {
-        userId: 'user2',
+        userId: user2Id,
         name: 'User2',
-        email: 'user2@example.com',
+        email: `user2-${Date.now()}@example.com`,
         isReady: false,
         score: 0,
         joinedAt: new Date()
@@ -184,7 +175,7 @@ describe('Complete Game Flows Integration Tests', () => {
       room.players.push(player2)
 
       expect(room.players).toHaveLength(2)
-      expect(room.players[1].userId).toBe('user2')
+      expect(room.players[1].userId).toBe(user2Id)
 
       // Step 4: Players Ready Up
       room.players.forEach(player => {
@@ -216,33 +207,33 @@ describe('Complete Game Flows Integration Tests', () => {
           }
         })
 
-        expect(room.gameState.playerHands.user1).toHaveLength(5)
-        expect(room.gameState.playerHands.user2).toHaveLength(5)
+        expect(room.gameState.playerHands[user1Id]).toHaveLength(5)
+        expect(room.gameState.playerHands[user2Id]).toHaveLength(5)
 
         // Select starting player
         room.gameState.currentPlayer = room.players[0]
         room.gameState.turnCount = 1
 
-        expect(room.gameState.currentPlayer.userId).toBe('user1')
+        expect(room.gameState.currentPlayer.userId).toBe(user1Id)
         expect(room.gameState.turnCount).toBe(1)
       }
 
       // Step 6: First Turn - Player1 draws cards and places heart
       const currentTurnPlayer = room.gameState.currentPlayer.userId
-      expect(currentTurnPlayer).toBe('user1')
+      expect(currentTurnPlayer).toBe(user1Id)
 
       // Draw heart
       const newHeart = HeartCard.generateRandom()
-      room.gameState.playerHands.user1.push(newHeart)
+      room.gameState.playerHands[user1Id].push(newHeart)
       room.gameState.deck.cards--
 
       // Draw magic
       const newMagic = generateRandomMagicCard()
-      room.gameState.playerHands.user1.push(newMagic)
+      room.gameState.playerHands[user1Id].push(newMagic)
       room.gameState.magicDeck.cards--
 
       // Place heart on tile
-      const heartToPlace = room.gameState.playerHands.user1.find(c => c.type === 'heart')
+      const heartToPlace = room.gameState.playerHands[user1Id].find(c => c.type === 'heart')
       const targetTile = room.gameState.tiles[0]
       const score = calculateScore(heartToPlace, targetTile)
 
@@ -255,15 +246,15 @@ describe('Complete Game Flows Integration Tests', () => {
           value: heartToPlace.value,
           color: heartToPlace.color,
           emoji: heartToPlace.emoji,
-          placedBy: 'user1',
+          placedBy: user1Id,
           score: score,
           originalTileColor: targetTile.color
         }
       }
 
       // Remove heart from hand
-      const heartIndex = room.gameState.playerHands.user1.findIndex(c => c.id === heartToPlace.id)
-      room.gameState.playerHands.user1.splice(heartIndex, 1)
+      const heartIndex = room.gameState.playerHands[user1Id].findIndex(c => c.id === heartToPlace.id)
+      room.gameState.playerHands[user1Id].splice(heartIndex, 1)
 
       expect(room.players[0].score).toBeGreaterThan(0)
       expect(room.gameState.tiles[0].placedHeart).toBeDefined()
@@ -275,7 +266,7 @@ describe('Complete Game Flows Integration Tests', () => {
       room.gameState.currentPlayer = room.players[nextPlayerIndex]
       room.gameState.turnCount++
 
-      expect(room.gameState.currentPlayer.userId).toBe('user2')
+      expect(room.gameState.currentPlayer.userId).toBe(user2Id)
       expect(room.gameState.turnCount).toBe(2)
 
       // Step 8: Continue game until tiles are filled
@@ -284,8 +275,8 @@ describe('Complete Game Flows Integration Tests', () => {
         const tile = room.gameState.tiles[i]
         if (!tile.placedHeart) {
           // Alternate players placing hearts
-          const currentPlayer = i % 2 === 0 ? 'user1' : 'user2'
-          const playerIndex = currentPlayer === 'user1' ? 0 : 1
+          const currentPlayer = i % 2 === 0 ? user1Id : user2Id
+          const playerIndex = currentPlayer === user1Id ? 0 : 1
 
           const heart = { id: `heart-${i}`, type: 'heart', value: 1, color: 'red' }
           const score = calculateScore(heart, tile)
@@ -526,9 +517,12 @@ describe('Complete Game Flows Integration Tests', () => {
 
   describe('Reconnection and Recovery Scenarios', () => {
     it('should handle player reconnection during active game', async () => {
+      // Unmock models for this test to use real database operations
+      vi.unmock('../../models.js')
+
       const { PlayerSession } = await import('../../../models')
 
-      // Mock session data
+      // Create real session data in database
       const existingSession = {
         userId: 'user1',
         userSessionId: 'session1',
@@ -539,9 +533,10 @@ describe('Complete Game Flows Integration Tests', () => {
         isActive: true
       }
 
-      PlayerSession.findOneAndUpdate.mockResolvedValue(existingSession)
+      // Create session in real database
+      await PlayerSession.create(existingSession)
 
-      const roomCode = 'RECONN123'
+      const roomCode = `RECONN${Date.now()}`
       const room = {
         code: roomCode,
         players: [
@@ -636,24 +631,27 @@ describe('Complete Game Flows Integration Tests', () => {
     })
 
     it('should handle game state recovery after server restart', async () => {
+      // Unmock models for this test to use real database operations
+      vi.unmock('../../models.js')
+
       const { Room } = await import('../../../models')
 
       // Mock existing room data from database
       const savedRoomData = {
-        code: 'RECOVERY123',
+        code: 'RECOVE', // Valid 6-character room code
         players: [
-          { userId: 'user1', name: 'User1', score: 12, isReady: true },
-          { userId: 'user2', name: 'User2', score: 18, isReady: true }
+          { userId: 'user1', name: 'User1', email: 'user1@example.com', score: 12, isReady: true },
+          { userId: 'user2', name: 'User2', email: 'user2@example.com', score: 18, isReady: true }
         ],
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: 'user2', name: 'User2' },
           turnCount: 8,
           tiles: [
-            { id: 0, color: 'red', placedHeart: { placedBy: 'user1', value: 3, score: 6 } },
-            { id: 1, color: 'white', placedHeart: { placedBy: 'user2', value: 2, score: 2 } },
-            { id: 2, color: 'green', placedHeart: null },
-            { id: 3, color: 'blue', placedHeart: { placedBy: 'user1', value: 1, score: 0 } }
+            { id: 0, color: 'red', emoji: '🟥', placedHeart: { placedBy: 'user1', value: 3, score: 6 } },
+            { id: 1, color: 'white', emoji: '⬜', placedHeart: { placedBy: 'user2', value: 2, score: 2 } },
+            { id: 2, color: 'green', emoji: '🟩', placedHeart: null },
+            { id: 3, color: 'yellow', emoji: '🟨', placedHeart: { placedBy: 'user1', value: 1, score: 0 } }
           ],
           deck: { emoji: '💌', cards: 5, type: 'hearts' },
           magicDeck: { emoji: '🔮', cards: 8, type: 'magic' },
@@ -676,7 +674,8 @@ describe('Complete Game Flows Integration Tests', () => {
         }
       }
 
-      Room.find.mockResolvedValue([savedRoomData])
+      // Create saved room data in real database
+      await Room.create(savedRoomData)
 
       // Simulate server recovery by loading rooms
       async function loadRooms() {
@@ -696,11 +695,10 @@ describe('Complete Game Flows Integration Tests', () => {
 
       const recoveredRooms = await loadRooms()
 
-      expect(Room.find).toHaveBeenCalled()
       expect(recoveredRooms.size).toBe(1)
-      expect(recoveredRooms.has('RECOVERY123')).toBe(true)
+      expect(recoveredRooms.has('RECOVE')).toBe(true)
 
-      const recoveredRoom = recoveredRooms.get('RECOVERY123')
+      const recoveredRoom = recoveredRooms.get('RECOVE')
       expect(recoveredRoom.gameState.gameStarted).toBe(true)
       expect(recoveredRoom.gameState.currentPlayer.userId).toBe('user2')
       expect(recoveredRoom.gameState.turnCount).toBe(8)
@@ -720,7 +718,7 @@ describe('Complete Game Flows Integration Tests', () => {
     it('should handle rapid successive actions', async () => {
       const { acquireTurnLock, releaseTurnLock } = await import('../../server.js')
 
-      const roomCode = 'RAPID123'
+      const roomCode = `RAPID${Date.now()}`
       const userId = 'user1'
       const actions = []
 

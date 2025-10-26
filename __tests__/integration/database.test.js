@@ -47,20 +47,22 @@ describe('Database Operations', () => {
         return
       }
 
+      // Use unique identifiers to avoid duplicate key errors
+      const testTimestamp = Date.now()
       const roomData = {
-        code: 'TEST01',
+        code: `TEST${testTimestamp}`,
         players: [
           {
-            userId: 'user-1',
+            userId: `user-1-${testTimestamp}`,
             name: 'Player 1',
-            email: 'player1@test.com',
+            email: `player1-${testTimestamp}@test.com`,
             isReady: true,
             score: 10
           },
           {
-            userId: 'user-2',
+            userId: `user-2-${testTimestamp}`,
             name: 'Player 2',
-            email: 'player2@test.com',
+            email: `player2-${testTimestamp}@test.com`,
             isReady: false,
             score: 5
           }
@@ -97,10 +99,10 @@ describe('Database Operations', () => {
       // Load rooms
       const rooms = await loadRooms()
       expect(rooms.size).toBe(1)
-      expect(rooms.has('TEST01')).toBe(true)
+      expect(rooms.has(`TEST${testTimestamp}`)).toBe(true)
 
-      const loadedRoom = rooms.get('TEST01')
-      expect(loadedRoom.code).toBe('TEST01')
+      const loadedRoom = rooms.get(`TEST${testTimestamp}`)
+      expect(loadedRoom.code).toBe(`TEST${testTimestamp}`)
       expect(loadedRoom.players).toHaveLength(2)
       expect(loadedRoom.players[0].name).toBe('Player 1')
       expect(loadedRoom.players[0].score).toBe(10)
@@ -108,7 +110,7 @@ describe('Database Operations', () => {
       expect(loadedRoom.gameState.tiles).toHaveLength(2)
       expect(loadedRoom.gameState.deck.cards).toBe(12)
       expect(loadedRoom.gameState.turnCount).toBe(3)
-      expect(loadedRoom.gameState.playerActions.get('user-1').drawnHeart).toBe(true)
+      expect(loadedRoom.gameState.playerActions.get(`user-1-${testTimestamp}`).drawnHeart).toBe(true)
     })
 
     it('should update existing room', async () => {
@@ -119,10 +121,12 @@ describe('Database Operations', () => {
         return
       }
 
+      // Use unique identifiers to avoid duplicate key errors
+      const testTimestamp = Date.now()
       const initialRoomData = {
-        code: 'TEST02',
+        code: `TESTUPD${testTimestamp}`,
         players: [
-          { userId: 'user-1', name: 'Player 1', email: 'p1@test.com', isReady: false, score: 0 }
+          { userId: `user-1-${testTimestamp}`, name: 'Player 1', email: `p1-${testTimestamp}@test.com`, isReady: false, score: 0 }
         ],
         maxPlayers: 2,
         gameState: {
@@ -134,7 +138,7 @@ describe('Database Operations', () => {
           playerHands: {},
           turnCount: 0,
           playerActions: {
-            'user-1': { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
+            [`user-1-${testTimestamp}`]: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
           }
         }
       }
@@ -146,8 +150,8 @@ describe('Database Operations', () => {
       const updatedRoomData = {
         ...initialRoomData,
         players: [
-          { userId: 'user-1', name: 'Player 1', email: 'p1@test.com', isReady: true, score: 15 },
-          { userId: 'user-2', name: 'Player 2', email: 'p2@test.com', isReady: true, score: 8 }
+          { userId: `user-1-${testTimestamp}`, name: 'Player 1', email: `p1-${testTimestamp}@test.com`, isReady: true, score: 15 },
+          { userId: `user-2-${testTimestamp}`, name: 'Player 2', email: `p2-${testTimestamp}@test.com`, isReady: true, score: 8 }
         ],
         gameState: {
           ...initialRoomData.gameState,
@@ -160,7 +164,7 @@ describe('Database Operations', () => {
 
       // Load and verify updated room
       const rooms = await loadRooms()
-      const loadedRoom = rooms.get('TEST02')
+      const loadedRoom = rooms.get(`TESTUPD${testTimestamp}`)
       expect(loadedRoom.players).toHaveLength(2)
       expect(loadedRoom.players[0].isReady).toBe(true)
       expect(loadedRoom.players[0].score).toBe(15)
@@ -177,8 +181,10 @@ describe('Database Operations', () => {
         return
       }
 
+      // Use unique identifiers to avoid duplicate key errors
+      const testTimestamp = Date.now()
       const roomData = {
-        code: 'TEST03',
+        code: `TESTDEL${testTimestamp}`,
         players: [],
         maxPlayers: 2,
         gameState: {
@@ -196,12 +202,12 @@ describe('Database Operations', () => {
       // Save room
       await saveRoom(roomData)
       let rooms = await loadRooms()
-      expect(rooms.has('TEST03')).toBe(true)
+      expect(rooms.has(`TESTDEL${testTimestamp}`)).toBe(true)
 
       // Delete room
-      await deleteRoom('TEST03')
+      await deleteRoom(`TESTDEL${testTimestamp}`)
       rooms = await loadRooms()
-      expect(rooms.has('TEST03')).toBe(false)
+      expect(rooms.has(`TESTDEL${testTimestamp}`)).toBe(false)
     })
 
     it('should handle room save errors gracefully', async () => {
@@ -234,11 +240,13 @@ describe('Database Operations', () => {
         return
       }
 
+      // Use unique identifiers to avoid duplicate key errors
+      const testTimestamp = Date.now()
       const sessionData = {
-        userId: 'user-1',
-        userSessionId: 'session-123',
+        userId: `user-1-${testTimestamp}`,
+        userSessionId: `session-123-${testTimestamp}`,
         name: 'Test User',
-        email: 'test@example.com',
+        email: `test-${testTimestamp}@example.com`,
         currentSocketId: 'socket-456',
         lastSeen: new Date(),
         isActive: true
@@ -250,11 +258,11 @@ describe('Database Operations', () => {
       // Load sessions
       const sessions = await loadPlayerSessions()
       expect(sessions.size).toBe(1)
-      expect(sessions.has('user-1')).toBe(true)
+      expect(sessions.has(`user-1-${testTimestamp}`)).toBe(true)
 
-      const loadedSession = sessions.get('user-1')
+      const loadedSession = sessions.get(`user-1-${testTimestamp}`)
       expect(loadedSession.name).toBe('Test User')
-      expect(loadedSession.email).toBe('test@example.com')
+      expect(loadedSession.email).toBe(`test-${testTimestamp}@example.com`)
       expect(loadedSession.currentSocketId).toBe('socket-456')
       expect(loadedSession.isActive).toBe(true)
     })
@@ -267,11 +275,13 @@ describe('Database Operations', () => {
         return
       }
 
+      // Use unique identifiers to avoid duplicate key errors
+      const testTimestamp = Date.now()
       const initialSessionData = {
-        userId: 'user-2',
-        userSessionId: 'session-789',
+        userId: `user-2-${testTimestamp}`,
+        userSessionId: `session-789-${testTimestamp}`,
         name: 'User Two',
-        email: 'user2@test.com',
+        email: `user2-${testTimestamp}@test.com`,
         currentSocketId: 'socket-old',
         lastSeen: new Date('2024-01-01'),
         isActive: true
@@ -292,7 +302,7 @@ describe('Database Operations', () => {
 
       // Load and verify updated session
       const sessions = await loadPlayerSessions()
-      const loadedSession = sessions.get('user-2')
+      const loadedSession = sessions.get(`user-2-${testTimestamp}`)
       expect(loadedSession.currentSocketId).toBe('socket-new')
       expect(loadedSession.isActive).toBe(true)
     })
@@ -305,21 +315,23 @@ describe('Database Operations', () => {
         return
       }
 
+      // Use unique identifiers to avoid duplicate key errors
+      const testTimestamp = Date.now()
       const activeSessionData = {
-        userId: 'user-active',
-        userSessionId: 'session-active',
+        userId: `user-active-${testTimestamp}`,
+        userSessionId: `session-active-${testTimestamp}`,
         name: 'Active User',
-        email: 'active@test.com',
+        email: `active-${testTimestamp}@test.com`,
         currentSocketId: 'socket-active',
         lastSeen: new Date(),
         isActive: true
       }
 
       const inactiveSessionData = {
-        userId: 'user-inactive',
-        userSessionId: 'session-inactive',
+        userId: `user-inactive-${testTimestamp}`,
+        userSessionId: `session-inactive-${testTimestamp}`,
         name: 'Inactive User',
-        email: 'inactive@test.com',
+        email: `inactive-${testTimestamp}@test.com`,
         currentSocketId: 'socket-inactive',
         lastSeen: new Date(),
         isActive: false
@@ -332,8 +344,8 @@ describe('Database Operations', () => {
       // Load sessions - should only return active ones
       const sessions = await loadPlayerSessions()
       expect(sessions.size).toBe(1)
-      expect(sessions.has('user-active')).toBe(true)
-      expect(sessions.has('user-inactive')).toBe(false)
+      expect(sessions.has(`user-active-${testTimestamp}`)).toBe(true)
+      expect(sessions.has(`user-inactive-${testTimestamp}`)).toBe(false)
     })
 
     it('should handle session save errors gracefully', async () => {
