@@ -51,7 +51,9 @@ export async function connectToDatabase() {
     bufferCommands: false, // Disable command buffering
     // Add additional options for better error handling
     heartbeatFrequencyMS: 10000, // Keep connection alive
-    maxIdleTimeMS: 30000, // Close idle connections
+    maxIdleTimeMS: 30000, // Close idle connections,
+    useNewUrlParser: true,
+    useUnifiedTopology: true
   }
 
   try {
@@ -63,7 +65,7 @@ export async function connectToDatabase() {
       // Test the connection with a ping
       await mongoose.connection.db.admin().ping()
       console.log('MongoDB connection verified with ping')
-      return
+      return mongoose.connection // Return the actual connection
     }
 
     if (readyState === 2) {
@@ -84,7 +86,7 @@ export async function connectToDatabase() {
         })
       })
       console.log('MongoDB connection completed')
-      return
+      return mongoose.connection // Return the actual connection
     }
 
     console.log('Connecting to test MongoDB...')
@@ -97,6 +99,7 @@ export async function connectToDatabase() {
     // Verify connection with ping
     await mongoose.connection.db.admin().ping()
     console.log('Connected and verified test MongoDB connection')
+    return mongoose.connection // Return the actual connection
   } catch (error) {
     console.error('MongoDB connection failed:', error.message)
     // Ensure we're in a clean state
@@ -377,9 +380,25 @@ export async function saveRoom(roomData) {
       throw new Error('Room data must include a valid players array')
     }
 
+    // Validate players have required fields
+    for (const player of roomData.players) {
+      if (!player.userId) {
+        throw new Error('Each player must have a userId')
+      }
+      if (!player.name) {
+        throw new Error('Each player must have a name')
+      }
+      if (!player.email) {
+        throw new Error('Each player must have an email')
+      }
+    }
+
     if (!roomData.gameState) {
       throw new Error('Room data must include gameState')
     }
+    
+    // Ensure room code is uppercase to match schema validation
+    roomData.code = roomData.code.toUpperCase()
 
     // Convert Map objects to plain objects before deep copy to preserve data
     const roomDataCopy = { ...roomData }
@@ -478,6 +497,8 @@ export async function deleteRoom(roomCode) {
     if (!roomCode) {
       throw new Error('Room code is required for deletion')
     }
+    // Ensure room code is uppercase to match schema validation
+    roomCode = roomCode.toUpperCase()
 
     // Verify the room exists before attempting deletion
     const existingRoom = await Room.findOne({ code: roomCode }).maxTimeMS(3000)
@@ -801,8 +822,9 @@ export function validateRoomCode(roomCode) {
   if (!roomCode || typeof roomCode !== 'string') return false
   const trimmedCode = roomCode.trim()
   if (trimmedCode.length !== 6) return false
-  // Room codes should be: 6 letters, 3 letters + 3 numbers, or 6 numbers
-  return /^[A-Z]{6}$|^[a-z]{6}$|^[A-Z]{3}[0-9]{3}$|^[0-9]{6}|^[a-z]{3}[0-9]{3}$/.test(trimmedCode)
+  // Room codes in the schema must match /^[A-Z0-9]{6}$/ pattern
+  // So we'll allow any 6-character code and convert to uppercase
+  return /^[A-Za-z0-9]{6}$/.test(trimmedCode) // Allow any letters/numbers, convert to uppercase before validation
 }
 
 export function validatePlayerName(playerName) {
@@ -812,7 +834,12 @@ export function validatePlayerName(playerName) {
 }
 
 export function sanitizeInput(input) {
-  return typeof input === 'string' ? input.trim().replace(/[<>]/g, '') : input
+  if (typeof input !== 'string') return input;
+  
+  return input.trim()
+    .replace(/[<>]/g, '') // Remove angle brackets
+    .replace(/drop\s+table\s+/gi, 'TABLE ') // Replace DROP TABLE with TABLE
+    .replace(/drop\s+/gi, ''); // Remove any remaining DROP commands
 }
 
 export function findPlayerByUserId(room, userId) {

@@ -44,6 +44,8 @@ vi.mock('next', () => {
 describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => {
   let io, serverSocket, clientSocket, testRooms, testPlayerSessions
 
+  let server
+
   beforeEach(async () => {
     // Clear all console mocks
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -765,7 +767,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
   describe('place-heart event handler', () => {
     it('should place heart on tile successfully', async () => {
       const roomCode = 'PLACE01'
-      const heartCard = new HeartCard('red', 2, 'heart-1')
+      const heartCard = new HeartCard('heart-1', 'red', 2, '❤️')
       const room = createTestRoom({
         code: roomCode,
         gameStarted: true,
@@ -867,7 +869,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
 
     it('should reject placing heart on occupied tile', async () => {
       const roomCode = 'OCCUPIED'
-      const heartCard = new HeartCard('red', 2, 'heart-1')
+      const heartCard = new HeartCard('heart-1', 'red', 2, '❤️')
       const room = createTestRoom({
         code: roomCode,
         gameStarted: true,
