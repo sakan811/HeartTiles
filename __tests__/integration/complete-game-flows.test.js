@@ -62,7 +62,32 @@ process.env.NODE_ENV = 'test'
 describe('Complete Game Flows Integration Tests', () => {
   let rooms, mockIo, playerSessions
 
-  beforeEach(() => {
+  beforeAll(async () => {
+    try {
+      const { connectToDatabase } = await import('../utils/server-test-utils.js')
+      await connectToDatabase()
+    } catch (error) {
+      console.warn('Database connection failed for complete game flows tests:', error.message)
+    }
+  })
+
+  afterAll(async () => {
+    try {
+      const { disconnectDatabase } = await import('../utils/server-test-utils.js')
+      await disconnectDatabase()
+    } catch (error) {
+      console.warn('Database disconnection failed for complete game flows tests:', error.message)
+    }
+  })
+
+  beforeEach(async () => {
+    try {
+      const { clearDatabase } = await import('../utils/server-test-utils.js')
+      await clearDatabase()
+    } catch (error) {
+      console.warn('Database clear failed for complete game flows tests:', error.message)
+    }
+
     vi.clearAllMocks()
     rooms = new Map()
     playerSessions = new Map()
