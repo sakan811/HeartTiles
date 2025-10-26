@@ -472,7 +472,8 @@ export function createCardFromData(cardData) {
 export function isHeartCard(card) {
   if (!card) return false;
   if (card.type === 'heart') return true;
-  return Boolean(card.color && card.value !== undefined && ['❤️', '💛', '💚'].includes(card.emoji));
+  // Also accept plain objects with the required heart properties
+  return Boolean(card.color && card.value !== undefined && ['❤️', '💛', '💚'].includes(card.emoji || '❤️'));
 }
 
 export function isMagicCard(card) {

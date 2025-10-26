@@ -270,7 +270,7 @@ describe('Server Utility Functions Tests', () => {
         currentPlayer: { userId: 'player1', name: 'Player1' },
         playerHands: {
           player1: [
-            new HeartCard('red', 2, 'heart-1'),
+            new HeartCard('heart-1', 'red', 2, '❤️'),
             { id: 'heart-2', color: 'yellow', value: 1, type: 'heart' } // Plain object
           ]
         }
@@ -329,7 +329,7 @@ describe('Server Utility Functions Tests', () => {
         currentPlayer: { userId: 'player1', name: 'Player1' },
         playerHands: {
           player1: [
-            new HeartCard('red', 2, 'heart-1')
+            new HeartCard('heart-1', 'red', 2, '❤️')
           ]
         }
       })

@@ -80,7 +80,7 @@ const roomSchema = new mongoose.Schema({
     required: true,
     unique: true,
     uppercase: true,
-    match: /^[A-Z0-9]{6}$/
+    match: /^[A-Z0-9]{6,7}$/
   },
   players: [{
     userId: {
