@@ -11,7 +11,6 @@ import {
   ShieldCard,
   generateRandomMagicCard,
   isHeartCard,
-  isMagicCard,
   createCardFromData
 } from './src/lib/cards.js';
 
@@ -102,10 +101,11 @@ async function savePlayerSession(sessionData) {
 function validateRoomCode(roomCode) {
   if (!roomCode || typeof roomCode !== 'string') return false;
   const trimmedCode = roomCode.trim();
-  // Allow 6-7 character room codes for tests
-  if (trimmedCode.length < 6 || trimmedCode.length > 7) return false;
-  // Room codes should be alphanumeric
-  return /^[A-Za-z0-9]+$/.test(trimmedCode);
+  // Room codes must be exactly 6 characters
+  if (trimmedCode.length !== 6) return false;
+  // Room codes can contain letters and numbers, but not mixed case letters
+  // Allow: all uppercase, all lowercase, all numbers, or letters+numbers of same case
+  return /^[A-Z0-9]+$/.test(trimmedCode) || /^[a-z0-9]+$/.test(trimmedCode) || /^[0-9]+$/.test(trimmedCode);
 }
 
 function validatePlayerName(playerName) {
