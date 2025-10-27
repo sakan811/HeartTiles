@@ -162,8 +162,14 @@ export class MockSocketServer {
         return
       }
 
-      // Check if player already in room
-      const existingPlayer = room.players.find(p => p.userId === socket.data.userId)
+      // Extract base userId for unique ID handling (for tests)
+      const baseUserId = socket.data.userId.split('-').slice(0, -2).join('-') || socket.data.userId
+
+      // Check if player already in room (using base userId)
+      const existingPlayer = room.players.find(p => {
+        const playerBaseId = p.userId.split('-').slice(0, -2).join('-') || p.userId
+        return playerBaseId === baseUserId
+      })
       if (existingPlayer) {
         socket.emit('room-error', 'Already in room')
         return
@@ -480,10 +486,24 @@ export class MockSocketServer {
       room.gameState.deck.cards--
       room.gameState.playerActions[socket.data.userId].drawnHeart = true
 
+      // Include hand information in player objects for the broadcast
+      const playersWithHands = room.players.map(player => ({
+        ...player,
+        hand: room.gameState.playerHands[player.userId] || []
+      }));
+
       socket.emit('heart-drawn', {
         roomCode,
         heartCard,
-        deck: room.gameState.deck
+        deck: room.gameState.deck,
+        tiles: room.gameState.tiles,
+        players: playersWithHands,
+        gameState: {
+          gameStarted: room.gameState.gameStarted,
+          currentPlayer: room.gameState.currentPlayer,
+          turnCount: room.gameState.turnCount,
+          shields: room.gameState.shields
+        }
       })
 
     } catch (error) {
@@ -537,10 +557,24 @@ export class MockSocketServer {
       room.gameState.magicDeck.cards--
       room.gameState.playerActions[socket.data.userId].drawnMagic = true
 
+      // Include hand information in player objects for the broadcast
+      const playersWithHands = room.players.map(player => ({
+        ...player,
+        hand: room.gameState.playerHands[player.userId] || []
+      }));
+
       socket.emit('magic-card-drawn', {
         roomCode,
         magicCard,
-        magicDeck: room.gameState.magicDeck
+        magicDeck: room.gameState.magicDeck,
+        tiles: room.gameState.tiles,
+        players: playersWithHands,
+        gameState: {
+          gameStarted: room.gameState.gameStarted,
+          currentPlayer: room.gameState.currentPlayer,
+          turnCount: room.gameState.turnCount,
+          shields: room.gameState.shields
+        }
       })
 
     } catch (error) {
@@ -827,8 +861,12 @@ export class MockSocketServer {
     if (socketInfo && socketInfo.roomCode) {
       const room = this.rooms.get(socketInfo.roomCode)
       if (room) {
-        // Remove player from room
-        room.players = room.players.filter(p => p.userId !== socketInfo.userId)
+        // Remove player from room (use base userId matching)
+        const baseUserId = socketInfo.userId.split('-').slice(0, -2).join('-') || socketInfo.userId
+        room.players = room.players.filter(p => {
+          const playerBaseId = p.userId.split('-').slice(0, -2).join('-') || p.userId
+          return playerBaseId !== baseUserId
+        })
 
         // Notify other players
         socket.to(socketInfo.roomCode).emit('player-left', {
@@ -840,6 +878,7 @@ export class MockSocketServer {
         // Clean up empty room
         if (room.players.length === 0) {
           this.rooms.delete(socketInfo.roomCode)
+          console.log(`Mock server: Cleaned up empty room ${socketInfo.roomCode}`)
         }
       }
     }
