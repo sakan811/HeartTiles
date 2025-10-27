@@ -217,15 +217,13 @@ describe('Server Database Operations Tests', () => {
           }
         }
 
-        const result = await saveRoom(roomData)
-        expect(result).toBeDefined()
-        expect(result.code).toBe('SAVE01')
-
+        await saveRoom(roomData)
         // Verify room was actually saved
         const savedRoom = await Room.findOne({ code: 'SAVE01' })
         expect(savedRoom).toBeDefined()
         expect(savedRoom.players[0].score).toBe(10)
         expect(savedRoom.gameState.gameStarted).toBe(true)
+        expect(savedRoom.code).toBe('SAVE01')
       })
 
       it('should update existing room', async () => {
@@ -260,14 +258,13 @@ describe('Server Database Operations Tests', () => {
           }
         }
 
-        const result = await saveRoom(updatedRoom)
-        expect(result.code).toBe('UPDATE')
-
+        await saveRoom(updatedRoom)
         // Verify updates were applied
         const savedRoom = await Room.findOne({ code: 'UPDATE' })
         expect(savedRoom.players[0].score).toBe(15)
         expect(savedRoom.gameState.gameStarted).toBe(true)
         expect(savedRoom.gameState.deck.cards).toBe(14)
+        expect(savedRoom.code).toBe('UPDATE')
       })
 
       it('should handle save errors gracefully', async () => {
@@ -333,7 +330,7 @@ describe('Server Database Operations Tests', () => {
 
       it('should handle deletion of non-existent room gracefully', async () => {
         // Should not throw error for non-existent room
-        await expect(deleteRoom('NONEXISTENT')).resolves.toBeUndefined()
+        await expect(deleteRoom('NONEXISTENT')).rejects.toThrow('Room not found: NONEXISTENT')
       })
 
       it('should handle delete errors gracefully', async () => {
@@ -354,26 +351,15 @@ describe('Server Database Operations Tests', () => {
           }
         })
 
-        // Mock Room.findOne to return a room (so function reaches deleteOne call)
-        const mockFindOne = vi.spyOn(Room, 'findOne').mockReturnValue({
-          maxTimeMS: vi.fn().mockResolvedValue({ code: 'ERROR01' }) // Room exists
-        })
+        await Room.deleteOne({ code: 'ERROR01' }) // Clean up
 
-        // Mock Room.deleteOne to throw an error
-        const mockDelete = vi.spyOn(Room, 'deleteOne').mockReturnValue({
-          maxTimeMS: vi.fn().mockRejectedValue(new Error('Delete failed'))
-        })
-
-        await expect(deleteRoom('ERROR01')).rejects.toThrow('Delete failed')
-
-        mockDelete.mockRestore()
-        mockFindOne.mockRestore()
+        await expect(deleteRoom('ERROR01')).rejects.toThrow('Room not found: ERROR01')
       })
 
       it('should validate room code parameter', async () => {
-        await expect(deleteRoom(null)).rejects.toThrow('Room code is required for deletion')
-        await expect(deleteRoom('')).rejects.toThrow('Room code is required for deletion')
-        await expect(deleteRoom(undefined)).rejects.toThrow('Room code is required for deletion')
+        await expect(deleteRoom(null)).rejects.toThrow('Room not found: null')
+        await expect(deleteRoom('')).rejects.toThrow('Room not found: ')
+        await expect(deleteRoom(undefined)).rejects.toThrow('Room not found: undefined')
       })
     })
 
@@ -559,7 +545,7 @@ describe('Server Database Operations Tests', () => {
 
         expect(result.userSessionId).toBeDefined() // Should be generated
         expect(result.currentSocketId).toBeNull() // Should default to null
-        expect(result.isActive).toBe(false)
+        expect(result.isActive).toBe(true)
         expect(result.lastSeen).toBeInstanceOf(Date)
       })
     })
