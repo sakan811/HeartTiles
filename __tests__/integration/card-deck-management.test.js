@@ -1,17 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { HeartCard, generateRandomMagicCard, ShieldCard } from '../../src/lib/cards.js'
-
-// Mock cards module
-vi.mock('../../src/lib/cards', () => ({
-  HeartCard: {
-    generateRandom: vi.fn()
-  },
-  generateRandomMagicCard: vi.fn(),
-  ShieldCard: {
-    isActive: vi.fn(),
-    getRemainingTurns: vi.fn()
-  }
-}))
 
 // Mock dependencies
 vi.mock('../../../models', () => ({
@@ -56,12 +43,6 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     rooms = new Map()
     global.turnLocks = new Map()
 
-    // Reset mocked functions
-    HeartCard.generateRandom = vi.fn()
-    generateRandomMagicCard = vi.fn()
-    ShieldCard.isActive = vi.fn()
-    ShieldCard.getRemainingTurns = vi.fn()
-
     mockSocket = {
       id: 'socket123',
       data: {
@@ -84,15 +65,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       const roomCode = 'HEART123'
       const userId = 'user123'
 
-      // Mock heart card generation
-      const mockHeartCard = {
-        id: 'heart-123',
-        type: 'heart',
-        color: 'red',
-        value: 2,
-        emoji: '❤️'
-      }
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
+      // Use real heart card generation
+      const { generateSingleHeart } = await import('../../server.js')
 
       const room = {
         code: roomCode,
@@ -121,7 +95,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       // Record heart draw
       recordCardDraw(room, userId, 'heart')
-      const newHeart = HeartCard.generateRandom()
+      const newHeart = generateSingleHeart()
 
       if (!room.gameState.playerHands[userId]) {
         room.gameState.playerHands[userId] = []
@@ -129,9 +103,11 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       room.gameState.playerHands[userId].push(newHeart)
       room.gameState.deck.cards--
 
-      expect(HeartCard.generateRandom).toHaveBeenCalled()
       expect(room.gameState.playerHands[userId]).toHaveLength(1)
-      expect(room.gameState.playerHands[userId][0]).toEqual(mockHeartCard)
+      expect(room.gameState.playerHands[userId][0]).toHaveProperty('type', 'heart')
+      expect(room.gameState.playerHands[userId][0]).toHaveProperty('id')
+      expect(room.gameState.playerHands[userId][0]).toHaveProperty('color')
+      expect(room.gameState.playerHands[userId][0]).toHaveProperty('value')
       expect(room.gameState.deck.cards).toBe(15)
 
       // Verify card was recorded as drawn
@@ -210,14 +186,8 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       const roomCode = 'MAGIC123'
       const userId = 'user123'
 
-      // Mock magic card generation
-      const mockMagicCard = {
-        id: 'magic-456',
-        type: 'wind',
-        emoji: '💨',
-        name: 'Wind Card'
-      }
-      generateRandomMagicCard.mockReturnValue(mockMagicCard)
+      // Use real magic card generation
+      const { generateSingleMagicCard } = await import('../../server.js')
 
       const room = {
         code: roomCode,
@@ -241,7 +211,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
       // Record magic draw
       recordCardDraw(room, userId, 'magic')
-      const newMagicCard = generateRandomMagicCard()
+      const newMagicCard = generateSingleMagicCard()
 
       if (!room.gameState.playerHands[userId]) {
         room.gameState.playerHands[userId] = []
@@ -249,9 +219,11 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       room.gameState.playerHands[userId].push(newMagicCard)
       room.gameState.magicDeck.cards--
 
-      expect(generateRandomMagicCard).toHaveBeenCalled()
       expect(room.gameState.playerHands[userId]).toHaveLength(1)
-      expect(room.gameState.playerHands[userId][0]).toEqual(mockMagicCard)
+      expect(room.gameState.playerHands[userId][0]).toHaveProperty('type')
+      expect(room.gameState.playerHands[userId][0]).toHaveProperty('id')
+      expect(room.gameState.playerHands[userId][0]).toHaveProperty('emoji')
+      expect(['wind', 'recycle', 'shield']).toContain(room.gameState.playerHands[userId][0].type)
       expect(room.gameState.magicDeck.cards).toBe(15)
 
       // Verify card was recorded as drawn
@@ -307,54 +279,33 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     })
 
     it('should generate different types of magic cards', async () => {
-
-      // Set up mock to return different card types
-      const mockCards = [
-        { id: 'wind-1', type: 'wind', emoji: '💨', name: 'Wind Card' },
-        { id: 'recycle-1', type: 'recycle', emoji: '♻️', name: 'Recycle Card' },
-        { id: 'shield-1', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
-      ]
-      let callCount = 0
-
-      generateRandomMagicCard.mockImplementation(() => {
-        return mockCards[callCount++ % mockCards.length]
-      })
+      const { generateSingleMagicCard } = await import('../../server.js')
 
       const generatedCards = []
       for (let i = 0; i < 10; i++) {
-        const card = generateRandomMagicCard()
+        const card = generateSingleMagicCard()
         generatedCards.push(card)
       }
 
       expect(generatedCards).toHaveLength(10)
-      expect(generateRandomMagicCard).toHaveBeenCalledTimes(10)
 
       // Verify we have different card types (the exact distribution depends on weights)
       const uniqueTypes = new Set(generatedCards.map(card => card.type))
       expect(uniqueTypes.size).toBeGreaterThan(0)
+
+      // Verify all cards have required properties
+      generatedCards.forEach(card => {
+        expect(card).toHaveProperty('id')
+        expect(card).toHaveProperty('type')
+        expect(card).toHaveProperty('emoji')
+        expect(['wind', 'recycle', 'shield']).toContain(card.type)
+      })
     })
   })
 
   describe('Initial Card Distribution', () => {
     it('should distribute correct number of cards at game start', async () => {
-      const { generateTiles } = await import('../../server.js')
-      
-      // Mock card generation
-      const mockHeartCard = {
-        id: 'heart-start',
-        type: 'heart',
-        color: 'red',
-        value: 2,
-        emoji: '❤️'
-      }
-      const mockMagicCard = {
-        id: 'magic-start',
-        type: 'wind',
-        emoji: '💨'
-      }
-
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
-      generateRandomMagicCard.mockReturnValue(mockMagicCard)
+      const { generateTiles, generateSingleHeart, generateSingleMagicCard } = await import('../../server.js')
 
       const room = {
         players: [
@@ -378,12 +329,12 @@ describe('Card Deck Management and Drawing Mechanics', () => {
 
         // Add 3 heart cards
         for (let i = 0; i < 3; i++) {
-          room.gameState.playerHands[player.userId].push(HeartCard.generateRandom())
+          room.gameState.playerHands[player.userId].push(generateSingleHeart())
         }
 
         // Add 2 magic cards
         for (let i = 0; i < 2; i++) {
-          room.gameState.playerHands[player.userId].push(generateRandomMagicCard())
+          room.gameState.playerHands[player.userId].push(generateSingleMagicCard())
         }
       })
 
@@ -400,18 +351,10 @@ describe('Card Deck Management and Drawing Mechanics', () => {
         expect(heartCards).toHaveLength(3)
         expect(magicCards).toHaveLength(2)
       })
-
-      expect(HeartCard.generateRandom).toHaveBeenCalledTimes(6) // 3 per player
-      expect(generateRandomMagicCard).toHaveBeenCalledTimes(4) // 2 per player
     })
 
     it('should handle initial distribution for single player', async () => {
-      
-      const mockHeartCard = { id: 'heart', type: 'heart' }
-      const mockMagicCard = { id: 'magic', type: 'magic' }
-
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
-      generateRandomMagicCard.mockReturnValue(mockMagicCard)
+      const { generateSingleHeart, generateSingleMagicCard } = await import('../../server.js')
 
       const room = {
         players: [
@@ -426,24 +369,20 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       room.players.forEach(player => {
         room.gameState.playerHands[player.userId] = []
         for (let i = 0; i < 3; i++) {
-          room.gameState.playerHands[player.userId].push(HeartCard.generateRandom())
+          room.gameState.playerHands[player.userId].push(generateSingleHeart())
         }
         for (let i = 0; i < 2; i++) {
-          room.gameState.playerHands[player.userId].push(generateRandomMagicCard())
+          room.gameState.playerHands[player.userId].push(generateSingleMagicCard())
         }
       })
 
       expect(room.gameState.playerHands.user1).toHaveLength(5)
-      expect(HeartCard.generateRandom).toHaveBeenCalledTimes(3)
-      expect(generateRandomMagicCard).toHaveBeenCalledTimes(2)
     })
   })
 
   describe('Deck State Management', () => {
     it('should track deck counts correctly during draws', async () => {
-      
-      const mockHeartCard = { id: 'heart', type: 'heart' }
-      vi.spyOn(HeartCard, 'generateRandom').mockReturnValue(mockHeartCard)
+      const { generateSingleHeart } = await import('../../server.js')
 
       const room = {
         gameState: {
@@ -459,7 +398,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       const initialMagicCount = room.gameState.magicDeck.cards
 
       // Draw heart card
-      room.gameState.playerHands.user123.push(HeartCard.generateRandom())
+      room.gameState.playerHands.user123.push(generateSingleHeart())
       room.gameState.deck.cards--
 
       expect(room.gameState.deck.cards).toBe(initialHeartCount - 1)
@@ -474,9 +413,7 @@ describe('Card Deck Management and Drawing Mechanics', () => {
     })
 
     it('should handle multiple players drawing from same deck', async () => {
-      
-      const mockHeartCard = { id: 'heart-multi', type: 'heart' }
-      HeartCard.generateRandom.mockReturnValue(mockHeartCard)
+      const { generateSingleHeart } = await import('../../server.js')
 
       const room = {
         gameState: {
@@ -491,11 +428,11 @@ describe('Card Deck Management and Drawing Mechanics', () => {
       const initialDeckCount = room.gameState.deck.cards
 
       // Player 1 draws
-      room.gameState.playerHands.user1.push(HeartCard.generateRandom())
+      room.gameState.playerHands.user1.push(generateSingleHeart())
       room.gameState.deck.cards--
 
       // Player 2 draws
-      room.gameState.playerHands.user2.push(HeartCard.generateRandom())
+      room.gameState.playerHands.user2.push(generateSingleHeart())
       room.gameState.deck.cards--
 
       expect(room.gameState.deck.cards).toBe(initialDeckCount - 2)

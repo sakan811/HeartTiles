@@ -47,39 +47,6 @@ vi.mock('next-auth/jwt', () => ({
   getToken: mockGetToken
 }))
 
-vi.mock('../../src/lib/cards.js', () => ({
-  HeartCard: {
-    generateRandom: vi.fn()
-  },
-  WindCard: vi.fn().mockImplementation((id) => ({
-    id,
-    type: 'wind',
-    emoji: '💨',
-    name: 'Wind Card',
-    canTargetTile: vi.fn(),
-    executeEffect: vi.fn()
-  })),
-  RecycleCard: vi.fn().mockImplementation((id) => ({
-    id,
-    type: 'recycle',
-    emoji: '♻️',
-    name: 'Recycle Card',
-    canTargetTile: vi.fn(),
-    executeEffect: vi.fn()
-  })),
-  ShieldCard: vi.fn().mockImplementation((id) => ({
-    id,
-    type: 'shield',
-    emoji: '🛡️',
-    name: 'Shield Card',
-    canTargetTile: vi.fn(),
-    executeEffect: vi.fn()
-  })),
-  generateRandomMagicCard: vi.fn(),
-  isHeartCard: vi.fn(),
-  isMagicCard: vi.fn(),
-  createCardFromData: vi.fn()
-}))
 
 // Mock Next.js to prevent server startup
 vi.mock('next', () => {
@@ -582,22 +549,16 @@ describe('Socket.IO Room Management Events', () => {
         expect(room.gameState.deck.cards).toBe(16)
         expect(room.gameState.magicDeck.cards).toBe(16)
 
-        // Initialize player hands
-        const { HeartCard } = await import('../../src/lib/cards.js')
-        const mockHeart = { id: 'heart1', type: 'heart', color: 'red', value: 2 }
-        HeartCard.generateRandom.mockReturnValue(mockHeart)
-
-        const { generateRandomMagicCard } = await import('../../src/lib/cards.js')
-        const mockMagicCard = { id: 'magic1', type: 'wind' }
-        generateRandomMagicCard.mockReturnValue(mockMagicCard)
+        // Initialize player hands with real card generation
+        const { generateSingleHeart, generateSingleMagicCard } = await import('../../server.js')
 
         room.players.forEach(player => {
           room.gameState.playerHands[player.userId] = []
           for (let i = 0; i < 3; i++) {
-            room.gameState.playerHands[player.userId].push(mockHeart)
+            room.gameState.playerHands[player.userId].push(generateSingleHeart())
           }
           for (let i = 0; i < 2; i++) {
-            room.gameState.playerHands[player.userId].push(mockMagicCard)
+            room.gameState.playerHands[player.userId].push(generateSingleMagicCard())
           }
         })
 

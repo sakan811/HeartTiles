@@ -1,24 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { HeartCard, WindCard, RecycleCard, ShieldCard, generateRandomMagicCard } from '../../src/lib/cards.js'
-
-// Mock card generation for consistent testing
-vi.mock('../../src/lib/cards.js', async (importOriginal) => {
-  const actual = await importOriginal()
-  return {
-    ...actual,
-    generateRandomMagicCard: vi.fn(() => ({
-      id: 'magic-card-1',
-      type: 'wind',
-      emoji: '💨',
-      executeEffect: vi.fn(),
-      canTargetTile: vi.fn(() => true)
-    })),
-    HeartCard: {
-      ...actual.HeartCard,
-      generateRandom: vi.fn(() => new actual.HeartCard('heart-1', 'red', 2, '❤️'))
-    }
-  }
-})
 
 describe('Server Game Initialization Functions', () => {
   let originalMathRandom
@@ -202,25 +182,28 @@ describe('Server Game Initialization Functions', () => {
   describe('generateSingleHeart function (lines 488-491)', () => {
     it('should generate a HeartCard instance', async () => {
       const { generateSingleHeart } = await import('../../server.js')
-      const { HeartCard } = await import('../../src/lib/cards.js')
 
       const heart = generateSingleHeart()
 
-      expect(HeartCard.generateRandom).toHaveBeenCalled()
-      expect(typeof heart).toBe('object')
+      expect(heart).toHaveProperty('id')
+      expect(heart).toHaveProperty('type')
+      expect(heart).toHaveProperty('color')
+      expect(heart).toHaveProperty('value')
+      expect(heart).toHaveProperty('emoji')
+      expect(heart.type).toBe('heart')
     })
   })
 
   describe('generateSingleMagicCard function (lines 493-496)', () => {
     it('should generate a magic card', async () => {
       const { generateSingleMagicCard } = await import('../../server.js')
-      const { generateRandomMagicCard } = await import('../../src/lib/cards.js')
 
       const magicCard = generateSingleMagicCard()
 
-      expect(generateRandomMagicCard).toHaveBeenCalled()
       expect(magicCard).toHaveProperty('id')
       expect(magicCard).toHaveProperty('type')
+      expect(magicCard).toHaveProperty('emoji')
+      expect(['wind', 'recycle', 'shield']).toContain(magicCard.type)
     })
   })
 

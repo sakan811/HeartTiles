@@ -444,331 +444,57 @@ global.clearInterval = vi.fn((id) => {
   return originalClearInterval(id)
 })
 
-// Mock cards library for all tests
+// Mock cards library for all tests - use real implementations with minimal mocking
 vi.mock('../src/lib/cards.js', async (importOriginal) => {
   const actual = await importOriginal();
 
-  // Import actual classes to extend and override specific methods
-  const {
-    BaseCard: ActualBaseCard,
-    HeartCard: ActualHeartCard,
-    MagicCard: ActualMagicCard,
-    WindCard: ActualWindCard,
-    RecycleCard: ActualRecycleCard,
-    ShieldCard: ActualShieldCard
-  } = actual;
-
-  // Mock BaseCard class to fix executeEffect behavior
-  class MockBaseCard extends ActualBaseCard {
-    executeEffect() {
-      throw new Error('executeEffect must be implemented by subclass');
-    }
-  }
-
-  // Mock WindCard class to provide proper executeEffect behavior
-  class MockWindCard extends ActualWindCard {
-    constructor(id) {
-      super(id)
-      // Mock the canTargetTile method for testability
-      this.canTargetTile = vi.fn(super.canTargetTile.bind(this))
-    }
-
-    executeEffect(gameState, targetTileId, playerId) {
-      const tile = gameState.tiles.find(t => t.id == targetTileId);
-      if (!tile || !this.canTargetTile(tile, playerId)) {
-        throw new Error('Invalid target for Wind card');
-      }
-
-      // Check shield protection using the ShieldCard protection logic
-      const opponentId = tile.placedHeart.placedBy;
-      const currentTurnCount = gameState.turnCount || 1;
-
-      if (ActualShieldCard.isPlayerProtected(gameState, opponentId, currentTurnCount)) {
-        const remainingTurns = ActualShieldCard.getRemainingTurns(gameState.shields[opponentId], currentTurnCount);
-        throw new Error(`Opponent is protected by Shield (${remainingTurns} turns remaining)`);
-      }
-
-      // CRITICAL RULE: Tile color preservation - restore to original tile color before heart was placed
-      const originalTileColor = tile.placedHeart.originalTileColor || tile.color;
-      const colorEmojis = {
-        'red': '🟥', 'yellow': '🟨', 'green': '🟩', 'white': '⬜'
-      };
-
-      // Return the action result for broadcasting
-      return {
-        type: 'wind',
-        removedHeart: tile.placedHeart,
-        targetedPlayerId: opponentId,
-        tileId: tile.id,
-        newTileState: {
-          id: tile.id,
-          color: originalTileColor, // Restore to original tile color
-          emoji: colorEmojis[originalTileColor] || '⬜',
-          placedHeart: undefined
-        }
-      };
-    }
-  }
-
-  // Mock RecycleCard class to provide proper executeEffect behavior
-  class MockRecycleCard extends ActualRecycleCard {
-    constructor(id) {
-      super(id)
-      // Mock the canTargetTile method for testability
-      this.canTargetTile = vi.fn(super.canTargetTile.bind(this))
-    }
-
-    executeEffect(gameState, targetTileId, currentPlayerId) {
-      const tile = gameState.tiles.find(t => t.id == targetTileId);
-      if (!tile || !this.canTargetTile(tile)) {
-        throw new Error('Invalid target for Recycle card');
-      }
-
-      // Check shield protection - Recycle cards should only be blocked when targeting tiles that would affect shielded players
-      // Allow shielded players to use their own Recycle cards on empty tiles
-      if (gameState.shields) {
-        for (const [shieldUserId, shield] of Object.entries(gameState.shields)) {
-          if (ActualShieldCard.isActive(shield, gameState.turnCount)) {
-            // Check if shielded player has any hearts on the board
-            const shieldedPlayerHasHearts = gameState.tiles.some(t =>
-              t.placedHeart && t.placedHeart.placedBy === shieldUserId
-            );
-
-            // Only block if:
-            // 1. No currentPlayerId specified (assume opponent action) OR currentPlayerId is NOT the shielded player
-            // 2. AND the shielded player has hearts on the board
-            // 3. AND the target tile could potentially affect the shielded player's strategy
-            const isOpponentCard = !currentPlayerId || currentPlayerId !== shieldUserId;
-
-            if (isOpponentCard && shieldedPlayerHasHearts) {
-              const remainingTurns = ActualShieldCard.getRemainingTurns(shield, gameState.turnCount);
-              throw new Error(`Tile is protected by Shield (${remainingTurns} turns remaining)`);
-            }
-          }
-        }
-      }
-
-      // Return the action result for broadcasting
-      return {
-        type: 'recycle',
-        previousColor: tile.color,
-        newColor: 'white',
-        tileId: tile.id,
-        newTileState: {
-          id: tile.id,
-          color: 'white',
-          emoji: '⬜',
-          placedHeart: undefined
-        }
-      };
-    }
-  }
-
-  // Mock ShieldCard class to provide proper static methods
-  class MockShieldCard extends ActualShieldCard {
-    constructor(id) {
-      super(id)
-      // Mock the executeEffect method for testability
-      const originalExecuteEffect = super.executeEffect.bind(this)
-      this.executeEffect = vi.fn((gameState, playerId) => originalExecuteEffect(gameState, playerId))
-    }
-
-    static isActive(shield, currentTurnCount) {
-      if (!shield) return false;
-
-      // If remainingTurns is explicitly set to 0, respect that (unit tests)
-      if (shield.remainingTurns === 0) {
-        return false;
-      }
-
-      // Use turn-based calculation when we have an activated turn
-      if (shield.activatedTurn !== undefined) {
-        // If currentTurnCount is provided, use turn-based calculation
-        if (currentTurnCount !== undefined) {
-          // Shield lasts for 2 turns: activation turn + 1 more turn
-          // Formula: (activatedTurn + 2) - currentTurnCount
-          const expirationTurn = shield.activatedTurn + 2;
-          const calculatedRemaining = expirationTurn - currentTurnCount;
-          return calculatedRemaining > 0;
-        }
-      }
-
-      // Otherwise use manual remainingTurns (unit tests)
-      if (shield.remainingTurns !== undefined) {
-        return shield.remainingTurns > 0;
-      }
-
-      return false;
-    }
-
-    static getRemainingTurns(shield, currentTurnCount) {
-      if (!shield) return 0;
-
-      // If remainingTurns is explicitly set to 0, respect that (unit tests)
-      if (shield.remainingTurns === 0) {
-        return 0;
-      }
-
-      // Use turn-based calculation when we have an activated turn
-      if (shield.activatedTurn !== undefined) {
-        // If currentTurnCount is not provided, we can't calculate turn-based duration
-        if (currentTurnCount !== undefined) {
-          // Shield lasts for 2 turns: activation turn + 1 more turn
-          // Formula: (activatedTurn + 2) - currentTurnCount
-          const expirationTurn = shield.activatedTurn + 2;
-          const calculatedRemaining = expirationTurn - currentTurnCount;
-          const finalRemaining = Math.max(0, calculatedRemaining);
-          return finalRemaining;
-        }
-      }
-
-      // Otherwise use manual remainingTurns (unit tests without currentTurnCount)
-      if (shield.remainingTurns !== undefined) {
-        return Math.max(0, shield.remainingTurns);
-      }
-
-      return 0;
-    }
-
-    static isPlayerProtected(gameState, playerId, currentTurnCount) {
-      if (!gameState.shields || !gameState.shields[playerId]) return false;
-      const shield = gameState.shields[playerId];
-      return this.isActive(shield, currentTurnCount);
-    }
-
-    static isTileProtected(gameState, tile, currentTurnCount) {
-      if (!tile.placedHeart) return false; // Empty tiles don't need protection
-      const playerId = tile.placedHeart.placedBy;
-      return this.isPlayerProtected(gameState, playerId, currentTurnCount);
-    }
-
-    static canReplaceShield(gameState, opponentId, currentTurnCount) {
-      // Cannot replace opponent's active shield
-      if (gameState.shields && gameState.shields[opponentId]) {
-        const opponentShield = gameState.shields[opponentId];
-        if (this.isActive(opponentShield, currentTurnCount)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    static cleanupExpiredShields(gameState, currentTurnCount) {
-      if (!gameState.shields) return;
-
-      const expiredShields = [];
-      for (const [playerId, shield] of Object.entries(gameState.shields)) {
-        if (!this.isActive(shield, currentTurnCount)) {
-          expiredShields.push(playerId);
-        }
-      }
-
-      // Remove expired shields
-      for (const playerId of expiredShields) {
-        delete gameState.shields[playerId];
-      }
-    }
-
-    static canActivateShield(gameState, playerId) {
-      // Check if any opponent has an active shield (prevents activation)
-      if (gameState.shields) {
-        for (const [otherPlayerId, shield] of Object.entries(gameState.shields)) {
-          if (otherPlayerId !== playerId && this.isActive(shield, gameState.turnCount)) {
-            return {
-              canActivate: false,
-              reason: `Cannot activate Shield while opponent has active Shield (${this.getRemainingTurns(shield, gameState.turnCount)} turns remaining)`
-            };
-          }
-        }
-      }
-
-      return { canActivate: true, reason: null };
-    }
-  }
-
-  // Mock factory functions to return our mock classes
+  // Wrap methods with vi.fn for testability but use real implementations
   const mockCreateHeartCard = vi.fn((id, color, value, emoji) => {
-    return new ActualHeartCard(id, color, value, emoji);
+    return actual.createHeartCard(id, color, value, emoji);
   });
 
   const mockCreateMagicCard = vi.fn((id, type) => {
-    switch (type) {
-      case 'wind':
-        return new MockWindCard(id);
-      case 'recycle':
-        return new MockRecycleCard(id);
-      case 'shield':
-        return new MockShieldCard(id);
-      default:
-        throw new Error(`Unknown magic card type: ${type}`);
-    }
+    return actual.createMagicCard(id, type);
   });
 
   const mockCreateCardFromData = vi.fn((cardData) => {
-    if (!cardData) {
-      throw new Error('Invalid card data');
-    }
-
-    if (cardData.type === 'heart' || (cardData.color && cardData.value !== undefined)) {
-      return mockCreateHeartCard(cardData.id, cardData.color, cardData.value, cardData.emoji);
-    } else if (cardData.type && ['wind', 'recycle', 'shield'].includes(cardData.type)) {
-      return mockCreateMagicCard(cardData.id, cardData.type);
-    }
-    throw new Error('Invalid card data');
+    return actual.createCardFromData(cardData);
   });
 
-  // Mock deck generation functions to return mock classes
   const mockGenerateMagicDeck = vi.fn(() => {
-    const cards = [];
-    const baseTime = Date.now();
-
-    // Game rule: 6 Wind, 5 Recycle, 5 Shield cards (total 16)
-    for (let i = 0; i < 16; i++) {
-      let cardType;
-      if (i < 6) {
-        cardType = 'wind'; // 6 Wind cards
-      } else if (i < 11) {
-        cardType = 'recycle'; // 5 Recycle cards
-      } else {
-        cardType = 'shield'; // 5 Shield cards
-      }
-
-      cards.push(mockCreateMagicCard(baseTime + i + 1, cardType));
-    }
-
-    return cards;
+    return actual.generateMagicDeck();
   });
 
-  // Mock generateRandomMagicCard to return mock classes
   const mockGenerateRandomMagicCard = vi.fn(() => {
-    const cardTypes = [
-      { type: 'wind', weight: 6 },
-      { type: 'recycle', weight: 5 },
-      { type: 'shield', weight: 5 }
-    ];
-
-    const totalWeight = cardTypes.reduce((sum, card) => sum + card.weight, 0);
-    let random = Math.random() * totalWeight;
-
-    let selectedType = 'wind'; // default
-    for (const cardType of cardTypes) {
-      random -= cardType.weight;
-      if (random <= 0) {
-        selectedType = cardType.type;
-        break;
-      }
-    }
-
-    // Use high-precision timestamp + random to ensure unique IDs
-    const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substring(2, 11);
-    const cardId = timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
-    return mockCreateMagicCard(cardId, selectedType);
+    return actual.generateRandomMagicCard();
   });
+
+  // Wrap card classes' methods for testability while preserving real implementation
+  const MockWindCard = class extends actual.WindCard {
+    constructor(id) {
+      super(id);
+      this.canTargetTile = vi.fn(super.canTargetTile.bind(this));
+      this.executeEffect = vi.fn(super.executeEffect.bind(this));
+    }
+  };
+
+  const MockRecycleCard = class extends actual.RecycleCard {
+    constructor(id) {
+      super(id);
+      this.canTargetTile = vi.fn(super.canTargetTile.bind(this));
+      this.executeEffect = vi.fn(super.executeEffect.bind(this));
+    }
+  };
+
+  const MockShieldCard = class extends actual.ShieldCard {
+    constructor(id) {
+      super(id);
+      this.executeEffect = vi.fn(super.executeEffect.bind(this));
+    }
+  };
 
   return {
     ...actual,
-    BaseCard: MockBaseCard,
     WindCard: MockWindCard,
     RecycleCard: MockRecycleCard,
     ShieldCard: MockShieldCard,
