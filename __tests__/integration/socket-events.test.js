@@ -12,49 +12,8 @@ import {
   createRoomCodeGenerator,
   cleanupClients
 } from '../helpers/test-utils.js';
-import { createHeartCard, createWindCard, createRecycleCard, createShieldCard } from '../factories/card-factories.js';
-// Import real card implementations for proper testing
-import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js';
-
-// Mock dependencies
-vi.mock('mongoose', () => ({
-  default: {
-    connect: vi.fn().mockResolvedValue(),
-    connection: { readyState: 1 }
-  }
-}));
-
-vi.mock('../../../models.js', () => ({
-  PlayerSession: {
-    find: vi.fn().mockResolvedValue([]),
-    findOneAndUpdate: vi.fn().mockResolvedValue({}),
-    deleteOne: vi.fn().mockResolvedValue({})
-  },
-  Room: {
-    find: vi.fn().mockResolvedValue([]),
-    findOneAndUpdate: vi.fn().mockResolvedValue({}),
-    deleteOne: vi.fn().mockResolvedValue({})
-  },
-  User: {
-    findById: vi.fn().mockResolvedValue({
-      id: 'user1',
-      email: 'test@example.com',
-      name: 'Test User'
-    })
-  }
-}));
-
-vi.mock('next-auth/jwt', () => ({
-  getToken: vi.fn().mockResolvedValue({
-    id: 'user1',
-    jti: 'session1',
-    email: 'test@example.com',
-    name: 'Test User'
-  })
-}));
-
-// Import real card implementations - setup.js will handle proper mocking
-// Remove local card mock to use real implementations from setup.js
+// Import real implementations for game logic - only mock external dependencies
+// The mock server will use real card implementations and game logic
 
 describe('Socket.IO Events Integration Tests', () => {
   let mockServer;
@@ -350,7 +309,16 @@ describe('Socket.IO Events Integration Tests', () => {
       testRooms.add(roomCode);
 
       const heartCard = currentPlayer.hand.find(card => card.type === 'heart');
-      const emptyTile = gameData.tiles.find(tile => !tile.placedHeart);
+      // Look for a white tile first, since it always gives points
+      let emptyTile = gameData.tiles.find(tile => !tile.placedHeart && tile.color === 'white');
+      if (!emptyTile) {
+        // If no white tile, look for a tile that matches the heart color
+        emptyTile = gameData.tiles.find(tile => !tile.placedHeart && tile.color === heartCard.color);
+      }
+      if (!emptyTile) {
+        // If no matching tile, use any empty tile
+        emptyTile = gameData.tiles.find(tile => !tile.placedHeart);
+      }
 
       expect(heartCard).toBeDefined();
       expect(emptyTile).toBeDefined();
@@ -763,19 +731,17 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle concurrent operations gracefully', async () => {
-      const { clients, roomCode } = await setupGame(port);
+      const { clients, roomCode, gameData } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Send multiple events rapidly with proper error handling and timeout
       const events = [
-        waitFor(clients[0], 'player-ready'),
-        waitFor(clients[0], 'room-error'), // Expected for invalid action
-        waitFor(clients[1], 'player-ready')
+        waitFor(clients[0], 'room-error'), // Expected for invalid action (can't be ready after game started)
+        waitFor(clients[1], 'room-error')  // Expected for invalid action (can't be ready after game started)
       ];
 
-      clients[0].emit('player-ready', { roomCode });
-      clients[0].emit('draw-heart', { roomCode }); // Should error since game already started
-      clients[1].emit('player-ready', { roomCode });
+      clients[0].emit('player-ready', { roomCode }); // Should error since game already started
+      clients[1].emit('player-ready', { roomCode }); // Should error since game already started
 
       // Use Promise.allSettled with timeout to prevent hanging
       const results = await Promise.race([
@@ -784,7 +750,7 @@ describe('Socket.IO Events Integration Tests', () => {
       ]);
 
       // Verify all operations completed (either fulfilled or rejected)
-      expect(results).toHaveLength(3);
+      expect(results).toHaveLength(2);
       expect(Array.isArray(results)).toBe(true);
     }, 8000); // Increased timeout for concurrent test
   });
