@@ -17,11 +17,27 @@ import {
   selectRandomStartingPlayer,
   endGame,
   executeMagicCard,
-  createTestUser
+  createTestUser,
+  validateRoomState,
+  validateTurn,
+  validateCardDrawLimit,
+  recordCardDraw,
+  validateHeartPlacement,
+  canPlaceMoreHearts,
+  calculateScore,
+  recordHeartPlacement,
+  canUseMoreMagicCards,
+  recordMagicCardUsage,
+  resetPlayerActions,
+  checkAndExpireShields
 } from '../utils/server-test-utils.js'
 import { HeartCard, WindCard, RecycleCard, ShieldCard, generateRandomMagicCard } from '../../src/lib/cards.js'
 import { Server } from 'socket.io'
 import { createServer } from 'http'
+import {
+  validateRoomCode,
+  findPlayerByUserId
+} from '../../server.js'
 
 // Mock NextAuth and other dependencies
 vi.mock('next-auth/jwt', () => ({
@@ -41,6 +57,9 @@ vi.mock('next', () => {
   }
 })
 
+// Import mocked jwt functions for use in tests
+import { getToken } from 'next-auth/jwt'
+
 describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => {
   let io, serverSocket, clientSocket, testRooms, testPlayerSessions
 
@@ -53,7 +72,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
 
     // Set up test environment
     await clearDatabase()
-    testRooms = await loadRooms()
+    testRooms = new Map() // Start with empty Map instead of loading from database
     testPlayerSessions = new Map()
 
     // Set up global turn locks
@@ -69,7 +88,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
     })
 
     // Mock authentication
-    vi.mocked(require('next-auth/jwt').getToken).mockResolvedValue({
+    vi.mocked(getToken).mockResolvedValue({
       id: 'test-user-1',
       name: 'TestPlayer1',
       email: 'test1@example.com',
@@ -114,15 +133,20 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
 
       // Simulate join-room event
       const eventHandler = async ({ roomCode }) => {
-        if (!require('../../server.js').validateRoomCode(roomCode)) {
+        console.log('eventHandler called with roomCode:', roomCode)
+        if (!validateRoomCode(roomCode)) {
+          console.log('Invalid room code')
           mockSocket.emit("room-error", "Invalid room code")
           return
         }
 
         roomCode = roomCode.toUpperCase()
+        console.log('Upper case roomCode:', roomCode)
         let room = testRooms.get(roomCode)
+        console.log('Room from testRooms:', room)
 
         if (!room) {
+          console.log('Creating new room')
           room = {
             code: roomCode,
             players: [],
@@ -138,15 +162,19 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
           await saveRoom(room)
 
           const player = { userId, name: userName, email: userEmail, isReady: false, score: 0, joinedAt: new Date() }
-          if (!require('../../server.js').findPlayerByUserId(room, userId)) {
+          if (!findPlayerByUserId(room, userId)) {
             room.players.push(player)
           }
 
+          console.log('About to call mockSocket.join with roomCode:', roomCode)
           mockSocket.join(roomCode)
           mockSocket.data.roomCode = roomCode
           mockSocket.data.userId = userId
 
+          console.log('About to call mockSocket.emit')
           mockSocket.emit("room-joined", { players: room.players, playerId: userId })
+        } else {
+          console.log('Room already exists, skipping creation')
         }
       }
 
@@ -194,7 +222,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         const room = testRooms.get(roomCode)
 
         if (room) {
-          const existingPlayerByUserId = require('../../server.js').findPlayerByUserId(room, userId)
+          const existingPlayerByUserId = findPlayerByUserId(room, userId)
           const actualPlayerCount = room.players.length
 
           if (!existingPlayerByUserId && actualPlayerCount >= room.maxPlayers) {
@@ -262,7 +290,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         const room = testRooms.get(roomCode)
 
         if (room) {
-          const existingPlayerByUserId = require('../../server.js').findPlayerByUserId(room, userId)
+          const existingPlayerByUserId = findPlayerByUserId(room, userId)
           const actualPlayerCount = room.players.length
 
           if (!existingPlayerByUserId && actualPlayerCount >= room.maxPlayers) {
@@ -300,7 +328,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         const room = testRooms.get(roomCode)
 
         if (room) {
-          const existingPlayerByUserId = require('../../server.js').findPlayerByUserId(room, userId)
+          const existingPlayerByUserId = findPlayerByUserId(room, userId)
 
           if (existingPlayerByUserId) {
             existingPlayerByUserId.name = userName
@@ -345,7 +373,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
       }
 
       const eventHandler = async ({ roomCode }) => {
-        if (!require('../../server.js').validateRoomCode(roomCode)) {
+        if (!validateRoomCode(roomCode)) {
           mockSocket.emit("room-error", "Invalid room code")
           return
         }
@@ -390,7 +418,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
     })
 
     it('should delete room when last player leaves', async () => {
-      const roomCode = 'DELETE01'
+      const roomCode = 'DELET01'
       const player1 = createTestPlayer({ userId: 'user1', name: 'Player1' })
       const room = createTestRoom({ code: roomCode, players: [player1] })
       testRooms.set(roomCode, room)
@@ -434,7 +462,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
       }
 
       const eventHandler = async ({ roomCode }) => {
-        if (!require('../../server.js').validateRoomCode(roomCode)) {
+        if (!validateRoomCode(roomCode)) {
           mockSocket.emit("room-error", "Invalid room code")
           return
         }
@@ -460,7 +488,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
       }
 
       const eventHandler = async ({ roomCode }) => {
-        if (!require('../../server.js').validateRoomCode(roomCode)) {
+        if (!validateRoomCode(roomCode)) {
           mockSocket.emit("room-error", "Invalid room code")
           return
         }
@@ -609,13 +637,13 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const roomValidation = require('../utils/server-test-utils.js').validateRoomState(room)
+        const roomValidation = validateRoomState(room)
         if (!roomValidation.valid) {
           mockSocket.emit("room-error", roomValidation.error)
           return
         }
 
-        const turnValidation = require('../utils/server-test-utils.js').validateTurn(room, 'user1')
+        const turnValidation = validateTurn(room, 'user1')
         if (!turnValidation.valid) {
           mockSocket.emit("room-error", turnValidation.error)
           return
@@ -628,7 +656,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
 
         try {
           if (room.gameState.gameStarted && room.gameState.deck.cards > 0) {
-            require('../utils/server-test-utils.js').recordCardDraw(room, 'user1', 'heart')
+            recordCardDraw(room, 'user1', 'heart')
             const newHeart = generateSingleHeart()
             if (!room.gameState.playerHands['user1']) {
               room.gameState.playerHands['user1'] = []
@@ -685,7 +713,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const turnValidation = require('../utils/server-test-utils.js').validateTurn(room, 'user1')
+        const turnValidation = validateTurn(room, 'user1')
         if (!turnValidation.valid) {
           mockSocket.emit("room-error", turnValidation.error)
           return
@@ -716,7 +744,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const cardDrawValidation = require('../utils/server-test-utils.js').validateCardDrawLimit(room, 'user1')
+        const cardDrawValidation = validateCardDrawLimit(room, 'user1')
         if (cardDrawValidation.currentActions.drawnHeart) {
           mockSocket.emit("room-error", "You can only draw one heart card per turn")
           return
@@ -786,19 +814,19 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const heartValidation = require('../utils/server-test-utils.js').validateHeartPlacement(room, 'user1', heartId, tileId)
+        const heartValidation = validateHeartPlacement(room, 'user1', heartId, tileId)
         if (!heartValidation.valid) {
           mockSocket.emit("room-error", heartValidation.error)
           return
         }
 
-        const turnValidation = require('../utils/server-test-utils.js').validateTurn(room, 'user1')
+        const turnValidation = validateTurn(room, 'user1')
         if (!turnValidation.valid) {
           mockSocket.emit("room-error", turnValidation.error)
           return
         }
 
-        if (!require('../utils/server-test-utils.js').canPlaceMoreHearts(room, 'user1')) {
+        if (!canPlaceMoreHearts(room, 'user1')) {
           mockSocket.emit("room-error", "You can only place up to 2 heart cards per turn")
           return
         }
@@ -820,7 +848,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
               tile.placedHeart = {
                 ...heart,
                 placedBy: 'user1',
-                score: require('../utils/server-test-utils.js').calculateScore(heart, tile)
+                score: calculateScore(heart, tile)
               }
 
               // Update player score
@@ -830,7 +858,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
               }
 
               playerHand.splice(heartIndex, 1)
-              require('../utils/server-test-utils.js').recordHeartPlacement(room, 'user1')
+              recordHeartPlacement(room, 'user1')
 
               mockSocket.to(roomCode).emit("heart-placed", {
                 tile,
@@ -892,7 +920,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const heartValidation = require('../utils/server-test-utils.js').validateHeartPlacement(room, 'user1', heartId, tileId)
+        const heartValidation = validateHeartPlacement(room, 'user1', heartId, tileId)
         if (!heartValidation.valid) {
           mockSocket.emit("room-error", heartValidation.error)
           return
@@ -924,7 +952,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        if (!require('../utils/server-test-utils.js').canPlaceMoreHearts(room, 'user1')) {
+        if (!canPlaceMoreHearts(room, 'user1')) {
           mockSocket.emit("room-error", "You can only place up to 2 heart cards per turn")
           return
         }
@@ -957,13 +985,13 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const turnValidation = require('../utils/server-test-utils.js').validateTurn(room, 'user1')
+        const turnValidation = validateTurn(room, 'user1')
         if (!turnValidation.valid) {
           mockSocket.emit("room-error", turnValidation.error)
           return
         }
 
-        const cardDrawValidation = require('../utils/server-test-utils.js').validateCardDrawLimit(room, 'user1')
+        const cardDrawValidation = validateCardDrawLimit(room, 'user1')
         if (cardDrawValidation.currentActions.drawnMagic) {
           mockSocket.emit("room-error", "You can only draw one magic card per turn")
           return
@@ -976,7 +1004,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
 
         try {
           if (room.gameState.gameStarted && room.gameState.magicDeck.cards > 0) {
-            require('../utils/server-test-utils.js').recordCardDraw(room, 'user1', 'magic')
+            recordCardDraw(room, 'user1', 'magic')
             const newMagicCard = generateSingleMagicCard()
             if (!room.gameState.playerHands['user1']) {
               room.gameState.playerHands['user1'] = []
@@ -1049,13 +1077,13 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const turnValidation = require('../utils/server-test-utils.js').validateTurn(room, 'user1')
+        const turnValidation = validateTurn(room, 'user1')
         if (!turnValidation.valid) {
           mockSocket.emit("room-error", turnValidation.error)
           return
         }
 
-        if (!require('../utils/server-test-utils.js').canUseMoreMagicCards(room, 'user1')) {
+        if (!canUseMoreMagicCards(room, 'user1')) {
           mockSocket.emit("room-error", "You can only use one magic card per turn")
           return
         }
@@ -1069,7 +1097,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
           const actionResult = await executeMagicCard(room, 'user1', cardId, targetTileId)
 
           if (actionResult) {
-            require('../utils/server-test-utils.js').recordMagicCardUsage(room, 'user1')
+            recordMagicCardUsage(room, 'user1')
 
             mockSocket.to(roomCode).emit("magic-card-used", {
               card: { type: 'wind', emoji: '💨' },
@@ -1124,7 +1152,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const turnValidation = require('../utils/server-test-utils.js').validateTurn(room, 'user1')
+        const turnValidation = validateTurn(room, 'user1')
         if (!turnValidation.valid) {
           mockSocket.emit("room-error", turnValidation.error)
           return
@@ -1139,7 +1167,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
           const actionResult = await executeMagicCard(room, 'user1', cardId, targetTileId)
 
           if (actionResult) {
-            require('../utils/server-test-utils.js').recordMagicCardUsage(room, 'user1')
+            recordMagicCardUsage(room, 'user1')
 
             mockSocket.to(roomCode).emit("magic-card-used", {
               card: { type: 'shield', emoji: '🛡️' },
@@ -1192,7 +1220,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        const turnValidation = require('../utils/server-test-utils.js').validateTurn(room, 'user1')
+        const turnValidation = validateTurn(room, 'user1')
         if (!turnValidation.valid) {
           mockSocket.emit("room-error", turnValidation.error)
           return
@@ -1205,7 +1233,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
 
         try {
           // Reset player actions
-          require('../utils/server-test-utils.js').resetPlayerActions(room, 'user1')
+          resetPlayerActions(room, 'user1')
 
           // Switch to next player
           const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId)
@@ -1214,7 +1242,7 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
           room.gameState.turnCount++
 
           // Check and expire shields
-          require('../utils/server-test-utils.js').checkAndExpireShields(room)
+          checkAndExpireShields(room)
 
           // Check for game end
           const gameEnded = await endGame(room, roomCode, { to: vi.fn().mockReturnThis() }, false)
@@ -1268,8 +1296,8 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
         roomCode = roomCode.toUpperCase()
         const room = testRooms.get(roomCode)
 
-        require('../utils/server-test-utils.js').resetPlayerActions(room, 'user1')
-        require('../utils/server-test-utils.js').checkAndExpireShields(room)
+        resetPlayerActions(room, 'user1')
+        checkAndExpireShields(room)
 
         // Switch to next player
         const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId)

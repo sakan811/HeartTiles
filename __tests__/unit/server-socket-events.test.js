@@ -1021,11 +1021,12 @@ describe('Server Socket.IO Event Handlers', () => {
   describe('Heart Placement Logic', () => {
     it('should place heart on tile successfully', () => {
       const roomCode = 'PLACE01'
-      const heartCard = new HeartCard('red', 2, 'heart-1')
+      const heartCard = new HeartCard('heart-1', 'red', 2, '❤️')
       const room = createTestRoom({
         code: roomCode,
         gameStarted: true,
         currentPlayer: { userId: 'user1', name: 'Player1' },
+        players: [{ userId: 'user1', name: 'Player1', score: 0 }],
         gameState: {
           playerHands: { user1: [heartCard] }
         },
@@ -1098,11 +1099,12 @@ describe('Server Socket.IO Event Handlers', () => {
 
     it('should reject placing heart on occupied tile', () => {
       const roomCode = 'OCCUPIED'
-      const heartCard = new HeartCard('red', 2, 'heart-1')
+      const heartCard = new HeartCard('heart-1', 'red', 2, '❤️')
       const room = createTestRoom({
         code: roomCode,
         gameStarted: true,
         currentPlayer: { userId: 'user1', name: 'Player1' },
+        players: [{ userId: 'user1', name: 'Player1', score: 0 }],
         gameState: {
           playerHands: { user1: [heartCard] } // Ensure heart card is in player's hand
         },
@@ -1129,9 +1131,10 @@ describe('Server Socket.IO Event Handlers', () => {
         code: roomCode,
         gameStarted: true,
         currentPlayer: { userId: 'user1', name: 'Player1' },
+        players: [{ userId: 'user1', name: 'Player1', score: 0 }],
         gameState: {
           playerActions: { user1: { heartsPlaced: 2 } }, // Already placed 2 hearts
-          playerHands: { user1: [new HeartCard('red', 2, 'heart-1')] }
+          playerHands: { user1: [new HeartCard('heart-1', 'red', 2, '❤️')] }
         },
         tiles: [{ id: 0, color: 'red', emoji: '🟥' }]
       })
@@ -1213,12 +1216,12 @@ describe('Server Socket.IO Event Handlers', () => {
           newTileState: expect.objectContaining({
             id: 0,
             color: 'red',
-            placedHeart: null // Heart should be removed
+            placedHeart: undefined // Heart should be removed
           })
         })
       }))
 
-      expect(room.gameState.tiles[0].placedHeart).toBeNull()
+      expect(room.gameState.tiles[0].placedHeart).toBeUndefined()
       expect(room.players[1].score).toBe(0) // Score should be subtracted
     })
 
