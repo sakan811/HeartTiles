@@ -397,7 +397,7 @@ export async function saveRoom(roomData) {
     if (!roomData.gameState) {
       throw new Error('Room data must include gameState')
     }
-    
+
     // Ensure room code is uppercase to match schema validation
     roomData.code = roomData.code.toUpperCase()
 
@@ -842,7 +842,7 @@ export function validatePlayerName(playerName) {
 
 export function sanitizeInput(input) {
   if (typeof input !== 'string') return input;
-  
+
   return input.trim()
     .replace(/[<>]/g, '') // Remove angle brackets
     .replace(/drop\s+table\s+/gi, 'TABLE ') // Replace DROP TABLE with TABLE
@@ -939,392 +939,27 @@ export function resetPlayerActions(room, userId) {
   }
 }
 
-export function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
-  if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null }
+// NOTE: The following functions were removed because they duplicate server.js logic:
+// - generateTiles() - import from server.js
+// - calculateScore() - use HeartCard.calculateScore() or import from server.js
+// - executeMagicCard() - import from server.js
+// - endGame() - import from server.js
+// - validateHeartPlacement() - import from server.js
+// - checkGameEndConditions() - import from server.js
+// - checkAndExpireShields() - import from server.js
+// These should be imported from server.js for testing, not duplicated here.
 
-  // Condition 1: All tiles are filled
-  const allTilesFilled = room.gameState.tiles.every(tile => tile.placedHeart)
-  if (allTilesFilled) {
-    return { shouldEnd: true, reason: "All tiles are filled" }
-  }
-
-  // Condition 2: Any deck is empty
-  const heartDeckEmpty = room.gameState.deck.cards <= 0
-  const magicDeckEmpty = room.gameState.magicDeck.cards <= 0
-  const anyDeckEmpty = heartDeckEmpty || magicDeckEmpty
-
-  if (anyDeckEmpty && !allowDeckEmptyGracePeriod) {
-    if (heartDeckEmpty && magicDeckEmpty) {
-      return { shouldEnd: true, reason: "Both decks are empty" }
-    } else {
-      const emptyDeck = heartDeckEmpty ? "Heart" : "Magic"
-      return { shouldEnd: true, reason: `${emptyDeck} deck is empty` }
-    }
-  }
-
-  return { shouldEnd: false, reason: null }
-}
-
-export function checkAndExpireShields(room) {
-  if (!room.gameState.shields) return
-
-  // Decrement remaining turns for all active shields
-  for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    if (shield.remainingTurns > 0) {
-      shield.remainingTurns--
-
-      // Remove shield if it has expired
-      if (shield.remainingTurns <= 0) {
-        delete room.gameState.shields[userId]
-      }
-    }
-  }
-}
-
-// Tile and card generation - real implementation
-export function generateTiles() {
-  const colors = ["red", "yellow", "green"]
-  const emojis = ["🟥", "🟨", "🟩"]
-  const tiles = []
-
-  for (let i = 0; i < 8; i++) {
-    if (Math.random() < 0.3) {
-      tiles.push({ id: i, color: "white", emoji: "⬜" })
-    } else {
-      const randomIndex = Math.floor(Math.random() * colors.length)
-      tiles.push({
-        id: i,
-        color: colors[randomIndex],
-        emoji: emojis[randomIndex]
-      })
-    }
-  }
-  return tiles
-}
-
-export function calculateScore(heart, tile) {
-  // Check if heart has the calculateScore method (HeartCard instance)
-  if (typeof heart.calculateScore === 'function') {
-    return heart.calculateScore(tile)
-  }
-  // Fallback for plain objects
-  if (tile.color === "white") return heart.value
-  return heart.color === tile.color ? heart.value * 2 : 0
-}
-
+// Simple data generation functions (legitimate test utilities)
 export function generateSingleHeart() {
-  const heartCard = HeartCard.generateRandom()
-  return heartCard
+  return HeartCard.generateRandom()
 }
 
 export function generateSingleMagicCard() {
-  const magicCard = generateRandomMagicCard()
-  return magicCard
+  return generateRandomMagicCard()
 }
 
 export function selectRandomStartingPlayer(players) {
   return players[Math.floor(Math.random() * players.length)]
-}
-
-// Game action functions - real implementation
-export function recordHeartPlacement(room, userId) {
-  if (!room.gameState.playerActions) {
-    room.gameState.playerActions = {}
-  }
-
-  if (!room.gameState.playerActions[userId]) {
-    room.gameState.playerActions[userId] = {
-      drawnHeart: false,
-      drawnMagic: false,
-      heartsPlaced: 0,
-      magicCardsUsed: 0
-    }
-  }
-
-  room.gameState.playerActions[userId].heartsPlaced = (room.gameState.playerActions[userId].heartsPlaced || 0) + 1
-}
-
-export function recordMagicCardUsage(room, userId) {
-  if (!room.gameState.playerActions) {
-    room.gameState.playerActions = {}
-  }
-
-  if (!room.gameState.playerActions[userId]) {
-    room.gameState.playerActions[userId] = {
-      drawnHeart: false,
-      drawnMagic: false,
-      heartsPlaced: 0,
-      magicCardsUsed: 0
-    }
-  }
-
-  room.gameState.playerActions[userId].magicCardsUsed = (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1
-}
-
-export function canPlaceMoreHearts(room, userId) {
-  const playerActions = room.gameState.playerActions[userId] || { heartsPlaced: 0 }
-  return (playerActions.heartsPlaced || 0) < 2
-}
-
-export function canUseMoreMagicCards(room, userId) {
-  const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 }
-  return (playerActions.magicCardsUsed || 0) < 1
-}
-
-export function validateHeartPlacement(room, userId, heartId, tileId) {
-  const playerHand = room.gameState.playerHands[userId] || []
-  const heart = playerHand.find(card => card.id === heartId)
-  if (!heart) return { valid: false, error: "Card not in player's hand" }
-
-  if (!isHeartCard(heart)) {
-    return { valid: false, error: "Only heart cards can be placed on tiles" }
-  }
-
-  // Convert to HeartCard instance if needed
-  let heartCard = heart
-  if (!(heart instanceof HeartCard)) {
-    heartCard = createCardFromData(heart)
-  }
-
-  const tile = room.gameState.tiles.find(tile => tile.id == tileId)
-  if (!tile) return { valid: false, error: "Tile not found" }
-
-  if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" }
-
-  if (!heartCard.canTargetTile(tile)) {
-    return { valid: false, error: "This heart cannot be placed on this tile" }
-  }
-
-  return { valid: true }
-}
-
-// Game end and scoring - real implementation
-export async function endGame(room, roomCode, io, allowDeckEmptyGracePeriod = true) {
-  const gameEndResult = checkGameEndConditions(room, allowDeckEmptyGracePeriod)
-  if (!gameEndResult.shouldEnd) return false
-
-  console.log(`Game ending in room ${roomCode}: ${gameEndResult.reason}`)
-
-  // Determine winner based on scores
-  const sortedPlayers = [...room.players].sort((a, b) => (b.score || 0) - (a.score || 0))
-  const winner = sortedPlayers[0]
-  const isTie = sortedPlayers.length > 1 && sortedPlayers[0].score === sortedPlayers[1].score
-
-  const gameEndData = {
-    reason: gameEndResult.reason,
-    players: room.players.map(player => ({
-      ...player,
-      hand: room.gameState.playerHands[player.userId] || []
-    })),
-    winner: isTie ? null : winner,
-    isTie: isTie,
-    finalScores: room.players.map(player => ({
-      userId: player.userId,
-      name: player.name,
-      score: player.score || 0
-    }))
-  }
-
-  // Broadcast game over to all players
-  if (io) {
-    io.to(roomCode).emit("game-over", gameEndData)
-  }
-
-  // Mark game as ended
-  room.gameState.gameStarted = false
-  room.gameState.gameEnded = true
-  room.gameState.endReason = gameEndResult.reason
-
-  if (roomCode) {
-    await saveRoom(room)
-  }
-
-  return true
-}
-
-// Player session utilities - real implementation
-export async function getPlayerSession(playerSessions, userId, userSessionId, userName, userEmail) {
-  let session = playerSessions.get(userId)
-
-  if (!session) {
-    const newSession = {
-      userId, userSessionId, name: userName, email: userEmail,
-      currentSocketId: null, lastSeen: new Date(), isActive: true
-    }
-    playerSessions.set(userId, newSession)
-    await savePlayerSession(newSession)
-    session = newSession
-  } else {
-    session.lastSeen = new Date()
-    session.isActive = true
-    await savePlayerSession(session)
-  }
-
-  return session
-}
-
-export async function updatePlayerSocket(playerSessions, userId, socketId, userSessionId, userName, userEmail) {
-  const session = await getPlayerSession(playerSessions, userId, userSessionId, userName, userEmail)
-  session.currentSocketId = socketId
-  session.lastSeen = new Date()
-  session.isActive = true
-  await savePlayerSession(session)
-  return session
-}
-
-// Migration utilities - real implementation
-export async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail) {
-  const playerIndex = room.players.findIndex(p => p.userId === oldUserId)
-  if (playerIndex !== -1) {
-    room.players[playerIndex] = {
-      ...room.players[playerIndex],
-      userId: newUserId, name: userName, email: userEmail,
-      score: room.players[playerIndex].score || 0
-    }
-  } else {
-    room.players.push({
-      userId: newUserId, name: userName, email: userEmail,
-      isReady: false, score: 0, joinedAt: new Date()
-    })
-  }
-
-  if (room.gameState.playerHands[oldUserId]) {
-    room.gameState.playerHands[newUserId] = room.gameState.playerHands[oldUserId]
-    delete room.gameState.playerHands[oldUserId]
-  }
-
-  // Migrate shield state
-  if (room.gameState.shields && room.gameState.shields[oldUserId]) {
-    room.gameState.shields[newUserId] = room.gameState.shields[oldUserId]
-    delete room.gameState.shields[oldUserId]
-  }
-
-  if (room.gameState.currentPlayer?.userId === oldUserId) {
-    room.gameState.currentPlayer = {
-      userId: newUserId, name: userName, email: userEmail,
-      isReady: room.players.find(p => p.userId === newUserId)?.isReady || false
-    }
-  }
-
-  // Clean up turn locks - use global if available (for test environment), otherwise local
-  // In test environment, tests set up global.turnLocks in beforeEach
-  if (global.turnLocks) {
-    // Clean up global turn locks in test environment
-    const globalKeysToDelete = [];
-    for (const lockKey of global.turnLocks.keys()) {
-      if (lockKey.includes(oldUserId)) {
-        globalKeysToDelete.push(lockKey);
-      }
-    }
-    for (const lockKey of globalKeysToDelete) {
-      global.turnLocks.delete(lockKey);
-    }
-  } else {
-    // Clean up local turn locks in non-test environment
-    const localKeysToDelete = [];
-    for (const lockKey of turnLocks.keys()) {
-      if (lockKey.includes(oldUserId)) {
-        localKeysToDelete.push(lockKey);
-      }
-    }
-    for (const lockKey of localKeysToDelete) {
-      turnLocks.delete(lockKey);
-    }
-  }
-}
-
-// IP utilities - real implementation
-export function getClientIP(socket) {
-  return socket.handshake.address || socket.conn.remoteAddress || 'unknown'
-}
-
-// Magic card execution - real implementation
-export async function executeMagicCard(room, userId, cardId, targetTileId) {
-  const playerHand = room.gameState.playerHands[userId] || []
-  const cardIndex = playerHand.findIndex(card => card.id === cardId)
-
-  if (cardIndex === -1) {
-    throw new Error("Magic card not found in your hand")
-  }
-
-  const card = playerHand[cardIndex]
-  let actionResult = null
-
-  // Convert plain object cards to instances if needed
-  let magicCard = card
-  if (!(card instanceof WindCard || card instanceof RecycleCard || card instanceof ShieldCard)) {
-    magicCard = createCardFromData(card)
-  }
-
-  // Validate and execute based on card type
-  if (magicCard.type === 'shield') {
-    if (targetTileId && targetTileId !== 'self') {
-      throw new Error("Shield cards don't target tiles")
-    }
-
-    if (room.gameState.currentPlayer.userId !== userId) {
-      throw new Error("You can only use Shield cards on your own turn")
-    }
-
-    actionResult = magicCard.executeEffect(room.gameState, userId)
-  } else {
-    if (targetTileId === null || targetTileId === undefined || targetTileId === 'self') {
-      throw new Error("Target tile is required for this card")
-    }
-
-    const tile = room.gameState.tiles.find(t => t.id == targetTileId)
-    if (!tile) {
-      throw new Error("Target tile not found")
-    }
-
-    if (magicCard.type === 'wind') {
-      if (!magicCard.canTargetTile(tile, userId)) {
-        throw new Error("Invalid target for Wind card - you can only target opponent's hearts")
-      }
-
-      // Check shield protection
-      const opponentId = tile.placedHeart.placedBy
-      const currentTurnCount = room.gameState.turnCount || 1
-      if (room.gameState.shields && room.gameState.shields[opponentId]) {
-        const shield = room.gameState.shields[opponentId]
-        if (ShieldCard.isActive(shield, currentTurnCount)) {
-          const remainingTurns = ShieldCard.getRemainingTurns(shield, currentTurnCount)
-          throw new Error(`Opponent is protected by Shield (${remainingTurns} turns remaining)`)
-        }
-      }
-
-      // Subtract score from opponent
-      const placedHeart = tile.placedHeart
-      if (placedHeart && placedHeart.score) {
-        const playerIndex = room.players.findIndex(p => p.userId === placedHeart.placedBy)
-        if (playerIndex !== -1) {
-          room.players[playerIndex].score -= placedHeart.score
-        }
-      }
-
-      actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId)
-      if (actionResult) {
-        const tileIndex = room.gameState.tiles.findIndex(t => t.id == targetTileId)
-        room.gameState.tiles[tileIndex] = actionResult.newTileState
-      }
-    } else if (magicCard.type === 'recycle') {
-      if (!magicCard.canTargetTile(tile)) {
-        throw new Error("Invalid target for Recycle card")
-      }
-
-      actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId)
-      if (actionResult) {
-        const tileIndex = room.gameState.tiles.findIndex(t => t.id == targetTileId)
-        room.gameState.tiles[tileIndex] = actionResult.newTileState
-      }
-    }
-  }
-
-  // Remove used card and record usage
-  room.gameState.playerHands[userId].splice(cardIndex, 1)
-  recordMagicCardUsage(room, userId)
-
-  return actionResult
 }
 
 // Room creation utilities - real implementation
@@ -1347,29 +982,8 @@ export function createDefaultRoom(roomCode) {
   }
 }
 
-export function startGame(room) {
-  room.gameState.tiles = generateTiles()
-  room.gameState.gameStarted = true
-  room.gameState.deck.cards = 16
-  room.gameState.magicDeck.cards = 16
-  room.gameState.playerActions = {}
-
-  // Deal initial cards
-  room.players.forEach(player => {
-    room.gameState.playerHands[player.userId] = []
-    for (let i = 0; i < 3; i++) {
-      room.gameState.playerHands[player.userId].push(generateSingleHeart())
-    }
-    for (let i = 0; i < 2; i++) {
-      room.gameState.playerHands[player.userId].push(generateSingleMagicCard())
-    }
-  })
-
-  room.gameState.currentPlayer = selectRandomStartingPlayer(room.players)
-  room.gameState.turnCount = 1
-
-  return room
-}
+// NOTE: startGame() function removed - it was calling removed functions.
+// Use server.js startGame function for testing.
 
 // Test helpers for creating realistic test data
 export function createTestUser(userData = {}) {
@@ -1387,7 +1001,7 @@ export function createTestRoom(roomData = {}) {
     players: roomData.players || [],
     maxPlayers: 2,
     gameState: {
-      tiles: roomData.tiles || generateTiles(),
+      tiles: roomData.tiles || [], // Removed generateTiles() call
       gameStarted: roomData.gameStarted || false,
       currentPlayer: roomData.currentPlayer || null,
       deck: { emoji: "💌", cards: 16, type: 'hearts' },

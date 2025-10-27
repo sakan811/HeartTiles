@@ -1,170 +1,84 @@
-import { vi } from 'vitest';
+/**
+ * Simple card data factories for testing
+ *
+ * IMPORTANT: These factories create simple data objects, NOT mock implementations.
+ * Tests should import real card classes from src/lib/cards.js for testing behavior.
+ */
 
 /**
- * Factory for creating test heart cards
+ * Factory for creating heart card data objects
  */
-export const createHeartCard = (overrides = {}) => {
+export const createHeartCardData = (overrides = {}) => {
   const defaults = {
     id: `heart-${Date.now()}-${Math.random()}`,
     color: 'red',
     value: 2,
     emoji: '❤️',
-    type: 'heart',
-    canTargetTile: vi.fn((tile) => !tile.placedHeart),
-    calculateScore: vi.fn((tile) => {
-      if (tile.color === 'white') return overrides.value || 2;
-      return tile.color === overrides.color ? (overrides.value || 2) * 2 : 0;
-    })
+    type: 'heart'
   };
 
   return { ...defaults, ...overrides };
 };
 
 /**
- * Factory for creating test wind cards
+ * Factory for creating wind card data objects
  */
-export const createWindCard = (overrides = {}) => {
+export const createWindCardData = (overrides = {}) => {
   const defaults = {
     id: `wind-${Date.now()}-${Math.random()}`,
     type: 'wind',
     emoji: '💨',
-    name: 'Wind Card',
-    canTargetTile: vi.fn((tile, playerId) => tile.placedHeart && tile.placedHeart.placedBy !== playerId),
-    executeEffect: vi.fn((gameState, targetTileId, playerId) => {
-      const tile = gameState.tiles.find(t => t.id == targetTileId);
-      if (!tile || !tile.placedHeart) throw new Error('Invalid target for Wind card');
-
-      const removedHeart = { ...tile.placedHeart };
-      const originalColor = tile.placedHeart.originalTileColor || 'white';
-
-      // Apply the effect to the tile state directly
-      const tileIndex = gameState.tiles.findIndex(t => t.id == targetTileId);
-      if (tileIndex !== -1) {
-        gameState.tiles[tileIndex] = {
-          id: tile.id,
-          color: originalColor,
-          emoji: originalColor === 'white' ? '⬜' :
-                originalColor === 'red' ? '🟥' :
-                originalColor === 'yellow' ? '🟨' : '🟩',
-          placedHeart: undefined
-        };
-      }
-
-      return {
-        type: 'wind',
-        removedHeart,
-        targetedPlayerId: removedHeart.placedBy,
-        tileId: tile.id,
-        newTileState: {
-          id: tile.id,
-          color: originalColor,
-          emoji: originalColor === 'white' ? '⬜' :
-                originalColor === 'red' ? '🟥' :
-                originalColor === 'yellow' ? '🟨' : '🟩',
-          placedHeart: undefined
-        }
-      };
-    })
+    name: 'Wind Card'
   };
 
   return { ...defaults, ...overrides };
 };
 
 /**
- * Factory for creating test recycle cards
+ * Factory for creating recycle card data objects
  */
-export const createRecycleCard = (overrides = {}) => {
+export const createRecycleCardData = (overrides = {}) => {
   const defaults = {
     id: `recycle-${Date.now()}-${Math.random()}`,
     type: 'recycle',
     emoji: '♻️',
-    name: 'Recycle Card',
-    canTargetTile: vi.fn((tile) => !tile.placedHeart && tile.color !== 'white'),
-    executeEffect: vi.fn((gameState, targetTileId) => {
-      const tile = gameState.tiles.find(t => t.id == targetTileId);
-      if (!tile || tile.color === 'white' || tile.placedHeart) throw new Error('Invalid target for Recycle card');
-      return {
-        type: 'recycle',
-        previousColor: tile.color,
-        newColor: 'white',
-        tileId: tile.id,
-        newTileState: {
-          id: tile.id,
-          color: 'white',
-          emoji: '⬜',
-          placedHeart: tile.placedHeart
-        }
-      };
-    })
+    name: 'Recycle Card'
   };
 
   return { ...defaults, ...overrides };
 };
 
 /**
- * Factory for creating test shield cards
+ * Factory for creating shield card data objects
  */
-export const createShieldCard = (overrides = {}) => {
+export const createShieldCardData = (overrides = {}) => {
   const defaults = {
     id: `shield-${Date.now()}-${Math.random()}`,
     type: 'shield',
     emoji: '🛡️',
-    name: 'Shield Card',
-    canTargetTile: vi.fn(() => false),
-    executeEffect: vi.fn((gameState, playerId) => {
-      if (!gameState.shields) gameState.shields = {};
-      gameState.shields[playerId] = {
-        active: true,
-        remainingTurns: 2,
-        activatedAt: Date.now(),
-        activatedTurn: gameState.turnCount || 1,
-        activatedBy: playerId,
-        protectedPlayerId: playerId
-      };
-      return {
-        type: 'shield',
-        activatedFor: playerId,
-        protectedPlayerId: playerId,
-        remainingTurns: 2,
-        message: `Shield activated! Your tiles and hearts are protected for 2 turns.`,
-        reinforced: false
-      };
-    }),
-    isActive: vi.fn((shield, currentTurnCount) => {
-      if (!shield) return false;
-      if (shield.remainingTurns === 0) return false;
-      if (shield.activatedTurn !== undefined && currentTurnCount !== undefined) {
-        const expirationTurn = shield.activatedTurn + 2;
-        return currentTurnCount < expirationTurn;
-      }
-      return shield.remainingTurns > 0;
-    }),
-    isPlayerProtected: vi.fn((gameState, playerId, currentTurnCount) => {
-      if (!gameState.shields || !gameState.shields[playerId]) return false;
-      return gameState.shields[playerId].remainingTurns > 0;
-    })
+    name: 'Shield Card'
   };
 
   return { ...defaults, ...overrides };
 };
 
 /**
- * Create a set of predefined heart cards for testing
+ * Create a set of predefined heart card data objects for testing
  */
-export const createTestHeartSet = (playerId) => [
-  createHeartCard({
+export const createTestHeartDataSet = (playerId) => [
+  createHeartCardData({
     id: `heart-${playerId}-1`,
     color: 'red',
     value: 2,
     emoji: '❤️'
   }),
-  createHeartCard({
+  createHeartCardData({
     id: `heart-${playerId}-2`,
     color: 'yellow',
     value: 1,
     emoji: '💛'
   }),
-  createHeartCard({
+  createHeartCardData({
     id: `heart-${playerId}-3`,
     color: 'green',
     value: 3,
@@ -173,34 +87,34 @@ export const createTestHeartSet = (playerId) => [
 ];
 
 /**
- * Create a set of predefined magic cards for testing
+ * Create a set of predefined magic card data objects for testing
  */
-export const createTestMagicSet = (playerId) => [
-  createWindCard({
+export const createTestMagicDataSet = (playerId) => [
+  createWindCardData({
     id: `magic-${playerId}-1`
   }),
-  createRecycleCard({
+  createRecycleCardData({
     id: `magic-${playerId}-2`
   })
 ];
 
 /**
- * Create a complete initial hand for a player
+ * Create a complete initial hand data set for a player
  */
-export const createInitialHand = (playerId) => [
-  ...createTestHeartSet(playerId),
-  ...createTestMagicSet(playerId)
+export const createInitialHandData = (playerId) => [
+  ...createTestHeartDataSet(playerId),
+  ...createTestMagicDataSet(playerId)
 ];
 
 /**
- * Generate random heart card with specified parameters
+ * Generate random heart card data with specified parameters
  */
-export const generateRandomHeartCard = (overrides = {}) => {
+export const generateRandomHeartCardData = (overrides = {}) => {
   const colors = ['red', 'yellow', 'green'];
   const emojis = ['❤️', '💛', '💚'];
   const colorIndex = Math.floor(Math.random() * 3);
 
-  return createHeartCard({
+  return createHeartCardData({
     color: colors[colorIndex],
     value: Math.floor(Math.random() * 3) + 1,
     emoji: emojis[colorIndex],
@@ -209,9 +123,9 @@ export const generateRandomHeartCard = (overrides = {}) => {
 };
 
 /**
- * Generate random magic card with weighted distribution
+ * Generate random magic card data with weighted distribution
  */
-export const generateRandomMagicCard = (overrides = {}) => {
+export const generateRandomMagicCardData = (overrides = {}) => {
   const types = ['wind', 'recycle', 'shield'];
   const weights = [6, 5, 5]; // Game rule distribution
   const totalWeight = weights.reduce((a, b) => a + b, 0);
@@ -228,40 +142,47 @@ export const generateRandomMagicCard = (overrides = {}) => {
 
   switch (selectedType) {
     case 'wind':
-      return createWindCard(overrides);
+      return createWindCardData(overrides);
     case 'recycle':
-      return createRecycleCard(overrides);
+      return createRecycleCardData(overrides);
     case 'shield':
-      return createShieldCard(overrides);
+      return createShieldCardData(overrides);
     default:
-      return createWindCard(overrides);
+      return createWindCardData(overrides);
   }
 };
 
 /**
- * Helper functions to check card types
+ * Helper functions to check card types from data objects
  */
-export const isHeartCard = (card) => card?.type === 'heart' || (card?.color && card?.value !== undefined);
-export const isMagicCard = (card) => card?.type && ['wind', 'recycle', 'shield'].includes(card.type);
-export const isWindCard = (card) => card?.type === 'wind';
-export const isRecycleCard = (card) => card?.type === 'recycle';
-export const isShieldCard = (card) => card?.type === 'shield';
+export const isHeartCardData = (card) => card?.type === 'heart' || (card?.color && card?.value !== undefined);
+export const isMagicCardData = (card) => card?.type && ['wind', 'recycle', 'shield'].includes(card.type);
+export const isWindCardData = (card) => card?.type === 'wind';
+export const isRecycleCardData = (card) => card?.type === 'recycle';
+export const isShieldCardData = (card) => card?.type === 'shield';
+
+// Legacy exports for backward compatibility
+// TODO: Update test files to use the new naming convention
+export const createHeartCard = createHeartCardData;
+export const createWindCard = createWindCardData;
+export const createRecycleCard = createRecycleCardData;
+export const createShieldCard = createShieldCardData;
+export const createTestHeartSet = createTestHeartDataSet;
+export const createTestMagicSet = createTestMagicDataSet;
+export const createInitialHand = createInitialHandData;
+export const generateRandomHeartCard = generateRandomHeartCardData;
+export const generateRandomMagicCard = generateRandomMagicCardData;
+export const isHeartCard = isHeartCardData;
+export const isMagicCard = isMagicCardData;
+export const isWindCard = isWindCardData;
+export const isRecycleCard = isRecycleCardData;
+export const isShieldCard = isShieldCardData;
 
 /**
- * Create card from data (for compatibility with existing code)
+ * Create card data from existing card (for compatibility)
+ * Simply returns the card data as-is since we don't create mock instances
  */
 export const createCardFromData = (cardData) => {
   if (!cardData) return null;
-
-  if (isHeartCard(cardData)) {
-    return createHeartCard(cardData);
-  } else if (isWindCard(cardData)) {
-    return createWindCard(cardData);
-  } else if (isRecycleCard(cardData)) {
-    return createRecycleCard(cardData);
-  } else if (isShieldCard(cardData)) {
-    return createShieldCard(cardData);
-  }
-
   return cardData;
 };
