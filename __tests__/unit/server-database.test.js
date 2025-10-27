@@ -319,7 +319,7 @@ describe('Server Database Operations and Logic', () => {
         const { deleteRoom } = await import('../../server.js')
 
         // Should not throw, but should log error
-        await expect(deleteRoom('TEST')).resolves.toBeUndefined()
+        await expect(deleteRoom('TEST')).rejects.toThrow('Error: Database delete failed') 
         expect(console.error).toHaveBeenCalledWith('Failed to delete room:', expect.any(Error))
       })
     })
@@ -390,7 +390,7 @@ describe('Server Database Operations and Logic', () => {
         const sessionData = { userId: 'testUser', name: 'Test Player' }
 
         // Should not throw, but should log error
-        await expect(savePlayerSession(sessionData)).resolves.toBeUndefined()
+        await expect(savePlayerSession(sessionData)).rejects.toThrow('Failed to save player session:')
         expect(console.error).toHaveBeenCalledWith('Failed to save player session:', expect.any(Error))
       })
     })
@@ -433,8 +433,8 @@ describe('Server Database Operations and Logic', () => {
       const { savePlayerSession } = await import('../../server.js')
 
       // Test with undefined session data
-      await expect(savePlayerSession(undefined)).resolves.toBeUndefined()
-      expect(console.error).toHaveBeenCalledWith('Failed to save player session:', expect.any(Error))
+      await expect(savePlayerSession(undefined)).rejects.toThrow('Session data and userId are required');
+      expect(console.error).toHaveBeenCalledWith('Session data and userId are required');
     })
   })
 })

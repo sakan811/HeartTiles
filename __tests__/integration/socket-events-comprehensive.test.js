@@ -1394,39 +1394,56 @@ describe('Comprehensive Socket.IO Event Handlers Tests (lines 613-1635)', () => 
   describe('shuffle-tiles event handler', () => {
     it('should shuffle tiles in active game', async () => {
       const roomCode = 'SHUFFLE'
-      const originalTiles = generateTiles()
-      const room = createTestRoom({
-        code: roomCode,
-        gameStarted: true,
-        tiles: originalTiles
+
+      // Mock Math.random to ensure different tile configurations
+      const originalMathRandom = Math.random
+      let callCount = 0
+      Math.random = vi.fn().mockImplementation(() => {
+        callCount++
+        // First call (original tiles): return 0.1 (mostly red tiles)
+        if (callCount <= 8) return 0.1
+        // Second call (shuffled tiles): return 0.8 (mostly green tiles)
+        return 0.8
       })
-      testRooms.set(roomCode, room)
 
-      const mockSocket = {
-        emit: vi.fn(),
-        to: vi.fn().mockReturnThis()
-      }
+      try {
+        const originalTiles = generateTiles()
+        const room = createTestRoom({
+          code: roomCode,
+          gameStarted: true,
+          tiles: originalTiles
+        })
+        testRooms.set(roomCode, room)
 
-      const eventHandler = async ({ roomCode }) => {
-        roomCode = roomCode.toUpperCase()
-        const room = testRooms.get(roomCode)
-
-        if (room?.gameState.gameStarted) {
-          room.gameState.tiles = generateTiles()
-          mockSocket.to(roomCode).emit("tiles-updated", { tiles: room.gameState.tiles })
+        const mockSocket = {
+          emit: vi.fn(),
+          to: vi.fn().mockReturnThis()
         }
+
+        const eventHandler = async ({ roomCode }) => {
+          roomCode = roomCode.toUpperCase()
+          const room = testRooms.get(roomCode)
+
+          if (room?.gameState.gameStarted) {
+            room.gameState.tiles = generateTiles()
+            mockSocket.to(roomCode).emit("tiles-updated", { tiles: room.gameState.tiles })
+          }
+        }
+
+        await eventHandler({ roomCode })
+
+        expect(mockSocket.to).toHaveBeenCalledWith(roomCode)
+        expect(mockSocket.to().emit).toHaveBeenCalledWith("tiles-updated", expect.objectContaining({
+          tiles: expect.any(Array)
+        }))
+
+        // Verify tiles were updated
+        expect(room.gameState.tiles).not.toEqual(originalTiles)
+        expect(room.gameState.tiles).toHaveLength(8)
+      } finally {
+        // Restore original Math.random
+        Math.random = originalMathRandom
       }
-
-      await eventHandler({ roomCode })
-
-      expect(mockSocket.to).toHaveBeenCalledWith(roomCode)
-      expect(mockSocket.to().emit).toHaveBeenCalledWith("tiles-updated", expect.objectContaining({
-        tiles: expect.any(Array)
-      }))
-
-      // Verify tiles were updated
-      expect(room.gameState.tiles).not.toEqual(originalTiles)
-      expect(room.gameState.tiles).toHaveLength(8)
     })
 
     it('should ignore shuffle in non-started game', async () => {

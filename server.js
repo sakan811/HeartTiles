@@ -88,13 +88,25 @@ async function loadPlayerSessions() {
 
 async function savePlayerSession(sessionData) {
   try {
-    await PlayerSession.findOneAndUpdate(
+    if (!sessionData || !sessionData.userId) {
+      throw new Error('Session data and userId are required');
+    }
+
+    // Generate userSessionId if not provided
+    if (!sessionData.userSessionId) {
+      sessionData.userSessionId = `session_${sessionData.userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    const savedSession = await PlayerSession.findOneAndUpdate(
       { userId: sessionData.userId },
       sessionData,
       { upsert: true, new: true }
     );
+
+    return savedSession;
   } catch (err) {
     console.error('Failed to save player session:', err);
+    throw err;
   }
 }
 
