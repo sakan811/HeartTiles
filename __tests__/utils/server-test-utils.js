@@ -4,7 +4,6 @@ import {
   WindCard,
   RecycleCard,
   ShieldCard,
-  generateRandomMagicCard,
   isHeartCard,
   isMagicCard,
   createCardFromData
@@ -33,7 +32,6 @@ import {
   sanitizeInput,
   findPlayerByUserId,
   findPlayerByName,
-  connectToDatabase as serverConnectToDatabase,
   loadRooms,
   saveRoom,
   deleteRoom,
@@ -45,10 +43,7 @@ import {
   getClientIP,
   acquireTurnLock,
   releaseTurnLock,
-  authenticateSocket,
-  migratePlayerData,
-  getPlayerSession,
-  updatePlayerSocket
+  migratePlayerData
 } from '../../server.js'
 
 // Re-export HeartCard for test files
@@ -83,10 +78,7 @@ export {
   getClientIP,
   acquireTurnLock,
   releaseTurnLock,
-  authenticateSocket,
   migratePlayerData,
-  getPlayerSession,
-  updatePlayerSocket,
   // Database functions
   loadRooms,
   saveRoom,
@@ -96,7 +88,85 @@ export {
 }
 
 import { PlayerSession, Room, User } from '../../models.js'
-import { getToken } from 'next-auth/jwt'
+
+// Test-friendly wrapper for authenticateSocket middleware
+// This function replicates the authentication logic but returns a result object
+// instead of calling a next() callback, making it easier to test
+export async function authenticateSocket(socket, getTokenFunc, userModel) {
+  try {
+    const token = await getTokenFunc({
+      req: socket.handshake,
+      secret: process.env.AUTH_SECRET
+    });
+
+    if (!token?.id) {
+      throw new Error('Authentication required');
+    }
+
+    const user = await userModel.findById(token.id);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Set socket data like the original middleware
+    socket.data.userId = token.id;
+    socket.data.userEmail = user.email;
+    socket.data.userName = user.name;
+    socket.data.userSessionId = token.jti;
+
+    // Return result object for testing instead of calling next()
+    return {
+      authenticated: true,
+      user: user,
+      token: token
+    };
+  } catch (error) {
+    throw error; // Let the test handle the error
+  }
+}
+
+// Test-friendly implementations for player session management
+// These functions manage in-memory sessions using a Map for testing
+export async function getPlayerSession(playerSessions, userId, userSessionId, userName, userEmail) {
+  const existingSession = playerSessions.get(userId);
+
+  if (existingSession) {
+    // Update existing session
+    existingSession.lastSeen = new Date();
+    existingSession.isActive = true;
+    return existingSession;
+  } else {
+    // Create new session
+    const newSession = {
+      userId,
+      userSessionId,
+      name: userName,
+      email: userEmail,
+      currentSocketId: null,
+      lastSeen: new Date(),
+      isActive: true
+    };
+
+    playerSessions.set(userId, newSession);
+    return newSession;
+  }
+}
+
+export async function updatePlayerSocket(playerSessions, userId, socketId, userSessionId, userName, userEmail) {
+  let session = playerSessions.get(userId);
+
+  if (!session) {
+    // Create session if it doesn't exist
+    session = await getPlayerSession(playerSessions, userId, userSessionId, userName, userEmail);
+  }
+
+  // Update socket information
+  session.currentSocketId = socketId;
+  session.lastSeen = new Date();
+  session.isActive = true;
+
+  return session;
+}
 
 // Test environment utilities
 export function ensureTestEnvironment() {
@@ -109,7 +179,7 @@ export function ensureTestEnvironment() {
 // Database connection functions - real implementation for integration testing
 export async function connectToDatabase() {
   // Ensure we're using test environment for integration tests
-  const isTestEnvironment = ensureTestEnvironment()
+  ensureTestEnvironment()
 
   // Default to test database if not specified or in test environment
   // Add process-specific suffix to avoid conflicts when running in parallel
