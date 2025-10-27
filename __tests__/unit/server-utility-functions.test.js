@@ -292,7 +292,7 @@ describe('Server Utility Functions Tests', () => {
         playerHands: {
           player1: [
             { id: 'magic-1', type: 'wind', emoji: '💨' }, // Magic card
-            { id: 'invalid-1', color: 'red', value: 2 } // Missing type
+            { id: 'invalid-1', color: 'red' } // Missing value
           ]
         }
       })

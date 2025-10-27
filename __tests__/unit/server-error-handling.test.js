@@ -46,7 +46,7 @@ describe('Server Error Handling and Edge Cases', () => {
         '',
         '   ',
         '\n\t\r',
-        'a'.repeat(21), // Too long
+        'a'.repeat(26), // Too long
         'name\x00with\x01control\x7fchars',
         123,
         [],
