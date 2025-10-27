@@ -320,7 +320,7 @@ describe('Server Database Operations and Logic', () => {
 
         // Should not throw, but should log error
         await expect(deleteRoom('TEST')).rejects.toThrow('Error: Database delete failed') 
-        expect(console.error).toHaveBeenCalledWith('Failed to delete room:', expect.any(Error))
+        expect(console.error).toHaveBeenCalledWith('Database delete failed', expect.any(Error))
       })
     })
 
@@ -391,7 +391,7 @@ describe('Server Database Operations and Logic', () => {
 
         // Should not throw, but should log error
         await expect(savePlayerSession(sessionData)).rejects.toThrow('Failed to save player session:')
-        expect(console.error).toHaveBeenCalledWith('Failed to save player session:', expect.any(Error))
+        expect(console.error).toHaveBeenCalledWith('Session save failed', expect.any(Error))
       })
     })
   })
@@ -434,7 +434,7 @@ describe('Server Database Operations and Logic', () => {
 
       // Test with undefined session data
       await expect(savePlayerSession(undefined)).rejects.toThrow('Session data and userId are required');
-      expect(console.error).toHaveBeenCalledWith('Session data and userId are required');
+      expect(console.error).toHaveBeenCalledWith('Failed to save player session:', expect.any(Error));
     })
   })
 })
