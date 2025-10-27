@@ -423,7 +423,7 @@ describe('Scoring System and Game End Conditions', () => {
 
       // Verify the room was saved with correct state
       expect(result).toBeDefined()
-      expect(result.code).toBe('ENDGAME123')
+      expect(result.code).toBe('ENDGME1')
       expect(result.gameState.gameStarted).toBe(false)
 
       // The most important verification is that the save operation worked

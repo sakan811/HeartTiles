@@ -121,7 +121,7 @@ describe('Error Handling and Edge Cases', () => {
           undefined,
           '',
           '   ',
-          'a'.repeat(21), // Too long
+          'a'.repeat(27), // Too long
           123,
           {},
           []
