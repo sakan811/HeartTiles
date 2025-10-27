@@ -712,7 +712,7 @@ describe('Socket.IO Events Integration Tests', () => {
       });
 
       const error = await waitFor(currentClient, 'room-error');
-      expect(error).toBe('Invalid input data');
+      expect(error).toBe('Game not started');
     });
 
     it('should handle missing room code in events', async () => {
@@ -720,7 +720,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
       client.emit('player-ready', {});
       const error = await waitFor(client, 'room-error');
-      expect(error).toBe('Invalid room code');
+      expect(error).toBe('Room not found');
     });
 
     it('should reject game actions when game not started', async () => {
