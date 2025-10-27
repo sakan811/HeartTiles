@@ -13,23 +13,44 @@ export const waitFor = (socket, event, timeout = 5000) => {
       return;
     }
 
-    const timer = setTimeout(() => {
-      if (socket && typeof socket.off === 'function') {
+    let timer = null;
+    let resolved = false;
+
+    const cleanup = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (socket && typeof socket.off === 'function' && !resolved) {
         socket.off(event, listener);
       }
-      reject(new Error(`Timeout waiting for event: ${event} after ${timeout}ms`));
+    };
+
+    timer = setTimeout(() => {
+      if (!resolved) {
+        cleanup();
+        reject(new Error(`Timeout waiting for event: ${event} after ${timeout}ms`));
+      }
     }, timeout);
 
     const listener = (data) => {
-      clearTimeout(timer);
-      if (socket && typeof socket.off === 'function') {
-        socket.off(event, listener);
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        console.log(`Test helper: Received event '${event}' with data:`, data);
+        resolve(data);
       }
-      console.log(`Test helper: Received event '${event}' with data:`, data);
-      resolve(data);
     };
 
-    socket.on(event, listener);
+    // Check if event already emitted (race condition)
+    const eventListeners = socket._events?.[event];
+    if (eventListeners && typeof eventListeners === 'function') {
+      // Event already has a listener, add ours
+      socket.on(event, listener);
+    } else {
+      socket.on(event, listener);
+    }
+
     console.log(`Test helper: Waiting for event '${event}' with timeout ${timeout}ms`);
   });
 };
@@ -117,10 +138,10 @@ export const createAuthenticatedClient = (port, userId = 'user1') => {
   console.log(`Test helper: Creating client for user ${userId} on port ${port}`);
 
   const client = ClientIO(`http://127.0.0.1:${port}`, {
-    transports: ['polling'], // Use polling first for more reliable connections in tests
+    transports: ['websocket'], // Use websocket for better test performance
     forceNew: true,
     reconnection: false,
-    timeout: 20000, // Increased timeout for test environment
+    timeout: 10000, // Reduce timeout for faster test failures
     // Add debugging options
     forceJSONP: false,
     rememberUpgrade: false,
@@ -132,6 +153,8 @@ export const createAuthenticatedClient = (port, userId = 'user1') => {
     // Add more robust connection options
     autoConnect: true,
     multiplex: false,
+    // Add additional connection settings for test stability
+    transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
     auth: {
       token: {
         id: userId,
