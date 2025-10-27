@@ -38,11 +38,39 @@ async function connectToDatabase() {
   }
 }
 
+// Helper function to convert plain objects to Maps for specific game state fields
+function convertRoomStateToMaps(roomObj) {
+  if (!roomObj.gameState) return roomObj;
+
+  const gameState = roomObj.gameState;
+
+  // Convert playerHands to Map if it's a plain object
+  if (gameState.playerHands && typeof gameState.playerHands === 'object' && !(gameState.playerHands instanceof Map)) {
+    gameState.playerHands = new Map(Object.entries(gameState.playerHands));
+  }
+
+  // Convert shields to Map if it's a plain object
+  if (gameState.shields && typeof gameState.shields === 'object' && !(gameState.shields instanceof Map)) {
+    gameState.shields = new Map(Object.entries(gameState.shields));
+  }
+
+  // Convert playerActions to Map if it's a plain object
+  if (gameState.playerActions && typeof gameState.playerActions === 'object' && !(gameState.playerActions instanceof Map)) {
+    gameState.playerActions = new Map(Object.entries(gameState.playerActions));
+  }
+
+  return roomObj;
+}
+
 async function loadRooms() {
   try {
     const rooms = await Room.find({});
     const roomsMap = new Map();
-    rooms.forEach(room => roomsMap.set(room.code, room.toObject()));
+    rooms.forEach(room => {
+      const roomObj = room.toObject();
+      const roomWithMaps = convertRoomStateToMaps(roomObj);
+      roomsMap.set(room.code, roomWithMaps);
+    });
     return roomsMap;
   } catch (err) {
     console.error('Failed to load rooms:', err);
@@ -52,6 +80,19 @@ async function loadRooms() {
 
 async function saveRoom(roomData) {
   try {
+    // Validate required fields
+    if (!roomData || !roomData.code) {
+      throw new Error('Room data and code are required');
+    }
+
+    if (!roomData.players) {
+      throw new Error('Room data must include a valid players array');
+    }
+
+    if (!roomData.gameState) {
+      throw new Error('Room data must include gameState');
+    }
+
     await Room.findOneAndUpdate(
       { code: roomData.code },
       roomData,
@@ -59,16 +100,16 @@ async function saveRoom(roomData) {
     );
   } catch (err) {
     console.error('Failed to save room:', err);
+    throw err; // Re-throw error to let tests handle it
   }
 }
 
 async function deleteRoom(roomCode) {
-  try {
-    await Room.deleteOne({ code: roomCode });
-  } catch (err) {
-    console.error('Failed to delete room:', err);
-    throw err;
+  const res = await Room.deleteOne({ code: roomCode });
+  if (!res || res.deletedCount === 0) {
+    throw new Error(`Room not found: ${roomCode}`);
   }
+  return res; // or return true
 }
 
 async function loadPlayerSessions() {
