@@ -14,6 +14,7 @@ import {
 } from '../helpers/test-utils.js';
 // Import real implementations for game logic - only mock external dependencies
 // The mock server will use real card implementations and game logic
+import { WindCard } from '../../src/lib/cards.js';
 
 describe('Socket.IO Events Integration Tests', () => {
   let mockServer;
@@ -42,6 +43,17 @@ describe('Socket.IO Events Integration Tests', () => {
   // Setup and cleanup for each test
   beforeEach(() => {
     testRooms.clear();
+    // Clean up existing clients from previous test
+    clientSockets.forEach(client => {
+      if (client && client.connected) {
+        try {
+          client.disconnect();
+        } catch (e) {
+          // Ignore disconnect errors
+        }
+      }
+    });
+    clientSockets = [];
   });
 
   afterEach(() => {
@@ -58,24 +70,31 @@ describe('Socket.IO Events Integration Tests', () => {
     if (global.__testRooms__) {
       global.__testRooms__.clear();
     }
+
+    // Clean up mock server state
+    if (mockServer && mockServer.rooms) {
+      mockServer.rooms.clear();
+    }
   });
 
   // Helper function to create and track client sockets with retry logic
   const createClient = async (userId = 'user1', maxRetries = 3) => {
     let lastError;
+    // Use unique userId to avoid conflicts between tests
+    const uniqueUserId = `${userId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`Test helper: Attempt ${attempt} to create client ${userId}`);
-        const client = createAuthenticatedClient(port, userId);
+        console.log(`Test helper: Attempt ${attempt} to create client ${uniqueUserId}`);
+        const client = createAuthenticatedClient(port, uniqueUserId);
         clientSockets.push(client);
 
         await waitForConnection(client);
-        console.log(`Test helper: Successfully created client ${userId} on attempt ${attempt}`);
+        console.log(`Test helper: Successfully created client ${uniqueUserId} on attempt ${attempt}`);
         return client;
       } catch (error) {
         lastError = error;
-        console.log(`Test helper: Client ${userId} attempt ${attempt} failed: ${error.message}`);
+        console.log(`Test helper: Client ${uniqueUserId} attempt ${attempt} failed: ${error.message}`);
 
         if (attempt < maxRetries) {
           // Clean up failed client and wait before retry
@@ -99,8 +118,21 @@ describe('Socket.IO Events Integration Tests', () => {
     }
 
     // All retries failed
-    console.error(`Test helper: All ${maxRetries} attempts failed for client ${userId}`);
-    throw new Error(`Failed to create client ${userId} after ${maxRetries} attempts: ${lastError.message}`);
+    console.error(`Test helper: All ${maxRetries} attempts failed for client ${uniqueUserId}`);
+    throw new Error(`Failed to create client ${uniqueUserId} after ${maxRetries} attempts: ${lastError.message}`);
+  };
+
+  // Helper function to find player by base userId (handles unique IDs)
+  const findPlayerByBaseId = (players, baseUserId) => {
+    return players.find(p => {
+      const playerBaseId = p.userId.split('-').slice(0, -2).join('-') || p.userId;
+      return playerBaseId === baseUserId;
+    });
+  };
+
+  // Helper function to extract base userId from full userId
+  const extractBaseUserId = (fullUserId) => {
+    return fullUserId.split('-').slice(0, -2).join('-') || fullUserId;
   };
 
   describe('Authentication & Room Management', () => {
@@ -118,7 +150,9 @@ describe('Socket.IO Events Integration Tests', () => {
         hasName: true,
         isReady: false
       });
-      expect(response.playerId).toBe('user1');
+      // Extract base userId for comparison (handles unique IDs)
+      const baseUserId = response.playerId.split('-').slice(0, -2).join('-') || response.playerId;
+      expect(baseUserId).toBe('user1');
     });
 
     it('should reject invalid room codes with proper validation', async () => {
@@ -417,19 +451,21 @@ describe('Socket.IO Events Integration Tests', () => {
       testRooms.add(roomCode);
 
       const initialMagicCount = currentPlayer.hand.filter(card => card.type !== 'heart').length;
+      const initialDeckCount = gameData.gameState.magicDeck.cards;
 
       currentClient.emit('draw-magic-card', { roomCode });
       const response = await waitFor(currentClient, 'magic-card-drawn');
 
-      const updatedPlayer = response.players.find(p => p.userId === currentPlayer.userId);
+      const baseCurrentPlayerId = extractBaseUserId(currentPlayer.userId);
+      const updatedPlayer = findPlayerByBaseId(response.players, baseCurrentPlayerId);
       const newMagicCount = updatedPlayer.hand.filter(card => card.type !== 'heart').length;
 
       expect(newMagicCount).toBeGreaterThan(initialMagicCount);
-      expect(response.magicDeck.cards).toBeLessThan(gameData.magicDeck.cards);
+      expect(response.magicDeck.cards).toBeLessThan(initialDeckCount);
     });
 
     it('should prevent drawing multiple magic cards in one turn', async () => {
-      const { clients, roomCode, currentClient } = await setupGame(port);
+      const { roomCode, currentClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Draw first magic card
@@ -443,7 +479,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle wind card usage correctly', async () => {
-      const { clients, gameData, roomCode, currentClient, otherClient } = await setupGame(port);
+      const { gameData, roomCode, currentClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Get the current player and their cards
@@ -511,7 +547,7 @@ describe('Socket.IO Events Integration Tests', () => {
     }, 12000); // Increased timeout for complex multi-step test
 
     it('should handle recycle card usage correctly', async () => {
-      const { clients, gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
+      const { gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Find a colored tile without a heart
@@ -545,7 +581,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle shield card activation correctly', async () => {
-      const { clients, gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
+      const { gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Get a shield card (may need to draw one)
@@ -555,7 +591,8 @@ describe('Socket.IO Events Integration Tests', () => {
         // Draw a magic card hoping for shield
         currentClient.emit('draw-magic-card', { roomCode });
         const drawResponse = await waitFor(currentClient, 'magic-card-drawn');
-        const updatedPlayer = drawResponse.players.find(p => p.userId === currentPlayer.userId);
+        const baseCurrentPlayerId = extractBaseUserId(currentPlayer.userId);
+        const updatedPlayer = findPlayerByBaseId(drawResponse.players, baseCurrentPlayerId);
         shieldCard = updatedPlayer.hand.find(card => card.type === 'shield');
       }
 
@@ -574,7 +611,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should enforce turn-based magic card usage', async () => {
-      const { clients, gameData, roomCode, currentClient, otherClient, currentPlayer } = await setupGame(port);
+      const { roomCode, currentClient, otherClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       const magicCard = currentPlayer.hand.find(card => card.type !== 'heart');
@@ -591,7 +628,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
   describe('Turn Management', () => {
     it('should require drawing cards before ending turn', async () => {
-      const { clients, roomCode, currentClient } = await setupGame(port);
+      const { roomCode, currentClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Try to end turn without drawing cards
@@ -601,7 +638,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should allow ending turn after drawing required cards', async () => {
-      const { clients, roomCode, currentClient, otherClient } = await setupGame(port);
+      const { roomCode, currentClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Draw heart card
@@ -622,7 +659,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle empty deck scenario correctly', async () => {
-      const { clients, roomCode, currentClient } = await setupGame(port);
+      const { roomCode, currentClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Manually empty the decks for testing
@@ -639,7 +676,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should track player actions correctly across turns', async () => {
-      const { clients, roomCode, currentClient, otherClient } = await setupGame(port);
+      const { roomCode, currentClient, otherClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // First player's turn
@@ -664,7 +701,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
   describe('Error Handling & Edge Cases', () => {
     it('should handle invalid input data gracefully', async () => {
-      const { clients, roomCode, currentClient } = await setupGame(port);
+      const { roomCode, currentClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Test invalid place-heart data
@@ -711,7 +748,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle deck exhaustion scenarios', async () => {
-      const { clients, gameData, roomCode, currentClient } = await setupGame(port);
+      const { roomCode, currentClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Empty the heart deck
@@ -731,7 +768,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle concurrent operations gracefully', async () => {
-      const { clients, roomCode, gameData } = await setupGame(port);
+      const { clients, roomCode } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Send multiple events rapidly with proper error handling and timeout
@@ -771,7 +808,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should broadcast consistent game state to all players', async () => {
-      const { clients, roomCode, gameData } = await setupGame(port);
+      const { clients, roomCode } = await setupGame(port);
       testRooms.add(roomCode);
 
       // setupGame already waits for game-start, so we just need to verify consistency
