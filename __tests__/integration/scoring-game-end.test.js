@@ -380,7 +380,7 @@ describe('Scoring System and Game End Conditions', () => {
       const { saveRoom } = await import('../utils/server-test-utils.js')
 
       const room = {
-        code: 'ENDGAME123',
+        code: 'ENDGME1',
         players: [
           { userId: 'user1', name: 'Player1', email: 'player1@test.com', score: 30 },
           { userId: 'user2', name: 'Player2', email: 'player2@test.com', score: 25 }

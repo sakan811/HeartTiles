@@ -273,7 +273,7 @@ describe('Authentication Integration Tests', () => {
   describe('Player Data Migration', () => {
     it('should migrate player data when user ID changes', async () => {
       const room = {
-        code: 'MIGRATE01',
+        code: 'MIGRAT01',
         players: [
           { userId: 'old-user-1', name: 'Old User', email: 'old@example.com', score: 10 }
         ],
@@ -319,7 +319,7 @@ describe('Authentication Integration Tests', () => {
 
     it('should add new player if old player not found', async () => {
       const room = {
-        code: 'ADDNEW01',
+        code: 'ADDNEW1',
         players: [
           { userId: 'existing-user', name: 'Existing User', email: 'existing@example.com', score: 5 }
         ],

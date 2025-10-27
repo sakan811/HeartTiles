@@ -67,6 +67,7 @@ async function deleteRoom(roomCode) {
     await Room.deleteOne({ code: roomCode });
   } catch (err) {
     console.error('Failed to delete room:', err);
+    throw err;
   }
 }
 
