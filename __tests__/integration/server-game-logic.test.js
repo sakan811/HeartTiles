@@ -28,20 +28,8 @@ vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn()
 }))
 
-// Mock cards library
-vi.mock('../../src/lib/cards.js', () => ({
-  HeartCard: {
-    generateRandom: vi.fn(),
-    calculateScore: vi.fn()
-  },
-  WindCard: vi.fn(),
-  RecycleCard: vi.fn(),
-  ShieldCard: vi.fn(),
-  generateRandomMagicCard: vi.fn(),
-  isHeartCard: vi.fn(),
-  isMagicCard: vi.fn(),
-  createCardFromData: vi.fn()
-}))
+// Import real card classes for testing
+import { HeartCard, WindCard, RecycleCard, ShieldCard, generateRandomMagicCard, isHeartCard, isMagicCard, createCardFromData } from '../../src/lib/cards.js'
 
 // Import validation functions directly from server (they are exported)
 const {
