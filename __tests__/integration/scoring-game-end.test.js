@@ -382,8 +382,8 @@ describe('Scoring System and Game End Conditions', () => {
       const room = {
         code: 'ENDGAME123',
         players: [
-          { userId: 'user1', name: 'Player1', score: 30 },
-          { userId: 'user2', name: 'Player2', score: 25 }
+          { userId: 'user1', name: 'Player1', email: 'player1@test.com', score: 30 },
+          { userId: 'user2', name: 'Player2', email: 'player2@test.com', score: 25 }
         ],
         maxPlayers: 2,
         gameState: {

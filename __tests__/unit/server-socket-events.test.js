@@ -26,9 +26,9 @@ import {
   endGame,
   executeMagicCard,
   migratePlayerData,
+  createTestUser,
   acquireTurnLock,
   releaseTurnLock,
-  createTestUser,
   HeartCard
 } from '../utils/server-test-utils.js'
 import { WindCard, RecycleCard, ShieldCard, generateRandomMagicCard } from '../../src/lib/cards.js'
@@ -765,15 +765,17 @@ describe('Server Socket.IO Event Handlers', () => {
 
   describe('Input Validation', () => {
     it('should validate room codes correctly', () => {
-      expect(validateRoomCode('TEST123')).toBe(true)
-      expect(validateRoomCode('test123')).toBe(true)
-      expect(validateRoomCode('ABC123')).toBe(true)
-      expect(validateRoomCode('123456')).toBe(true)
-      expect(validateRoomCode('abcdef')).toBe(true)
+      expect(validateRoomCode('ABC123')).toBe(true)  // 6 chars, uppercase
+      expect(validateRoomCode('abc123')).toBe(true)  // 6 chars, lowercase
+      expect(validateRoomCode('123456')).toBe(true)  // 6 chars, numbers
+      expect(validateRoomCode('ABCDEF')).toBe(true)  // 6 chars, uppercase
+      expect(validateRoomCode('abcdef')).toBe(true)  // 6 chars, lowercase
 
       expect(validateRoomCode('')).toBe(false)
-      expect(validateRoomCode('TEST')).toBe(false)
-      expect(validateRoomCode('TEST1234')).toBe(false)
+      expect(validateRoomCode('TEST')).toBe(false)   // Too short
+      expect(validateRoomCode('TEST123')).toBe(false)  // Too long (7 chars)
+      expect(validateRoomCode('test123')).toBe(false)  // Too long (7 chars)
+      expect(validateRoomCode('TEST1234')).toBe(false) // Too long (8 chars)
       expect(validateRoomCode(null)).toBe(false)
       expect(validateRoomCode(undefined)).toBe(false)
     })
@@ -1024,7 +1026,9 @@ describe('Server Socket.IO Event Handlers', () => {
         code: roomCode,
         gameStarted: true,
         currentPlayer: { userId: 'user1', name: 'Player1' },
-        playerHands: { user1: [heartCard] },
+        gameState: {
+          playerHands: { user1: [heartCard] }
+        },
         tiles: [{ id: 0, color: 'red', emoji: '🟥' }, { id: 1, color: 'white', emoji: '⬜' }]
       })
 
@@ -1059,7 +1063,7 @@ describe('Server Socket.IO Event Handlers', () => {
                 playerHand.splice(heartIndex, 1)
                 recordHeartPlacement(room, 'user1')
 
-                mockSocket.to(roomCode).emit("heart-placed", {
+                mockIo.to(roomCode).emit("heart-placed", {
                   tile,
                   player: room.players.find(p => p.userId === 'user1'),
                   players: room.players,
@@ -1073,8 +1077,8 @@ describe('Server Socket.IO Event Handlers', () => {
         }
       }
 
-      expect(mockSocket.to).toHaveBeenCalledWith(roomCode)
-      expect(mockSocket.to().emit).toHaveBeenCalledWith("heart-placed", expect.objectContaining({
+      expect(mockIo.to).toHaveBeenCalledWith(roomCode)
+      expect(mockIo.to().emit).toHaveBeenCalledWith("heart-placed", expect.objectContaining({
         tile: expect.objectContaining({
           id: 0,
           placedHeart: expect.objectContaining({
@@ -1099,7 +1103,9 @@ describe('Server Socket.IO Event Handlers', () => {
         code: roomCode,
         gameStarted: true,
         currentPlayer: { userId: 'user1', name: 'Player1' },
-        playerHands: { user1: [heartCard] },
+        gameState: {
+          playerHands: { user1: [heartCard] } // Ensure heart card is in player's hand
+        },
         tiles: [{
           id: 0,
           color: 'red',
@@ -1123,8 +1129,10 @@ describe('Server Socket.IO Event Handlers', () => {
         code: roomCode,
         gameStarted: true,
         currentPlayer: { userId: 'user1', name: 'Player1' },
-        playerActions: { user1: { heartsPlaced: 2 } }, // Already placed 2 hearts
-        playerHands: { user1: [new HeartCard('red', 2, 'heart-1')] },
+        gameState: {
+          playerActions: { user1: { heartsPlaced: 2 } }, // Already placed 2 hearts
+          playerHands: { user1: [new HeartCard('red', 2, 'heart-1')] }
+        },
         tiles: [{ id: 0, color: 'red', emoji: '🟥' }]
       })
 
@@ -1150,7 +1158,9 @@ describe('Server Socket.IO Event Handlers', () => {
           { userId: 'user1', name: 'Player1', score: 0 },
           { userId: 'user2', name: 'Player2', score: 4 }
         ],
-        playerHands: { user1: [windCard] },
+        gameState: {
+          playerHands: { user1: [windCard] }
+        },
         tiles: [{
           id: 0,
           color: 'red',
@@ -1177,15 +1187,18 @@ describe('Server Socket.IO Event Handlers', () => {
             if (actionResult) {
               recordMagicCardUsage(room, 'user1')
 
-              mockSocket.to(roomCode).emit("magic-card-used", {
+              mockIo.to(roomCode).emit("magic-card-used", {
                 card: { type: 'wind', emoji: '💨' },
-                targetTile: actionResult.newTileState,
-                player: room.players.find(p => p.userId === 'user1'),
+                actionResult: actionResult,
+                tiles: room.gameState.tiles,
                 players: room.players,
-                playerHands: room.gameState.playerHands
+                playerHands: room.gameState.playerHands,
+                usedBy: 'user1',
+                shields: room.gameState.shields || {},
+                playerActions: room.gameState.playerActions || {}
               })
 
-              mockSocket.to(roomCode).emit("scores-updated", room.players)
+              mockIo.to(roomCode).emit("scores-updated", room.players)
             }
           } finally {
             releaseTurnLock(roomCode, 'socket1')
@@ -1193,13 +1206,15 @@ describe('Server Socket.IO Event Handlers', () => {
         }
       }
 
-      expect(mockSocket.to).toHaveBeenCalledWith(roomCode)
-      expect(mockSocket.to().emit).toHaveBeenCalledWith("magic-card-used", expect.objectContaining({
+      expect(mockIo.to).toHaveBeenCalledWith(roomCode)
+      expect(mockIo.to().emit).toHaveBeenCalledWith("magic-card-used", expect.objectContaining({
         card: expect.objectContaining({ type: 'wind', emoji: '💨' }),
-        targetTile: expect.objectContaining({
-          id: 0,
-          color: 'red',
-          placedHeart: null // Heart should be removed
+        actionResult: expect.objectContaining({
+          newTileState: expect.objectContaining({
+            id: 0,
+            color: 'red',
+            placedHeart: null // Heart should be removed
+          })
         })
       }))
 
@@ -1214,8 +1229,10 @@ describe('Server Socket.IO Event Handlers', () => {
         code: roomCode,
         gameStarted: true,
         currentPlayer: { userId: 'user1', name: 'Player1' },
-        playerHands: { user1: [shieldCard] },
-        shields: {}
+        gameState: {
+          playerHands: { user1: [shieldCard] },
+          shields: {}
+        }
       })
 
       // Simulate shield card usage
@@ -1228,13 +1245,15 @@ describe('Server Socket.IO Event Handlers', () => {
             if (actionResult) {
               recordMagicCardUsage(room, 'user1')
 
-              mockSocket.to(roomCode).emit("magic-card-used", {
+              mockIo.to(roomCode).emit("magic-card-used", {
                 card: { type: 'shield', emoji: '🛡️' },
-                effect: actionResult,
-                player: room.players.find(p => p.userId === 'user1'),
+                actionResult: actionResult,
+                tiles: room.gameState.tiles,
                 players: room.players,
                 playerHands: room.gameState.playerHands,
-                shields: room.gameState.shields
+                usedBy: 'user1',
+                shields: room.gameState.shields || {},
+                playerActions: room.gameState.playerActions || {}
               })
             }
           } finally {
@@ -1243,8 +1262,8 @@ describe('Server Socket.IO Event Handlers', () => {
         }
       }
 
-      expect(mockSocket.to).toHaveBeenCalledWith(roomCode)
-      expect(mockSocket.to().emit).toHaveBeenCalledWith("magic-card-used", expect.objectContaining({
+      expect(mockIo.to).toHaveBeenCalledWith(roomCode)
+      expect(mockIo.to().emit).toHaveBeenCalledWith("magic-card-used", expect.objectContaining({
         card: expect.objectContaining({ type: 'shield', emoji: '🛡️' })
       }))
 
@@ -1340,7 +1359,10 @@ describe('Server Socket.IO Event Handlers', () => {
   })
 
   describe('Lock Management', () => {
-    it('should handle turn lock contention', () => {
+    it('should handle turn lock contention', async () => {
+      // Import server lock functions for this test
+      const { acquireTurnLock: serverAcquireLock, releaseTurnLock: serverReleaseLock } = await import('../../server.js')
+
       const roomCode = 'LOCKED'
       const room = createTestRoom({
         code: roomCode,
@@ -1349,12 +1371,15 @@ describe('Server Socket.IO Event Handlers', () => {
         deck: { cards: 16 }
       })
 
+      // Set up global turn locks for server implementation
+      global.turnLocks = new Map()
+
       // Acquire lock first
-      const lockAcquired = acquireTurnLock(roomCode, 'other-socket')
+      const lockAcquired = serverAcquireLock(roomCode, 'other-socket')
       expect(lockAcquired).toBe(true)
 
       // Try to acquire same lock
-      const lockBlocked = acquireTurnLock(roomCode, 'socket1')
+      const lockBlocked = serverAcquireLock(roomCode, 'socket1')
       expect(lockBlocked).toBe(false)
 
       // Simulate action lock handling
@@ -1365,23 +1390,29 @@ describe('Server Socket.IO Event Handlers', () => {
       expect(mockSocket.emit).toHaveBeenCalledWith("room-error", "Action in progress, please wait")
 
       // Clean up lock
-      releaseTurnLock(roomCode, 'other-socket')
+      serverReleaseLock(roomCode, 'other-socket')
     })
 
-    it('should release locks correctly', () => {
+    it('should release locks correctly', async () => {
+      // Import server lock functions for this test
+      const { acquireTurnLock: serverAcquireLock, releaseTurnLock: serverReleaseLock } = await import('../../server.js')
+
       const roomCode = 'RELEASE'
 
+      // Set up global turn locks for server implementation
+      global.turnLocks = new Map()
+
       // Acquire and release lock
-      const lockAcquired = acquireTurnLock(roomCode, 'socket1')
+      const lockAcquired = serverAcquireLock(roomCode, 'socket1')
       expect(lockAcquired).toBe(true)
 
-      releaseTurnLock(roomCode, 'socket1')
+      serverReleaseLock(roomCode, 'socket1')
 
       // Should be able to acquire lock again
-      const lockReacquired = acquireTurnLock(roomCode, 'socket1')
+      const lockReacquired = serverAcquireLock(roomCode, 'socket1')
       expect(lockReacquired).toBe(true)
 
-      releaseTurnLock(roomCode, 'socket1')
+      serverReleaseLock(roomCode, 'socket1')
     })
   })
 

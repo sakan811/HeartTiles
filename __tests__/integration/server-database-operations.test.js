@@ -85,7 +85,7 @@ describe('Server Database Operations Tests', () => {
         // Create test rooms
         const testRoom1 = {
           code: 'TEST01',
-          players: [{ userId: 'user1', name: 'Player1' }],
+          players: [{ userId: 'user1', name: 'Player1', email: 'player1@example.com' }],
           gameState: {
             gameStarted: false,
             currentPlayer: null,
@@ -101,10 +101,10 @@ describe('Server Database Operations Tests', () => {
 
         const testRoom2 = {
           code: 'TEST02',
-          players: [{ userId: 'user2', name: 'Player2' }],
+          players: [{ userId: 'user2', name: 'Player2', email: 'player2@example.com' }],
           gameState: {
             gameStarted: true,
-            currentPlayer: { userId: 'user2', name: 'Player2' },
+            currentPlayer: { userId: 'user2', name: 'Player2', email: 'player2@example.com' },
             tiles: [],
             deck: { cards: 10 },
             magicDeck: { cards: 12 },
@@ -161,7 +161,7 @@ describe('Server Database Operations Tests', () => {
         // Create valid room
         const validRoom = {
           code: 'VALID01',
-          players: [{ userId: 'user1', name: 'Player1' }],
+          players: [{ userId: 'user1', name: 'Player1', email: 'player1@example.com' }],
           gameState: {
             gameStarted: false,
             currentPlayer: null,
@@ -178,7 +178,7 @@ describe('Server Database Operations Tests', () => {
         // Create invalid room (missing gameState)
         const invalidRoom = {
           code: 'INVALID01',
-          players: [{ userId: 'user2', name: 'Player2' }]
+          players: [{ userId: 'user2', name: 'Player2', email: 'player2@example.com' }]
           // Missing gameState
         }
 
@@ -196,10 +196,10 @@ describe('Server Database Operations Tests', () => {
       it('should save room successfully', async () => {
         const roomData = {
           code: 'SAVE01',
-          players: [{ userId: 'user1', name: 'Player1', score: 10 }],
+          players: [{ userId: 'user1', name: 'Player1', email: 'player1@example.com', score: 10 }],
           gameState: {
             gameStarted: true,
-            currentPlayer: { userId: 'user1', name: 'Player1' },
+            currentPlayer: { userId: 'user1', name: 'Player1', email: 'player1@example.com' },
             tiles: [{ id: 0, color: 'red', emoji: '🟥' }],
             deck: { cards: 14 },
             magicDeck: { cards: 15 },
@@ -228,8 +228,8 @@ describe('Server Database Operations Tests', () => {
       it('should update existing room', async () => {
         // Create initial room
         const initialRoom = {
-          code: 'UPDATE01',
-          players: [{ userId: 'user1', name: 'Player1', score: 5 }],
+          code: 'UPDATE',
+          players: [{ userId: 'user1', name: 'Player1', email: 'player1@example.com', score: 5 }],
           gameState: {
             gameStarted: false,
             currentPlayer: null,
@@ -248,20 +248,20 @@ describe('Server Database Operations Tests', () => {
         // Update room with new data
         const updatedRoom = {
           ...initialRoom,
-          players: [{ userId: 'user1', name: 'Player1', score: 15 }],
+          players: [{ userId: 'user1', name: 'Player1', email: 'player1@example.com', score: 15 }],
           gameState: {
             ...initialRoom.gameState,
             gameStarted: true,
-            currentPlayer: { userId: 'user1', name: 'Player1' },
+            currentPlayer: { userId: 'user1', name: 'Player1', email: 'player1@example.com' },
             deck: { cards: 14 }
           }
         }
 
         const result = await saveRoom(updatedRoom)
-        expect(result.code).toBe('UPDATE01')
+        expect(result.code).toBe('UPDATE')
 
         // Verify updates were applied
-        const savedRoom = await Room.findOne({ code: 'UPDATE01' })
+        const savedRoom = await Room.findOne({ code: 'UPDATE' })
         expect(savedRoom.players[0].score).toBe(15)
         expect(savedRoom.gameState.gameStarted).toBe(true)
         expect(savedRoom.gameState.deck.cards).toBe(14)
@@ -300,7 +300,7 @@ describe('Server Database Operations Tests', () => {
         // Create test room
         const roomData = {
           code: 'DELETE01',
-          players: [{ userId: 'user1', name: 'Player1' }],
+          players: [{ userId: 'user1', name: 'Player1', email: 'player1@example.com' }],
           gameState: {
             gameStarted: false,
             currentPlayer: null,
