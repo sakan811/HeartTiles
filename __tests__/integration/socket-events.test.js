@@ -13,6 +13,8 @@ import {
   cleanupClients
 } from '../helpers/test-utils.js';
 import { createHeartCard, createWindCard, createRecycleCard, createShieldCard } from '../factories/card-factories.js';
+// Import real card implementations for proper testing
+import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js';
 
 // Mock dependencies
 vi.mock('mongoose', () => ({
@@ -51,33 +53,8 @@ vi.mock('next-auth/jwt', () => ({
   })
 }));
 
-// Mock cards library
-vi.mock('../../src/lib/cards.js', () => ({
-  HeartCard: {
-    generateRandom: vi.fn().mockImplementation(() => createHeartCard())
-  },
-  WindCard: vi.fn().mockImplementation((id) => createWindCard({ id })),
-  RecycleCard: vi.fn().mockImplementation((id) => createRecycleCard({ id })),
-  ShieldCard: vi.fn().mockImplementation((id) => createShieldCard({ id })),
-  generateRandomMagicCard: vi.fn().mockImplementation(() => {
-    const types = ['wind', 'recycle', 'shield'];
-    const selectedType = types[Math.floor(Math.random() * types.length)];
-
-    switch (selectedType) {
-      case 'wind':
-        return createWindCard();
-      case 'recycle':
-        return createRecycleCard();
-      case 'shield':
-        return createShieldCard();
-      default:
-        return createWindCard();
-    }
-  }),
-  isHeartCard: vi.fn((card) => card?.type === 'heart' || (card?.color && card?.value !== undefined)),
-  isMagicCard: vi.fn((card) => card?.type && ['wind', 'recycle', 'shield'].includes(card.type)),
-  createCardFromData: vi.fn((cardData) => cardData)
-}));
+// Import real card implementations - setup.js will handle proper mocking
+// Remove local card mock to use real implementations from setup.js
 
 describe('Socket.IO Events Integration Tests', () => {
   let mockServer;
@@ -540,7 +517,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
       // Get the room and manually add a wind card to other player's hand for testing
       const room = mockServer.getRoom(roomCode);
-      const windCard = createWindCard({ id: `test-wind-${Date.now()}` });
+      const windCard = new WindCard(`test-wind-${Date.now()}`);
       room.gameState.playerHands[otherPlayer.userId].push(windCard);
 
       // Step 5: Other player uses wind card to remove the heart
