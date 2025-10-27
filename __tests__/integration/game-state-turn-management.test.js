@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+// Import real card implementations for proper testing
+import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js'
+
 // Mock dependencies
 vi.mock('../../../models', () => ({
   PlayerSession: {
@@ -21,18 +24,8 @@ vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn()
 }))
 
-vi.mock('../../src/lib/cards.js', () => ({
-  HeartCard: {
-    generateRandom: vi.fn()
-  },
-  WindCard: vi.fn(),
-  RecycleCard: vi.fn(),
-  ShieldCard: vi.fn(),
-  generateRandomMagicCard: vi.fn(),
-  isHeartCard: vi.fn(),
-  isMagicCard: vi.fn(),
-  createCardFromData: vi.fn()
-}))
+// Import real card implementations - setup.js will handle proper mocking
+// Remove local card mock to use real implementations from setup.js
 
 // Set environment
 process.env.NODE_ENV = 'test'
