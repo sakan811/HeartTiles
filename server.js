@@ -579,8 +579,11 @@ function validateHeartPlacement(room, userId, heartId, tileId) {
 
   // Convert to HeartCard instance if it's a plain object for validation
   let heartCard = heart;
-  // Check if HeartCard is available and is a constructor function
-  if (typeof HeartCard === 'function' && heart instanceof HeartCard) {
+  // Check if the heart already has canTargetTile method (handles context issues)
+  if (heart && typeof heart.canTargetTile === 'function') {
+    // Already has the method we need, use as-is
+    heartCard = heart;
+  } else if (typeof HeartCard === 'function' && heart instanceof HeartCard) {
     // Already a HeartCard instance
     heartCard = heart;
   } else {
@@ -729,31 +732,39 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
   return room;
 }
 
-// Session management stubs for testing
+// Global session store - used by both server and tests
+let playerSessions = new Map();
+
+// Session management functions - real implementation for both server and tests
 async function getPlayerSession(userId, userSessionId, userName, userEmail) {
-  // Stub implementation for testing
-  return {
-    userId,
-    userSessionId,
-    name: userName,
-    email: userEmail,
-    currentSocketId: null,
-    lastSeen: new Date(),
-    isActive: true
-  };
+  // Use global playerSessions for test compatibility, otherwise fall back to module-level
+  const sessions = global.playerSessions || playerSessions;
+  let session = sessions.get(userId);
+
+  if (!session) {
+    const newSession = {
+      userId, userSessionId, name: userName, email: userEmail,
+      currentSocketId: null, lastSeen: new Date(), isActive: true
+    };
+    sessions.set(userId, newSession);
+    await savePlayerSession(newSession);
+    session = newSession;
+  } else {
+    session.lastSeen = new Date();
+    session.isActive = true;
+    await savePlayerSession(session);
+  }
+
+  return session;
 }
 
 async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail) {
-  // Stub implementation for testing
-  return {
-    userId,
-    userSessionId,
-    name: userName,
-    email: userEmail,
-    currentSocketId: socketId,
-    lastSeen: new Date(),
-    isActive: true
-  };
+  const session = await getPlayerSession(userId, userSessionId, userName, userEmail);
+  session.currentSocketId = socketId;
+  session.lastSeen = new Date();
+  session.isActive = true;
+  await savePlayerSession(session);
+  return session;
 }
 
 // Prevent server from starting during tests
@@ -770,47 +781,19 @@ if (process.env.NODE_ENV !== 'test') {
   });
 
   const rooms = await loadRooms();
+  // Load sessions into the global playerSessions variable
+  playerSessions = await loadPlayerSessions();
+
   // Clear any existing locks from previous runs
   // Use global turnLocks if available (for testing), otherwise use module-level
   const locks = global.turnLocks || turnLocks;
   locks.clear();
   const connectionPool = new Map();
-  const playerSessions = await loadPlayerSessions();
   const MAX_CONNECTIONS_PER_IP = 5;
 
   console.log(`Loaded ${rooms.size} rooms, ${playerSessions.size} sessions`);
 
-  // These functions are now defined globally for testing
-
-  async function getPlayerSession(userId, userSessionId, userName, userEmail) {
-    let session = playerSessions.get(userId);
-
-    if (!session) {
-      const newSession = {
-        userId, userSessionId, name: userName, email: userEmail,
-        currentSocketId: null, lastSeen: new Date(), isActive: true
-      };
-      playerSessions.set(userId, newSession);
-      await savePlayerSession(newSession);
-      session = newSession;
-    } else {
-      session.lastSeen = new Date();
-      session.isActive = true;
-      await savePlayerSession(session);
-    }
-
-    return session;
-  }
-
-  async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail) {
-    const session = await getPlayerSession(userId, userSessionId, userName, userEmail);
-    session.currentSocketId = socketId;
-    session.lastSeen = new Date();
-    session.isActive = true;
-    await savePlayerSession(session);
-    return session;
-  }
-
+  
   // These functions are now defined globally for testing
 
   // Helper functions that need access to closure variables
