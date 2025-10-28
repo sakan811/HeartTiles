@@ -1,0 +1,680 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
+import {
+  connectToDatabase,
+  disconnectDatabase,
+  clearDatabase,
+  clearTurnLocks
+} from '../utils/server-test-utils.js'
+import { Room } from '../../models.js'
+import { createMockSocket, createMockRoom, waitForAsync } from './setup.js'
+import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js'
+
+// Helper function to generate valid room codes (6-7 chars, uppercase + numbers)
+function generateValidRoomCode(prefix = 'TEST') {
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  return `${prefix}${random}`.slice(0, 7).toUpperCase()
+}
+
+describe('Server Room Management Integration Tests', () => {
+  let mockServer
+  let port
+
+  beforeAll(async () => {
+    try {
+      await connectToDatabase()
+    } catch (error) {
+      console.warn('Database connection failed, skipping tests:', error.message)
+    }
+  }, 15000)
+
+  afterAll(async () => {
+    try {
+      await clearDatabase()
+      await disconnectDatabase()
+    } catch (error) {
+      console.warn('Database cleanup failed:', error.message)
+    }
+  })
+
+  beforeEach(async () => {
+    try {
+      await clearDatabase()
+      await clearTurnLocks()
+    } catch (error) {
+      console.warn('Database clear failed:', error.message)
+    }
+    vi.clearAllMocks()
+    process.env.NODE_ENV = 'test'
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  describe('validateRoomState function with real database', () => {
+    it('should validate room with valid state from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateRoomState } = await import('../../server.js')
+
+      // Create and save a room to the database
+      const roomData = createMockRoom('VALID01')
+      roomData.players = [
+        { userId: 'u1', name: 'Alice', isReady: true, score: 10, joinedAt: new Date(), email: 'u1@test.com' },
+        { userId: 'u2', name: 'Bob', isReady: false, score: 5, joinedAt: new Date(), email: 'u2@test.com' }
+      ];
+      roomData.gameState.gameStarted = true;
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      // Load the room from database
+      const dbRoom = await Room.findOne({ code: 'VALID01' })
+      const result = validateRoomState(dbRoom)
+
+      expect(result.valid).toBe(true)
+    })
+
+    it('should reject room with null or undefined', async () => {
+      const { validateRoomState } = await import('../../server.js')
+
+      expect(validateRoomState(null).valid).toBe(false)
+      expect(validateRoomState(undefined).valid).toBe(false)
+      expect(validateRoomState('string').valid).toBe(false)
+    })
+
+    it('should reject room with invalid players array from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateRoomState } = await import('../../server.js')
+
+      // Create room with invalid players structure
+      const roomData = {
+        code: 'INVALID01',
+        players: 'not an array', // Invalid
+        gameState: { gameStarted: false }
+      }
+
+      const result = validateRoomState(roomData)
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Invalid players state')
+    })
+
+    it('should reject room with missing or invalid gameState from database', async () => {
+      const { validateRoomState } = await import('../../server.js')
+
+      // Test room without gameState
+      const roomWithoutGameState = {
+        code: 'NOGAME01',
+        players: []
+      }
+
+      const result1 = validateRoomState(roomWithoutGameState)
+      expect(result1.valid).toBe(false)
+      expect(result1.error).toBe('Invalid game state')
+
+      // Test room with invalid gameState
+      const roomWithInvalidGameState = {
+        code: 'INVALIDGAME01',
+        players: [],
+        gameState: 'not an object'
+      }
+
+      const result2 = validateRoomState(roomWithInvalidGameState)
+      expect(result2.valid).toBe(false)
+      expect(result2.error).toBe('Invalid game state')
+    })
+
+    it('should reject room with gameStarted=true but no currentPlayer from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateRoomState } = await import('../../server.js')
+
+      const gameStartedNoCurrent = {
+        code: 'NOCURRENT01',
+        players: [],
+        gameState: {
+          gameStarted: true,
+          currentPlayer: null
+        }
+      }
+
+      const result = validateRoomState(gameStartedNoCurrent)
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Game started but no current player')
+    })
+
+    it('should reject room with gameStarted=false but has currentPlayer from database', async () => {
+      const { validateRoomState } = await import('../../server.js')
+
+      const gameNotStartedWithCurrent = {
+        code: 'HASCURRENT01',
+        players: [],
+        gameState: {
+          gameStarted: false,
+          currentPlayer: { userId: 'user1', name: 'Player1' }
+        }
+      }
+
+      const result = validateRoomState(gameNotStartedWithCurrent)
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Game not started but has current player')
+    })
+
+    it('should validate complex room state with real database persistence', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateRoomState } = await import('../../server.js')
+
+      const complexRoom = {
+        code: generateValidRoomCode('CPLX'),
+        players: [
+          { userId: 'user1', name: 'Player1', score: 10, email: 'player1@test.com', isReady: true, joinedAt: new Date() },
+          { userId: 'user2', name: 'Player2', score: 5, email: 'player2@test.com', isReady: false, joinedAt: new Date() }
+        ],
+        maxPlayers: 2,
+        gameState: {
+          gameStarted: true,
+          currentPlayer: { userId: 'user1', name: 'Player1' },
+          turnCount: 5,
+          tiles: [
+            { id: 0, color: 'red', emoji: '🟥' },
+            { id: 1, color: 'white', emoji: '⬜' }
+          ],
+          playerHands: {
+            user1: [{ id: 'heart-1', type: 'heart', color: 'red', value: 2, emoji: '❤️' }],
+            user2: [{ id: 'heart-2', type: 'heart', color: 'yellow', value: 1, emoji: '💛' }]
+          },
+          deck: { emoji: '💌', cards: 12, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+          playerActions: {
+            user1: { drawnHeart: true, drawnMagic: false, heartsPlaced: 1, magicCardsUsed: 0 },
+            user2: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
+          }
+        }
+      }
+
+      // Save to database
+      const savedRoom = new Room(complexRoom)
+      await savedRoom.save()
+
+      // Load from database and validate
+      const dbRoom = await Room.findOne({ code: complexRoom.code })
+      const result = validateRoomState(dbRoom)
+
+      expect(result.valid).toBe(true)
+    })
+  })
+
+  describe('validatePlayerInRoom function with database integration', () => {
+    it('should validate player present in room from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validatePlayerInRoom } = await import('../../server.js')
+
+      const roomData = createMockRoom('PLAER01')
+      roomData.players = [
+        { userId: 'user1', name: 'Player1', email: 'player1@test.com', isReady: false, score: 0, joinedAt: new Date() },
+        { userId: 'user2', name: 'Player2', email: 'player2@test.com', isReady: false, score: 0, joinedAt: new Date() }
+      ]
+
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      const dbRoom = await Room.findOne({ code: 'PLAER01' })
+      const result = validatePlayerInRoom(dbRoom, 'user1')
+
+      expect(result.valid).toBe(true)
+    })
+
+    it('should reject player not in room from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validatePlayerInRoom } = await import('../../server.js')
+
+      const roomData = createMockRoom('PLAYR02')
+      roomData.players = [
+        { userId: 'user1', name: 'Player1', email: 'player1@test.com', isReady: false, score: 0, joinedAt: new Date() }
+      ]
+
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      const dbRoom = await Room.findOne({ code: 'PLAYR02' })
+      const result = validatePlayerInRoom(dbRoom, 'user2')
+
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Player not in room')
+    })
+
+    it('should handle invalid room object from database context', async () => {
+      const { validatePlayerInRoom } = await import('../../server.js')
+
+      expect(validatePlayerInRoom(null, 'user1').valid).toBe(false)
+      expect(validatePlayerInRoom(undefined, 'user1').valid).toBe(false)
+      expect(validatePlayerInRoom('not object', 'user1').valid).toBe(false)
+    })
+
+    it('should handle missing players array in database document', async () => {
+      const { validatePlayerInRoom } = await import('../../server.js')
+
+      const roomWithoutPlayers = {
+        code: 'NOPLAYERS01',
+        notPlayers: 'not an array'
+      }
+
+      const result = validatePlayerInRoom(roomWithoutPlayers, 'user1')
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Invalid players state')
+    })
+  })
+
+  describe('validateDeckState function with database persistence', () => {
+    it('should validate proper deck state from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateDeckState } = await import('../../server.js')
+
+      const roomData = createMockRoom('DECK01')
+      roomData.gameState.deck = {
+        emoji: '💌',
+        cards: 16,
+        type: 'hearts'
+      }
+
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      const dbRoom = await Room.findOne({ code: 'DECK01' })
+      const result = validateDeckState(dbRoom)
+
+      expect(result.valid).toBe(true)
+    })
+
+    it('should reject room with missing deck from database', async () => {
+      const { validateDeckState } = await import('../../server.js')
+
+      expect(validateDeckState(null).valid).toBe(false)
+      expect(validateDeckState({}).valid).toBe(false)
+      expect(validateDeckState({ gameState: {} }).valid).toBe(false)
+      expect(validateDeckState({ gameState: { deck: null } }).valid).toBe(false)
+    })
+
+    it('should reject invalid deck count values in database context', async () => {
+      const { validateDeckState } = await import('../../server.js')
+
+      const testCases = [
+        { cards: 'not a number' },
+        { cards: NaN },
+        { cards: Infinity },
+        { cards: -Infinity },
+        { cards: -1 },
+        { cards: undefined },
+        { cards: null }
+      ]
+
+      for (const deckData of testCases) {
+        const room = {
+          code: `INVALID${Date.now()}`,
+          gameState: {
+            deck: {
+              emoji: '💌',
+              type: 'hearts',
+              ...deckData
+            }
+          }
+        }
+
+        const result = validateDeckState(room)
+        expect(result.valid).toBe(false)
+        expect(result.error).toBe('Invalid deck count')
+      }
+    })
+
+    it('should reject invalid deck type in database', async () => {
+      const { validateDeckState } = await import('../../server.js')
+
+      const invalidTypeRooms = [
+        { code: 'TYPE1', gameState: { deck: { cards: 16, type: '' } } },
+        { code: 'TYPE2', gameState: { deck: { cards: 16, type: null } } },
+        { code: 'TYPE3', gameState: { deck: { cards: 16, type: undefined } } },
+        { code: 'TYPE4', gameState: { deck: { cards: 16, type: 123 } } }
+      ]
+
+      for (const room of invalidTypeRooms) {
+        const result = validateDeckState(room)
+        expect(result.valid).toBe(false)
+        expect(result.error).toBe('Invalid deck type')
+      }
+    })
+  })
+
+  describe('validateTurn function with game state persistence', () => {
+    it('should validate current player turn from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateTurn } = await import('../../server.js')
+
+      const roomData = createMockRoom('TURN01')
+      roomData.gameState.gameStarted = true
+      roomData.gameState.currentPlayer = { userId: 'user1', name: 'Player1' }
+
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      const dbRoom = await Room.findOne({ code: 'TURN01' })
+      const result = validateTurn(dbRoom, 'user1')
+
+      expect(result.valid).toBe(true)
+    })
+
+    it('should reject when game not started from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateTurn } = await import('../../server.js')
+
+      const roomData = createMockRoom('NRTED01')
+      roomData.gameState.gameStarted = false
+      roomData.gameState.currentPlayer = { userId: 'user1', name: 'Player1' }
+
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      const dbRoom = await Room.findOne({ code: 'NRTED01' })
+      const result = validateTurn(dbRoom, 'user1')
+
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Game not started')
+    })
+
+    it('should reject wrong player turn from database', async () => {
+      const { validateTurn } = await import('../../server.js')
+
+      const roomWithDifferentPlayer = {
+        code: 'WRONGTURN01',
+        gameState: {
+          gameStarted: true,
+          currentPlayer: { userId: 'user1', name: 'Player1' }
+        }
+      }
+
+      const result = validateTurn(roomWithDifferentPlayer, 'user2')
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe('Not your turn')
+    })
+
+    it('should handle invalid room state from database context', async () => {
+      const { validateTurn } = await import('../../server.js')
+
+      expect(validateTurn(null, 'user1').valid).toBe(false)
+      expect(validateTurn({}, 'user1').valid).toBe(false)
+      expect(validateTurn({ gameState: null }, 'user1').valid).toBe(false)
+    })
+  })
+
+  describe('validateCardDrawLimit function with persistent player actions', () => {
+    it('should initialize player actions when not present in database', async () => {
+      const { validateCardDrawLimit } = await import('../../server.js')
+
+      const room = {
+        code: 'NOACTIONS01',
+        gameState: {}
+      }
+
+      const result = validateCardDrawLimit(room, 'user1')
+
+      expect(result.valid).toBe(true)
+      expect(result.currentActions).toEqual({
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      })
+
+      // Should initialize playerActions in room
+      expect(room.gameState.playerActions.user1).toEqual({
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      })
+    })
+
+    it('should return existing player actions from database', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateCardDrawLimit } = await import('../../server.js')
+
+      const existingActions = {
+        drawnHeart: true,
+        drawnMagic: false,
+        heartsPlaced: 1,
+        magicCardsUsed: 0
+      }
+
+      const roomData = createMockRoom('EXIST01')
+      roomData.gameState.playerActions = {
+        user1: existingActions
+      }
+
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      const dbRoom = await Room.findOne({ code: 'EXIST01' })
+      const result = validateCardDrawLimit(dbRoom, 'user1')
+
+      expect(result.valid).toBe(true)
+      expect(result.currentActions).toEqual(existingActions)
+    })
+
+    it('should handle different players independently with database persistence', async () => {
+      const { validateCardDrawLimit } = await import('../../server.js')
+
+      const room = {
+        code: 'MULTIPLAYER01',
+        gameState: {
+          playerActions: {
+            user1: { drawnHeart: true, drawnMagic: false, heartsPlaced: 1, magicCardsUsed: 0 },
+            user2: { drawnHeart: false, drawnMagic: true, heartsPlaced: 0, magicCardsUsed: 1 }
+          }
+        }
+      }
+
+      const result1 = validateCardDrawLimit(room, 'user1')
+      const result2 = validateCardDrawLimit(room, 'user2')
+
+      expect(result1.currentActions.drawnHeart).toBe(true)
+      expect(result2.currentActions.drawnMagic).toBe(true)
+    })
+  })
+
+  describe('Complex room state validation with database integration', () => {
+    it('should handle complex room states with full database persistence', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateRoomState } = await import('../../server.js')
+
+      const complexRoom = {
+        code: 'FPLEX01',
+        players: [
+          {
+            userId: 'user1',
+            name: 'Player1',
+            score: 10,
+            email: 'player1@test.com',
+            isReady: true,
+            joinedAt: new Date()
+          },
+          {
+            userId: 'user2',
+            name: 'Player2',
+            score: 5,
+            email: 'player2@test.com',
+            isReady: true,
+            joinedAt: new Date()
+          }
+        ],
+        maxPlayers: 2,
+        gameState: {
+          gameStarted: true,
+          currentPlayer: { userId: 'user1', name: 'Player1' },
+          turnCount: 5,
+          tiles: [
+            { id: 0, color: 'red', emoji: '🟥', placedHeart: null },
+            { id: 1, color: 'yellow', emoji: '🟨', placedHeart: null },
+            { id: 2, color: 'green', emoji: '🟩', placedHeart: null },
+            { id: 3, color: 'white', emoji: '⬜', placedHeart: null }
+          ],
+          playerHands: {
+            user1: [
+              { id: 'heart-1', type: 'heart', color: 'red', value: 2, emoji: '❤️' },
+              { id: 'heart-2', type: 'heart', color: 'yellow', value: 1, emoji: '💛' },
+              { id: 'magic-1', type: 'magic', magicType: 'wind', emoji: '💨' }
+            ],
+            user2: [
+              { id: 'heart-3', type: 'heart', color: 'green', value: 3, emoji: '💚' },
+              { id: 'heart-4', type: 'heart', color: 'red', value: 2, emoji: '❤️' },
+              { id: 'magic-2', type: 'magic', magicType: 'shield', emoji: '🛡️' }
+            ]
+          },
+          deck: { emoji: '💌', cards: 12, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+          shields: {},
+          playerActions: {
+            user1: { drawnHeart: true, drawnMagic: false, heartsPlaced: 1, magicCardsUsed: 0 },
+            user2: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
+          }
+        }
+      }
+
+      // Save to database
+      const savedRoom = new Room(complexRoom)
+      await savedRoom.save()
+      await waitForAsync(100) // Ensure database operation completes
+
+      // Load from database and validate
+      const dbRoom = await Room.findOne({ code: 'FPLEX01' })
+      const result = validateRoomState(dbRoom)
+
+      expect(result.valid).toBe(true)
+    })
+
+    it('should handle partial room states from database context', async () => {
+      const { validateRoomState } = await import('../../server.js')
+
+      // Room with some but not all properties
+      const partialRoom = {
+        code: 'PARTIAL01',
+        players: [],
+        gameState: {
+          gameStarted: undefined, // Explicitly undefined
+          currentPlayer: null
+        }
+      }
+
+      const result = validateRoomState(partialRoom)
+      expect(result.valid).toBe(true) // Should be valid when gameStarted is undefined
+    })
+
+    it('should maintain data consistency across database operations', async () => {
+      // Skip if MongoDB is not available
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const { validateRoomState, validatePlayerInRoom, validateDeckState } = await import('../../server.js')
+
+      const roomData = createMockRoom('CONSY01')
+      roomData.players = [
+        { userId: 'user1', name: 'Player1', email: 'player1@test.com', isReady: true, score: 0, joinedAt: new Date() }
+      ]
+      roomData.gameState.deck = { emoji: '💌', cards: 16, type: 'hearts' }
+      roomData.gameState.magicDeck = { emoji: '🔮', cards: 16, type: 'magic' }
+      roomData.gameState.gameStarted = true;
+
+      // Save to database
+      const savedRoom = new Room(roomData)
+      await savedRoom.save()
+
+      // Load and perform multiple validations
+      const dbRoom = await Room.findOne({ code: 'CONSY01' })
+
+      const roomStateResult = validateRoomState(dbRoom)
+
+      const playerResult = validatePlayerInRoom(dbRoom, 'user1')
+      const deckResult = validateDeckState(dbRoom)
+
+      expect(roomStateResult.valid).toBe(true)
+      expect(playerResult.valid).toBe(true)
+      expect(deckResult.valid).toBe(true)
+    })
+  })
+})
