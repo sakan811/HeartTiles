@@ -2,6 +2,14 @@ import { vi } from 'vitest'
 import React from 'react'
 import '@testing-library/jest-dom/vitest'
 
+// NOTE: Real server logic functions can be imported directly from server.js for unit tests:
+// import {
+//   validateRoomCode, validatePlayerName, generateTiles, calculateScore,
+//   validateHeartPlacement, canPlaceMoreHearts, checkGameEndConditions,
+//   sanitizeInput, findPlayerByUserId, findPlayerByName
+// } from '../../server.js'
+// Only mock external dependencies (MongoDB, Socket.IO, NextAuth) in this setup file
+
 // Mock mongoose before any imports that might use it
 const mockSchemaTypes = {
   ObjectId: vi.fn(),
@@ -85,7 +93,8 @@ MockUser.findByIdAndDelete = vi.fn()
 MockUser.deleteOne = vi.fn()
 MockUser.findOneAndUpdate = vi.fn()
 
-vi.mock('../models.js', () => ({
+// Helper function to create model mocks - eliminates duplication
+const createModelMocks = () => ({
   User: MockUser,
   PlayerSession: {
     findOne: vi.fn(),
@@ -108,85 +117,13 @@ vi.mock('../models.js', () => ({
     find: vi.fn(),
   },
   deleteRoom: vi.fn(),
-}))
+})
 
-// Also mock the path used by API routes
-vi.mock('../../../models.js', () => ({
-  User: MockUser,
-  PlayerSession: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  Room: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  deleteRoom: vi.fn(),
-}))
-
-// Also mock the path used by API routes in src/app/api/
-vi.mock('../../../../models.js', () => ({
-  User: MockUser,
-  PlayerSession: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  Room: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  deleteRoom: vi.fn(),
-}))
-
-// Also mock the path used by API routes without .js extension
-vi.mock('../../../../models', () => ({
-  User: MockUser,
-  PlayerSession: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  Room: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  deleteRoom: vi.fn(),
-}))
+// Apply the same mock to all possible import paths
+vi.mock('../models.js', createModelMocks)
+vi.mock('../../../models.js', createModelMocks)
+vi.mock('../../../../models.js', createModelMocks)
+vi.mock('../../../../models', createModelMocks)
 
 // Make React available globally for all tests
 vi.stubGlobal('React', React)
@@ -307,8 +244,8 @@ vi.mock('next-auth/react', () => ({
 // Make the mock function globally accessible
 global.__mockUseSession = mockUseSession
 
-// Mock window object for React components using vi.stubGlobal for proper cleanup
-vi.stubGlobal('window', {
+// Define window mock once for reuse
+const createWindowMock = () => ({
   location: {
     reload: vi.fn(),
     href: 'http://localhost:3000',
@@ -318,7 +255,6 @@ vi.stubGlobal('window', {
     search: '',
     hash: ''
   },
-  // Add other common window properties that components might use
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   dispatchEvent: vi.fn(),
@@ -349,14 +285,34 @@ vi.stubGlobal('window', {
   },
   requestAnimationFrame: vi.fn((cb) => setTimeout(cb, 16)),
   cancelAnimationFrame: vi.fn(),
-  // Ensure window object checks work correctly
   self: {},
   performance: {
     now: vi.fn(() => Date.now())
   },
-  // Mock alert function for components that use it
-  alert: vi.fn()
+  alert: vi.fn(),
+  // Additional properties that React DOM might access
+  console: {
+    log: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  },
+  Event: class Event {
+    constructor(type, options) {
+      this.type = type
+      this.bubbles = options?.bubbles || false
+      this.cancelable = options?.cancelable || false
+    }
+  },
+  CustomEvent: class CustomEvent extends Event {
+    constructor(type, options) {
+      super(type, options)
+      this.detail = options?.detail || null
+    }
+  }
 })
+
+// Mock window object for React components using vi.stubGlobal for proper cleanup
+vi.stubGlobal('window', createWindowMock())
 
 // Also expose alert globally for direct access
 global.alert = vi.fn()
@@ -375,80 +331,30 @@ global.console = {
 const mockDate = new Date('2024-01-01T00:00:00.000Z')
 global.Date.now = vi.fn(() => mockDate.getTime())
 
-// Mock Math.random() for consistent testing
-// Create a predictable sequence that still allows for unique IDs
+// Mock Math.random() for consistent testing - simplified version
 let mathRandomCallCount = 0
 
-// Store the original Math.random
-const originalMathRandom = Math.random
-
-// Create a robust Math.random mock that never returns undefined
-const robustMathRandom = vi.fn(() => {
-  try {
-    // Return deterministic but varied values for different test scenarios
-    // Using the golden ratio technique for better distribution and uniqueness
-    const goldenRatio = 0.618033988749895
-    const seed = 0.123456789
-    const current = (seed + mathRandomCallCount * goldenRatio) % 1
-    mathRandomCallCount++
-
-    // Ensure we never return undefined or NaN
-    if (typeof current === 'number' && !isNaN(current) && current >= 0 && current <= 1) {
-      return current
-    }
-
-    // Fallback to original Math.random if something goes wrong
-    const fallback = originalMathRandom()
-    console.warn('Math.random() fallback used, returned:', fallback)
-    return fallback
-  } catch (error) {
-    console.error('Error in Math.random() mock, using fallback:', error)
-    return originalMathRandom()
-  }
+// Simple deterministic Math.random mock - no complex fallback logic needed
+const simpleMathRandom = vi.fn(() => {
+  const value = (mathRandomCallCount++ * 0.1) % 1
+  return value
 })
 
-// Only mock Math.random, keep all other Math functions intact
-// Use Object.defineProperty to safely replace only the random function
-const originalMath = Math
+// Replace Math.random with simple deterministic version
 Object.defineProperty(Math, 'random', {
-  value: robustMathRandom,
-  writable: true,
-  configurable: true
-})
-Object.defineProperty(global, 'Math', {
-  value: originalMath,
+  value: simpleMathRandom,
   writable: true,
   configurable: true
 })
 
-// Store original timer functions before mocking
-const originalSetTimeout = global.setTimeout
-const originalSetInterval = global.setInterval
-const originalClearTimeout = global.clearTimeout
-const originalClearInterval = global.clearInterval
-
-// Mock setTimeout/setInterval for consistent testing
-global.setTimeout = vi.fn((fn, delay) => {
-  return originalSetTimeout(fn, delay)
-})
-
-global.setInterval = vi.fn((fn, interval) => {
-  return originalSetInterval(fn, interval)
-})
-
-global.clearTimeout = vi.fn((id) => {
-  return originalClearTimeout(id)
-})
-
-global.clearInterval = vi.fn((id) => {
-  return originalClearInterval(id)
-})
+// Timer mocking removed - these mocks just called original functions and provided no value
+// Use vi.useFakeTimers() in individual tests if timer control is needed
 
 // Mock cards library for all tests - use real implementations with minimal mocking
 vi.mock('../src/lib/cards.js', async (importOriginal) => {
   const actual = await importOriginal();
 
-  // Wrap methods with vi.fn for testability but use real implementations
+  // Mock factory functions with vi.fn for testability but use real implementations
   const mockCreateHeartCard = vi.fn((id, color, value, emoji) => {
     return actual.createHeartCard(id, color, value, emoji);
   });
@@ -458,7 +364,15 @@ vi.mock('../src/lib/cards.js', async (importOriginal) => {
   });
 
   const mockCreateCardFromData = vi.fn((cardData) => {
-    return actual.createCardFromData(cardData);
+    if (!cardData) {
+      throw new Error('Invalid card data');
+    }
+    if (cardData.type === 'heart' || (cardData.color && cardData.value !== undefined)) {
+      return mockCreateHeartCard(cardData.id, cardData.color, cardData.value, cardData.emoji);
+    } else if (cardData.type && ['wind', 'recycle', 'shield'].includes(cardData.type)) {
+      return mockCreateMagicCard(cardData.id, cardData.type);
+    }
+    throw new Error('Invalid card data');
   });
 
   const mockGenerateMagicDeck = vi.fn(() => {
@@ -469,35 +383,9 @@ vi.mock('../src/lib/cards.js', async (importOriginal) => {
     return actual.generateRandomMagicCard();
   });
 
-  // Wrap card classes' methods for testability while preserving real implementation
-  const MockWindCard = class extends actual.WindCard {
-    constructor(id) {
-      super(id);
-      this.canTargetTile = vi.fn(super.canTargetTile.bind(this));
-      this.executeEffect = vi.fn(super.executeEffect.bind(this));
-    }
-  };
-
-  const MockRecycleCard = class extends actual.RecycleCard {
-    constructor(id) {
-      super(id);
-      this.canTargetTile = vi.fn(super.canTargetTile.bind(this));
-      this.executeEffect = vi.fn(super.executeEffect.bind(this));
-    }
-  };
-
-  const MockShieldCard = class extends actual.ShieldCard {
-    constructor(id) {
-      super(id);
-      this.executeEffect = vi.fn(super.executeEffect.bind(this));
-    }
-  };
-
+  // Use real implementations directly - no need for wrapper classes
   return {
     ...actual,
-    WindCard: MockWindCard,
-    RecycleCard: MockRecycleCard,
-    ShieldCard: MockShieldCard,
     createHeartCard: mockCreateHeartCard,
     createMagicCard: mockCreateMagicCard,
     createCardFromData: mockCreateCardFromData,
@@ -559,84 +447,11 @@ afterEach(() => {
 
   // Re-apply the Math.random mock to ensure it's always available
   Object.defineProperty(Math, 'random', {
-    value: robustMathRandom,
+    value: simpleMathRandom,
     writable: true,
     configurable: true
   })
 
-  // Re-establish comprehensive window object mock to ensure consistency across tests
-  // This includes all properties that React DOM might need during rendering and cleanup
-  vi.stubGlobal('window', {
-    location: {
-      reload: vi.fn(),
-      href: 'http://localhost:3000',
-      origin: 'http://localhost:3000',
-      hostname: 'localhost',
-      pathname: '/',
-      search: '',
-      hash: ''
-    },
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-    navigator: {
-      userAgent: 'test-user-agent',
-      platform: 'test-platform',
-      language: 'en-US'
-    },
-    document: {
-      createElement: vi.fn(() => ({ style: {}, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
-      body: { appendChild: vi.fn(), removeChild: vi.fn() },
-      getElementById: vi.fn(),
-      querySelector: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    },
-    localStorage: {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn()
-    },
-    sessionStorage: {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn()
-    },
-    requestAnimationFrame: vi.fn((cb) => setTimeout(cb, 16)),
-    cancelAnimationFrame: vi.fn(),
-    self: {},
-    performance: {
-      now: vi.fn(() => Date.now())
-    },
-    // Mock alert function
-    alert: vi.fn(),
-    // Additional properties that React DOM might access
-    console: {
-      log: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn()
-    },
-    // Mock timers that React DOM might use
-    setTimeout: global.setTimeout,
-    clearTimeout: global.clearTimeout,
-    setInterval: global.setInterval,
-    clearInterval: global.clearInterval,
-    // Mock Event constructor
-    Event: class Event {
-      constructor(type, options) {
-        this.type = type
-        this.bubbles = options?.bubbles || false
-        this.cancelable = options?.cancelable || false
-      }
-    },
-    // Mock CustomEvent constructor
-    CustomEvent: class CustomEvent extends Event {
-      constructor(type, options) {
-        super(type, options)
-        this.detail = options?.detail || null
-      }
-    }
-  })
+  // Re-establish window object mock to ensure consistency across tests
+  vi.stubGlobal('window', createWindowMock())
 })
