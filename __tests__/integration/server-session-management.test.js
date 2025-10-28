@@ -59,7 +59,7 @@ describe('Server Session Management Integration Tests', () => {
 
       const { migratePlayerData } = await import('../../server.js')
 
-      const roomData = createMockRoom('MIGRATE01')
+      const roomData = createMockRoom('MIGTE01')
       roomData.players = [
         { userId: 'oldUser1', name: 'OldUser', email: 'old@test.com', score: 10, isReady: true, joinedAt: new Date() }
       ]
@@ -76,24 +76,22 @@ describe('Server Session Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load from database and migrate
-      const dbRoom = await Room.findOne({ code: 'MIGRATE01' })
+      const dbRoom = await Room.findOne({ code: 'MIGTE01' })
       migratePlayerData(dbRoom, 'oldUser1', 'newUser1', 'NewUser', 'new@example.com')
 
       // Verify migration
-      expect(dbRoom.players[0]).toEqual({
-        userId: 'newUser1',
-        name: 'NewUser',
-        email: 'new@example.com',
-        score: 10,
-        isReady: true,
-        joinedAt: expect.any(Date)
-      })
+      expect(dbRoom.players[0].userId).toBe('newUser1')
+      expect(dbRoom.players[0].name).toBe('NewUser')
+      expect(dbRoom.players[0].email).toBe('new@example.com')
+      expect(dbRoom.players[0].score).toBe(10)
+      expect(dbRoom.players[0].isReady).toBe(true)
+      expect(dbRoom.players[0].joinedAt).toBeInstanceOf(Date)
 
       // Save changes back to database
       await dbRoom.save()
 
       // Verify persistence
-      const updatedRoom = await Room.findOne({ code: 'MIGRATE01' })
+      const updatedRoom = await Room.findOne({ code: 'MIGTE01' })
       expect(updatedRoom.players[0].userId).toBe('newUser1')
     })
 
@@ -108,7 +106,7 @@ describe('Server Session Management Integration Tests', () => {
 
       const { migratePlayerData } = await import('../../server.js')
 
-      const roomData = createMockRoom('NEWPLAYER01')
+      const roomData = createMockRoom('NAYER01')
       roomData.players = [] // Empty players array
       roomData.gameState = {}
 
@@ -117,22 +115,20 @@ describe('Server Session Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load from database and migrate
-      const dbRoom = await Room.findOne({ code: 'NEWPLAYER01' })
+      const dbRoom = await Room.findOne({ code: 'NAYER01' })
       migratePlayerData(dbRoom, 'oldUser1', 'newUser1', 'NewUser', 'new@example.com')
 
       expect(dbRoom.players).toHaveLength(1)
-      expect(dbRoom.players[0]).toEqual({
-        userId: 'newUser1',
-        name: 'NewUser',
-        email: 'new@example.com',
-        isReady: false,
-        score: 0,
-        joinedAt: expect.any(Date)
-      })
+      expect(dbRoom.players[0].userId).toBe('newUser1')
+      expect(dbRoom.players[0].name).toBe('NewUser')
+      expect(dbRoom.players[0].email).toBe('new@example.com')
+      expect(dbRoom.players[0].isReady).toBe(false)
+      expect(dbRoom.players[0].score).toBe(0)
+      expect(dbRoom.players[0].joinedAt).toBeInstanceOf(Date)
 
       // Save and verify persistence
       await dbRoom.save()
-      const updatedRoom = await Room.findOne({ code: 'NEWPLAYER01' })
+      const updatedRoom = await Room.findOne({ code: 'NAYER01' })
       expect(updatedRoom.players[0].userId).toBe('newUser1')
     })
 
@@ -184,7 +180,7 @@ describe('Server Session Management Integration Tests', () => {
 
       const { migratePlayerData } = await import('../../server.js')
 
-      const roomData = createMockRoom('SHIELDS01')
+      const roomData = createMockRoom('SHIES01')
       roomData.players = [{ userId: 'oldUser1', name: 'OldUser', email: 'old@test.com', isReady: false, score: 0, joinedAt: new Date() }]
       roomData.gameState.shields = {
         oldUser1: { remainingTurns: 2, active: true },
@@ -196,7 +192,7 @@ describe('Server Session Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load from database and migrate
-      const dbRoom = await Room.findOne({ code: 'SHIELDS01' })
+      const dbRoom = await Room.findOne({ code: 'SHIES01' })
       migratePlayerData(dbRoom, 'oldUser1', 'newUser1', 'NewUser', 'new@example.com')
 
       expect(dbRoom.gameState.shields.newUser1).toEqual({ remainingTurns: 2, active: true })
@@ -205,7 +201,7 @@ describe('Server Session Management Integration Tests', () => {
 
       // Save and verify persistence
       await dbRoom.save()
-      const updatedRoom = await Room.findOne({ code: 'SHIELDS01' })
+      const updatedRoom = await Room.findOne({ code: 'SHIES01' })
       expect(updatedRoom.gameState.shields.newUser1).toBeDefined()
       expect(updatedRoom.gameState.shields.oldUser1).toBeUndefined()
     })
@@ -221,7 +217,7 @@ describe('Server Session Management Integration Tests', () => {
 
       const { migratePlayerData } = await import('../../server.js')
 
-      const roomData = createMockRoom('CURRENT01')
+      const roomData = createMockRoom('CURRT01')
       roomData.players = [
         { userId: 'oldUser1', name: 'OldUser', email: 'old@test.com', isReady: true, score: 0, joinedAt: new Date() },
         { userId: 'otherUser', name: 'OtherUser', email: 'other@test.com', isReady: false, score: 0, joinedAt: new Date() }
@@ -233,7 +229,7 @@ describe('Server Session Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load from database and migrate
-      const dbRoom = await Room.findOne({ code: 'CURRENT01' })
+      const dbRoom = await Room.findOne({ code: 'CURRT01' })
       migratePlayerData(dbRoom, 'oldUser1', 'newUser1', 'NewUser', 'new@example.com')
 
       expect(dbRoom.gameState.currentPlayer).toEqual({
@@ -245,7 +241,7 @@ describe('Server Session Management Integration Tests', () => {
 
       // Save and verify persistence
       await dbRoom.save()
-      const updatedRoom = await Room.findOne({ code: 'CURRENT01' })
+      const updatedRoom = await Room.findOne({ code: 'CURRT01' })
       expect(updatedRoom.gameState.currentPlayer.userId).toBe('newUser1')
     })
   })

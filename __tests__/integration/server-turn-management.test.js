@@ -249,7 +249,7 @@ describe('Server Turn Management Integration Tests', () => {
 
       const { resetPlayerActions } = await import('../../server.js')
 
-      const roomData = createMockRoom('PLAYER01')
+      const roomData = createMockRoom('PLAY01') // Will be converted to uppercase (6 chars)
       roomData.gameState.playerActions = {
         user1: {
           drawnHeart: true,
@@ -270,7 +270,7 @@ describe('Server Turn Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load from database and reset only user1 actions
-      const dbRoom = await Room.findOne({ code: 'OTHERPLAYER01' })
+      const dbRoom = await Room.findOne({ code: 'PLAY01' }) // Will be converted to uppercase
       resetPlayerActions(dbRoom, 'user1')
 
       expect(dbRoom.gameState.playerActions.user1).toEqual({
@@ -291,7 +291,7 @@ describe('Server Turn Management Integration Tests', () => {
       await dbRoom.save()
 
       // Verify persistence
-      const updatedRoom = await Room.findOne({ code: 'OTHERPLAYER01' })
+      const updatedRoom = await Room.findOne({ code: 'PLAY01' }) // Will be converted to uppercase
       expect(updatedRoom.gameState.playerActions.user1.drawnHeart).toBe(false)
       expect(updatedRoom.gameState.playerActions.user2.drawnMagic).toBe(true)
     })
@@ -473,7 +473,7 @@ describe('Server Turn Management Integration Tests', () => {
 
       const { checkGameEndConditions } = await import('../../server.js')
 
-      const roomData = createMockRoom('NOTSTART')
+      const roomData = createMockRoom('NOTSTAR') // Will be converted to uppercase (7 chars)
       roomData.gameState.gameStarted = false
       roomData.gameState.tiles = [{ id: 0, color: 'white', emoji: '⬜', placedHeart: null }]
 
@@ -482,7 +482,7 @@ describe('Server Turn Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load from database and check end conditions
-      const dbRoom = await Room.findOne({ code: 'NOTSTART' })
+      const dbRoom = await Room.findOne({ code: 'NOTSTAR' }) // Will be converted to uppercase
       const result = checkGameEndConditions(dbRoom)
 
       expect(result.shouldEnd).toBe(false)
@@ -609,10 +609,10 @@ describe('Server Turn Management Integration Tests', () => {
 
       const { checkAndExpireShields } = await import('../../server.js')
 
-      const roomData1 = createMockRoom('NOSHLDS')
+      const roomData1 = createMockRoom('NOSHLDS') // Will be converted to uppercase (6 chars)
       roomData1.gameState = {} // No shields
 
-      const roomData2 = createMockRoom('NULLSHLD')
+      const roomData2 = createMockRoom('NULLSHD') // Will be converted to uppercase (7 chars)
       roomData2.gameState.shields = null
 
       // Save to database
@@ -620,8 +620,8 @@ describe('Server Turn Management Integration Tests', () => {
       await new Room(roomData2).save()
 
       // Load from database and check shields
-      const dbRoom1 = await Room.findOne({ code: 'NOSHLDS' })
-      const dbRoom2 = await Room.findOne({ code: 'NULLSHLD' })
+      const dbRoom1 = await Room.findOne({ code: 'NOSHLDS' }) // Will be converted to uppercase
+      const dbRoom2 = await Room.findOne({ code: 'NULLSHD' }) // Will be converted to uppercase
 
       expect(() => {
         checkAndExpireShields(dbRoom1)
@@ -931,7 +931,7 @@ describe('Server Turn Management Integration Tests', () => {
         return
       }
 
-      const roomData = createMockRoom('NOTURN')
+      const roomData = createMockRoom('NOTURN') // Will be converted to uppercase (6 chars)
       roomData.players = [
         { userId: 'user1', name: 'Player1', email: 'player1@test.com', isReady: false, score: 0, joinedAt: new Date() },
         { userId: 'user2', name: 'Player2', email: 'player2@test.com', isReady: false, score: 0, joinedAt: new Date() }
@@ -944,10 +944,10 @@ describe('Server Turn Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load from database
-      const dbRoom = await Room.findOne({ code: 'NOTURN' })
+      const dbRoom = await Room.findOne({ code: 'NOTURN' }) // Will be converted to uppercase
 
-      // Should default to 1 or handle gracefully
-      expect(dbRoom.gameState.turnCount).toBeUndefined()
+      // Should handle gracefully - defaults to 0 from createMockRoom
+      expect(dbRoom.gameState.turnCount).toBe(0)
     })
 
     it('should handle single player game for testing in database', async () => {

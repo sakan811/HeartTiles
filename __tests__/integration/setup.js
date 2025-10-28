@@ -188,7 +188,7 @@ export function createMockUser(userId = 'test-user-1', userName = 'Test User', u
 // Helper function to create mock room
 export function createMockRoom(roomCode = 'TEST01') {
   return {
-    code: roomCode,
+    code: roomCode.toUpperCase(),
     players: [],
     maxPlayers: 2,
     gameState: {

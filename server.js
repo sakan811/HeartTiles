@@ -324,6 +324,11 @@ function recordCardDraw(room, userId, cardType) {
   } else if (cardType === 'magic') {
     userActions.drawnMagic = true;
   }
+
+  // Mark the nested object as modified for Mongoose (only if it's a Mongoose document)
+  if (typeof room.markModified === 'function') {
+    room.markModified('gameState.playerActions');
+  }
 }
 
 function resetPlayerActions(room, userId) {
@@ -336,13 +341,25 @@ function resetPlayerActions(room, userId) {
     heartsPlaced: 0,
     magicCardsUsed: 0
   };
+
+  // Mark the nested object as modified for Mongoose (only if it's a Mongoose document)
+  if (typeof room.markModified === 'function') {
+    room.markModified('gameState.playerActions');
+  }
 }
 
 function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
   if (!room?.gameState?.gameStarted) return { shouldEnd: false, reason: null };
 
   // Condition 1: All tiles are filled (have hearts)
-  const allTilesFilled = room.gameState.tiles.every(tile => tile.placedHeart);
+  // A tile is considered filled when it has a placedHeart (regardless of value, as long as it's >= 0)
+  const allTilesFilled = room.gameState.tiles.every(tile =>
+    tile.placedHeart &&
+    typeof tile.placedHeart === 'object' &&
+    typeof tile.placedHeart.value === 'number' &&
+    tile.placedHeart.value >= 0
+  );
+
   if (allTilesFilled) {
     return { shouldEnd: true, reason: "All tiles are filled" };
   }
@@ -392,6 +409,11 @@ function checkAndExpireShields(room) {
       console.log(`Removing invalid shield for ${userId}: ${typeof shield}`);
       delete room.gameState.shields[userId];
     }
+  }
+
+  // Mark the nested object as modified for Mongoose (only if it's a Mongoose document)
+  if (typeof room.markModified === 'function') {
+    room.markModified('gameState.shields');
   }
 }
 
@@ -461,7 +483,21 @@ function acquireTurnLock(roomCode, socketId) {
   // Use global turnLocks if available (for testing), otherwise use module-level
   const locks = global.turnLocks || turnLocks;
 
-  if (locks.has(lockKey)) return false;
+  // Check if there's an existing lock and clean up expired ones (older than 30 seconds)
+  const existingLock = locks.get(lockKey);
+  if (existingLock) {
+    const now = Date.now();
+    const lockAge = now - existingLock.timestamp;
+
+    // If lock is older than 30 seconds, consider it expired and remove it
+    if (lockAge > 30 * 1000) {
+      locks.delete(lockKey);
+    } else {
+      // Lock is still valid
+      return false;
+    }
+  }
+
   locks.set(lockKey, { socketId, timestamp: Date.now() });
   return true;
 }
