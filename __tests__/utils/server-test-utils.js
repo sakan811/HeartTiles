@@ -493,6 +493,13 @@ export function createTestPlayer(playerData = {}) {
   }
 }
 
+// Turn lock management utilities
+export function clearTurnLocks() {
+  if (global.turnLocks) {
+    global.turnLocks.clear()
+  }
+}
+
 // Performance monitoring utilities for tests
 export function createPerformanceMonitor() {
   const metrics = new Map()
