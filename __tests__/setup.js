@@ -78,52 +78,168 @@ vi.mock('mongoose', () => ({
   ...mockMongoose
 }))
 
-// Mock models.js to provide mocked User model for testing
-// This is needed for auth tests that need to mock User.findOne
-// Create User mock that can be used as a constructor
-const MockUser = vi.fn().mockImplementation(function(data) {
-  this.data = data
-  this.save = vi.fn().mockResolvedValue({ ...data, _id: 'mock-id' })
-})
-MockUser.findOne = vi.fn()
-MockUser.create = vi.fn()
-MockUser.findById = vi.fn()
-MockUser.findByIdAndUpdate = vi.fn()
-MockUser.findByIdAndDelete = vi.fn()
-MockUser.deleteOne = vi.fn()
-MockUser.findOneAndUpdate = vi.fn()
+// Apply the same mock to all possible import paths BEFORE other imports
+// Define inline factory to avoid initialization order issues
+vi.mock('../models.js', () => {
+  // Create User mock that can be used as a constructor
+  const MockUser = vi.fn().mockImplementation(function(data) {
+    this.data = data
+    this.save = vi.fn().mockResolvedValue({ ...data, _id: 'mock-id' })
+  })
+  MockUser.findOne = vi.fn()
+  MockUser.create = vi.fn()
+  MockUser.findById = vi.fn()
+  MockUser.findByIdAndUpdate = vi.fn()
+  MockUser.findByIdAndDelete = vi.fn()
+  MockUser.deleteOne = vi.fn()
+  MockUser.findOneAndUpdate = vi.fn()
 
-// Helper function to create model mocks - eliminates duplication
-const createModelMocks = () => ({
-  User: MockUser,
-  PlayerSession: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  Room: {
-    findOne: vi.fn(),
-    create: vi.fn(),
-    findById: vi.fn(),
-    findByIdAndUpdate: vi.fn(),
-    findByIdAndDelete: vi.fn(),
-    deleteOne: vi.fn(),
-    findOneAndUpdate: vi.fn(),
-    find: vi.fn(),
-  },
-  deleteRoom: vi.fn(),
+  return {
+    User: MockUser,
+    PlayerSession: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    Room: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    deleteRoom: vi.fn(),
+  }
 })
 
-// Apply the same mock to all possible import paths
-vi.mock('../models.js', createModelMocks)
-vi.mock('../../../models.js', createModelMocks)
-vi.mock('../../../../models.js', createModelMocks)
-vi.mock('../../../../models', createModelMocks)
+vi.mock('../../../models.js', () => {
+  // Create User mock that can be used as a constructor
+  const MockUser = vi.fn().mockImplementation(function(data) {
+    this.data = data
+    this.save = vi.fn().mockResolvedValue({ ...data, _id: 'mock-id' })
+  })
+  MockUser.findOne = vi.fn()
+  MockUser.create = vi.fn()
+  MockUser.findById = vi.fn()
+  MockUser.findByIdAndUpdate = vi.fn()
+  MockUser.findByIdAndDelete = vi.fn()
+  MockUser.deleteOne = vi.fn()
+  MockUser.findOneAndUpdate = vi.fn()
+
+  return {
+    User: MockUser,
+    PlayerSession: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    Room: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    deleteRoom: vi.fn(),
+  }
+})
+
+vi.mock('../../../../models.js', () => {
+  // Create User mock that can be used as a constructor
+  const MockUser = vi.fn().mockImplementation(function(data) {
+    this.data = data
+    this.save = vi.fn().mockResolvedValue({ ...data, _id: 'mock-id' })
+  })
+  MockUser.findOne = vi.fn()
+  MockUser.create = vi.fn()
+  MockUser.findById = vi.fn()
+  MockUser.findByIdAndUpdate = vi.fn()
+  MockUser.findByIdAndDelete = vi.fn()
+  MockUser.deleteOne = vi.fn()
+  MockUser.findOneAndUpdate = vi.fn()
+
+  return {
+    User: MockUser,
+    PlayerSession: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    Room: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    deleteRoom: vi.fn(),
+  }
+})
+
+vi.mock('../../../../models', () => {
+  // Create User mock that can be used as a constructor
+  const MockUser = vi.fn().mockImplementation(function(data) {
+    this.data = data
+    this.save = vi.fn().mockResolvedValue({ ...data, _id: 'mock-id' })
+  })
+  MockUser.findOne = vi.fn()
+  MockUser.create = vi.fn()
+  MockUser.findById = vi.fn()
+  MockUser.findByIdAndUpdate = vi.fn()
+  MockUser.findByIdAndDelete = vi.fn()
+  MockUser.deleteOne = vi.fn()
+  MockUser.findOneAndUpdate = vi.fn()
+
+  return {
+    User: MockUser,
+    PlayerSession: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    Room: {
+      findOne: vi.fn(),
+      create: vi.fn(),
+      findById: vi.fn(),
+      findByIdAndUpdate: vi.fn(),
+      findByIdAndDelete: vi.fn(),
+      deleteOne: vi.fn(),
+      findOneAndUpdate: vi.fn(),
+      find: vi.fn(),
+    },
+    deleteRoom: vi.fn(),
+  }
+})
+
 
 // Make React available globally for all tests
 vi.stubGlobal('React', React)

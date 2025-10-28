@@ -268,6 +268,7 @@ describe('Server Utility Functions Tests', () => {
       const room = createTestRoom({
         gameStarted: true,
         currentPlayer: { userId: 'player1', name: 'Player1' },
+        tiles: generateTiles(), // Add 8 tiles for the test
         playerHands: {
           player1: [
             new HeartCard('heart-1', 'red', 2, '❤️'),
@@ -289,6 +290,7 @@ describe('Server Utility Functions Tests', () => {
       const room = createTestRoom({
         gameStarted: true,
         currentPlayer: { userId: 'player1', name: 'Player1' },
+        tiles: generateTiles(), // Add 8 tiles for the test
         playerHands: {
           player1: [
             { id: 'magic-1', type: 'wind', emoji: '💨' }, // Magic card
@@ -312,6 +314,7 @@ describe('Server Utility Functions Tests', () => {
       const room = createTestRoom({
         gameStarted: true,
         currentPlayer: { userId: 'player1', name: 'Player1' },
+        tiles: generateTiles(), // Add 8 tiles for the test
         playerHands: {
           player1: [
             { id: 'heart-plain', color: 'red', value: 2, type: 'heart' }
@@ -327,6 +330,7 @@ describe('Server Utility Functions Tests', () => {
       const room = createTestRoom({
         gameStarted: true,
         currentPlayer: { userId: 'player1', name: 'Player1' },
+        tiles: generateTiles(), // Add 8 tiles for the test
         playerHands: {
           player1: [
             new HeartCard('heart-1', 'red', 2, '❤️')
@@ -348,6 +352,7 @@ describe('Server Utility Functions Tests', () => {
       const room = createTestRoom({
         gameStarted: true,
         currentPlayer: { userId: 'player1', name: 'Player1' },
+        tiles: generateTiles(), // Add 8 tiles for the test
         playerHands: {
           player1: [
             { id: 'heart-plain', color: 'red', value: 2, type: 'heart' }
