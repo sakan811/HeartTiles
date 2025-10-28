@@ -8,7 +8,16 @@ import {
   loadPlayerSessions
 } from '../utils/server-test-utils.js'
 import { Room, PlayerSession, User } from '../../models.js'
+import mongoose from 'mongoose'
 import { createMockSocket, createMockRoom, waitForAsync } from './setup.js'
+
+// Helper function to generate a valid ObjectId that won't exist in the database
+function generateNonexistentObjectId() {
+  // Generate a valid ObjectId using high timestamp values that are unlikely to exist
+  const timestamp = Math.floor(Date.now() / 1000) + 1000000; // Far future timestamp
+  const randomBytes = '0000000000000000'; // All zeros
+  return new mongoose.Types.ObjectId(timestamp.toString(16).padStart(8, '0') + randomBytes).toString()
+}
 
 describe('Server Session Management Integration Tests', () => {
   let mockServer
@@ -230,6 +239,9 @@ describe('Server Session Management Integration Tests', () => {
 
       // Load from database and migrate
       const dbRoom = await Room.findOne({ code: 'CURRT01' })
+      expect(dbRoom).not.toBeNull()
+      expect(dbRoom.gameState).not.toBeNull()
+
       migratePlayerData(dbRoom, 'oldUser1', 'newUser1', 'NewUser', 'new@example.com')
 
       expect(dbRoom.gameState.currentPlayer).toEqual({
@@ -242,6 +254,8 @@ describe('Server Session Management Integration Tests', () => {
       // Save and verify persistence
       await dbRoom.save()
       const updatedRoom = await Room.findOne({ code: 'CURRT01' })
+      expect(updatedRoom).not.toBeNull()
+      expect(updatedRoom.gameState).not.toBeNull()
       expect(updatedRoom.gameState.currentPlayer.userId).toBe('newUser1')
     })
   })
@@ -258,9 +272,12 @@ describe('Server Session Management Integration Tests', () => {
 
       const { getPlayerSession } = await import('../../server.js')
 
+      // Generate proper ObjectId for the test
+      const userId = new mongoose.Types.ObjectId().toString()
+
       // Create session in database
       const sessionData = {
-        userId: 'user1',
+        userId,
         userSessionId: 'session1',
         name: 'Player1',
         email: 'user1@example.com',
@@ -274,12 +291,12 @@ describe('Server Session Management Integration Tests', () => {
 
       // Mock global playerSessions map to work with database session
       global.playerSessions = new Map([
-        ['user1', sessionData]
+        [userId, sessionData]
       ])
 
-      const session = await getPlayerSession('user1', 'session1', 'Player1', 'user1@example.com')
+      const session = await getPlayerSession(userId, 'session1', 'Player1', 'user1@example.com')
 
-      expect(session.userId).toBe('user1')
+      expect(session.userId).toBe(userId)
       expect(session.userSessionId).toBe('session1')
       expect(session.name).toBe('Player1')
       expect(session.email).toBe('user1@example.com')
@@ -297,12 +314,15 @@ describe('Server Session Management Integration Tests', () => {
 
       const { getPlayerSession } = await import('../../server.js')
 
+      // Generate proper ObjectId for the test
+      const userId = new mongoose.Types.ObjectId().toString()
+
       // Mock empty global sessions
       global.playerSessions = new Map()
 
-      const session = await getPlayerSession('user2', 'session2', 'Player2', 'user2@example.com')
+      const session = await getPlayerSession(userId, 'session2', 'Player2', 'user2@example.com')
 
-      expect(session.userId).toBe('user2')
+      expect(session.userId).toBe(userId)
       expect(session.userSessionId).toBe('session2')
       expect(session.name).toBe('Player2')
       expect(session.email).toBe('user2@example.com')
@@ -321,9 +341,11 @@ describe('Server Session Management Integration Tests', () => {
 
       const { getPlayerSession } = await import('../../server.js')
 
+      // Generate proper ObjectId for the test
+      const userId = new mongoose.Types.ObjectId().toString()
       const oldDate = new Date('2023-01-01')
       const existingSession = {
-        userId: 'user1',
+        userId,
         userSessionId: 'session1',
         name: 'Player1',
         email: 'user1@example.com',
@@ -337,9 +359,9 @@ describe('Server Session Management Integration Tests', () => {
       await savedSession.save()
 
       // Mock global sessions
-      global.playerSessions = new Map([['user1', existingSession]])
+      global.playerSessions = new Map([[userId, existingSession]])
 
-      const session = await getPlayerSession('user1', 'session1', 'Player1', 'user1@example.com')
+      const session = await getPlayerSession(userId, 'session1', 'Player1', 'user1@example.com')
 
       // The returned session should have new values
       expect(session.lastSeen.getTime()).toBeGreaterThan(oldDate.getTime())
@@ -347,7 +369,7 @@ describe('Server Session Management Integration Tests', () => {
 
       // Verify database was updated if savePlayerSession was called
       await waitForAsync(100)
-      const updatedSession = await PlayerSession.findOne({ userId: 'user1' })
+      const updatedSession = await PlayerSession.findOne({ userId })
       expect(updatedSession.isActive).toBe(true)
     })
 
@@ -358,10 +380,13 @@ describe('Server Session Management Integration Tests', () => {
       const { getPlayerSession } = await import('../../server.js')
       global.playerSessions = new Map()
 
+      // Generate proper ObjectId for the test
+      const userId = new mongoose.Types.ObjectId().toString()
+
       // Should not throw but handle gracefully
-      const session = await getPlayerSession('user1', 'session1', 'Player1', 'user1@example.com')
+      const session = await getPlayerSession(userId, 'session1', 'Player1', 'user1@example.com')
       expect(session).toBeDefined()
-      expect(session.userId).toBe('user1')
+      expect(session.userId).toBe(userId)
 
       // Restore mock
       vi.restoreAllMocks()
@@ -380,9 +405,12 @@ describe('Server Session Management Integration Tests', () => {
 
       const { updatePlayerSocket } = await import('../../server.js')
 
+      // Generate proper ObjectId for the test
+      const userId = new mongoose.Types.ObjectId().toString()
+
       // Create session in database
       const sessionData = {
-        userId: 'user1',
+        userId,
         userSessionId: 'session1',
         name: 'Player1',
         email: 'user1@example.com',
@@ -395,27 +423,30 @@ describe('Server Session Management Integration Tests', () => {
       await savedSession.save()
 
       // Mock global sessions
-      global.playerSessions = new Map([['user1', sessionData]])
+      global.playerSessions = new Map([[userId, sessionData]])
 
-      const result = await updatePlayerSocket('user1', 'newSocket123', 'session1', 'Player1', 'user1@example.com')
+      const result = await updatePlayerSocket(userId, 'newSocket123', 'session1', 'Player1', 'user1@example.com', '192.168.1.1')
 
-      expect(result.userId).toBe('user1')
+      expect(result.userId).toBe(userId)
       expect(result.currentSocketId).toBe('newSocket123')
       expect(result.isActive).toBe(true)
+      expect(result.clientIP).toBe('192.168.1.1')
 
       // Verify database was updated
       await waitForAsync(100)
-      const updatedSession = await PlayerSession.findOne({ userId: 'user1' })
+      const updatedSession = await PlayerSession.findOne({ userId })
       expect(updatedSession.currentSocketId).toBe('newSocket123')
+      expect(updatedSession.clientIP).toBe('192.168.1.1')
     })
 
     it('should handle socket update for non-existent session', async () => {
       const { updatePlayerSocket } = await import('../../server.js')
       global.playerSessions = new Map()
 
-      const result = await updatePlayerSocket('nonexistent', 'newSocket123', 'session1', 'Player1', 'user1@example.com')
+      const nonexistentUserId = generateNonexistentObjectId()
+      const result = await updatePlayerSocket(nonexistentUserId, 'newSocket123', 'session1', 'Player1', 'user1@example.com')
 
-      expect(result.userId).toBe('nonexistent')
+      expect(result.userId).toBe(nonexistentUserId)
       expect(result.currentSocketId).toBe('newSocket123')
       expect(result.isActive).toBe(true)
     })
@@ -433,7 +464,6 @@ describe('Server Session Management Integration Tests', () => {
 
       // Create user in database
       const userData = {
-        _id: 'user1',
         email: 'user1@example.com',
         name: 'Player1',
         password: 'hashedpassword'
@@ -442,9 +472,9 @@ describe('Server Session Management Integration Tests', () => {
       const savedUser = new User(userData)
       await savedUser.save()
 
-      // Mock successful token validation
+      // Mock successful token validation with actual user ID
       const mockToken = {
-        id: 'user1',
+        id: savedUser._id.toString(),
         email: 'user1@example.com',
         name: 'Player1',
         jti: 'session1'
@@ -461,7 +491,7 @@ describe('Server Session Management Integration Tests', () => {
 
       await authenticateSocket(mockSocket, mockNext)
 
-      expect(mockSocket.data.userId).toBe('user1')
+      expect(mockSocket.data.userId).toBe(savedUser._id.toString())
       expect(mockSocket.data.userEmail).toBe('user1@example.com')
       expect(mockSocket.data.userName).toBe('Player1')
       expect(mockSocket.data.userSessionId).toBe('session1')
@@ -477,9 +507,10 @@ describe('Server Session Management Integration Tests', () => {
         return
       }
 
-      // Mock token for non-existent user
+      // Mock token for non-existent user with valid ObjectId format
+      const nonexistentUserId = generateNonexistentObjectId()
       const mockToken = {
-        id: 'nonexistent',
+        id: nonexistentUserId,
         email: 'nonexistent@example.com',
         name: 'NonExistent'
       }
@@ -495,7 +526,29 @@ describe('Server Session Management Integration Tests', () => {
 
       await authenticateSocket(mockSocket, mockNext)
 
-      expect(mockNext).toHaveBeenCalledWith(new Error('Authentication failed'))
+      expect(mockNext).toHaveBeenCalledWith(new Error('User not found'))
+    })
+
+    it('should reject authentication with invalid ObjectId format', async () => {
+      // Mock token with invalid ObjectId format
+      const mockToken = {
+        id: 'invalid-object-id-format',
+        email: 'invalid@example.com',
+        name: 'Invalid'
+      }
+
+      const { authenticateSocket } = await import('../../server.js')
+      const { getToken } = await import('next-auth/jwt')
+
+      const mockGetToken = vi.mocked(getToken)
+      mockGetToken.mockResolvedValue(mockToken)
+
+      const mockSocket = createMockSocket()
+      const mockNext = vi.fn()
+
+      await authenticateSocket(mockSocket, mockNext)
+
+      expect(mockNext).toHaveBeenCalledWith(new Error('Invalid user ID format'))
     })
 
     it('should reject authentication with no token', async () => {
@@ -557,9 +610,12 @@ describe('Server Session Management Integration Tests', () => {
 
       const { getPlayerSession } = await import('../../server.js')
 
+      // Generate proper ObjectId for the test
+      const userId = new mongoose.Types.ObjectId().toString()
+
       // Create session in database
       const existingSession = {
-        userId: 'user1',
+        userId,
         userSessionId: 'session1',
         name: 'Player1',
         email: 'user1@example.com',
@@ -572,11 +628,11 @@ describe('Server Session Management Integration Tests', () => {
       await savedSession.save()
 
       // Mock global sessions
-      global.playerSessions = new Map([['user1', existingSession]])
+      global.playerSessions = new Map([[userId, existingSession]])
 
-      const session = await getPlayerSession('user1', 'session1', 'Player1', 'user1@example.com')
+      const session = await getPlayerSession(userId, 'session1', 'Player1', 'user1@example.com')
 
-      expect(session.userId).toBe('user1')
+      expect(session.userId).toBe(userId)
       expect(session.userSessionId).toBe('session1')
       expect(session.isActive).toBe(true)
     })
@@ -590,9 +646,13 @@ describe('Server Session Management Integration Tests', () => {
         return
       }
 
+      // Generate proper ObjectIds for the test
+      const userId1 = new mongoose.Types.ObjectId().toString()
+      const userId2 = new mongoose.Types.ObjectId().toString()
+
       // Create sessions in database
       const oldSession = {
-        userId: 'user1',
+        userId: userId1,
         userSessionId: 'session1',
         name: 'Player1',
         email: 'user1@example.com',
@@ -601,7 +661,7 @@ describe('Server Session Management Integration Tests', () => {
       }
 
       const newSession = {
-        userId: 'user2',
+        userId: userId2,
         userSessionId: 'session2',
         name: 'Player2',
         email: 'user2@example.com',
@@ -627,8 +687,8 @@ describe('Server Session Management Integration Tests', () => {
       }
 
       // Verify cleanup
-      const updatedOldSession = await PlayerSession.findOne({ userId: 'user1' })
-      const updatedNewSession = await PlayerSession.findOne({ userId: 'user2' })
+      const updatedOldSession = await PlayerSession.findOne({ userId: userId1 })
+      const updatedNewSession = await PlayerSession.findOne({ userId: userId2 })
 
       expect(updatedOldSession.isActive).toBe(false)
       expect(updatedNewSession.isActive).toBe(true)
@@ -643,10 +703,15 @@ describe('Server Session Management Integration Tests', () => {
         return
       }
 
+      // Generate proper ObjectIds for the test
+      const userId1 = new mongoose.Types.ObjectId().toString()
+      const userId2 = new mongoose.Types.ObjectId().toString()
+      const userId3 = new mongoose.Types.ObjectId().toString()
+
       // Create multiple sessions
       const sessions = [
         {
-          userId: 'user1',
+          userId: userId1,
           userSessionId: 'session1',
           name: 'Player1',
           email: 'user1@example.com',
@@ -654,7 +719,7 @@ describe('Server Session Management Integration Tests', () => {
           isActive: true
         },
         {
-          userId: 'user2',
+          userId: userId2,
           userSessionId: 'session2',
           name: 'Player2',
           email: 'user2@example.com',
@@ -662,7 +727,7 @@ describe('Server Session Management Integration Tests', () => {
           isActive: true
         },
         {
-          userId: 'user3',
+          userId: userId3,
           userSessionId: 'session3',
           name: 'Player3',
           email: 'user3@example.com',
@@ -685,9 +750,9 @@ describe('Server Session Management Integration Tests', () => {
       expect(result.modifiedCount).toBe(2) // user1 and user3 should be deactivated
 
       // Verify specific sessions
-      const user1Session = await PlayerSession.findOne({ userId: 'user1' })
-      const user2Session = await PlayerSession.findOne({ userId: 'user2' })
-      const user3Session = await PlayerSession.findOne({ userId: 'user3' })
+      const user1Session = await PlayerSession.findOne({ userId: userId1 })
+      const user2Session = await PlayerSession.findOne({ userId: userId2 })
+      const user3Session = await PlayerSession.findOne({ userId: userId3 })
 
       expect(user1Session.isActive).toBe(false)
       expect(user2Session.isActive).toBe(true)
@@ -758,16 +823,17 @@ describe('Server Session Management Integration Tests', () => {
     it('should log connection attempts to database for monitoring', async () => {
       // This would typically be implemented as connection logs in a real system
       // For testing purposes, we'll simulate the behavior
+      const userId = new mongoose.Types.ObjectId().toString()
       const connectionLog = {
         ip: '192.168.1.1',
-        userId: 'user1',
+        userId,
         timestamp: new Date(),
         action: 'connect'
       }
 
       // In a real implementation, this would be saved to a logs collection
       expect(connectionLog.ip).toBe('192.168.1.1')
-      expect(connectionLog.userId).toBe('user1')
+      expect(connectionLog.userId).toBe(userId)
       expect(connectionLog.action).toBe('connect')
       expect(connectionLog.timestamp).toBeInstanceOf(Date)
     })
@@ -803,21 +869,27 @@ describe('Server Session Management Integration Tests', () => {
         return
       }
 
-      const sessionData = {
-        userId: 'user1',
-        userSessionId: 'session1',
-        name: 'Player1',
-        email: 'user1@example.com',
-        currentSocketId: 'socket1',
-        clientIP: '192.168.1.1',
-        lastSeen: new Date(),
-        isActive: true
-      }
+      const { getPlayerSession } = await import('../../server.js')
 
-      const savedSession = new PlayerSession(sessionData)
-      await savedSession.save()
+      // Generate proper ObjectId for the test
+      const userId = new mongoose.Types.ObjectId().toString()
 
-      const retrievedSession = await PlayerSession.findOne({ userId: 'user1' })
+      // Mock empty global sessions
+      global.playerSessions = new Map()
+
+      // Call getPlayerSession with clientIP parameter
+      const session = await getPlayerSession(userId, 'session1', 'Player1', 'user1@example.com', '192.168.1.1')
+
+      expect(session.userId).toBe(userId)
+      expect(session.clientIP).toBe('192.168.1.1')
+      expect(session.isActive).toBe(true)
+
+      // Wait a bit for async database operations to complete
+      await waitForAsync(100)
+
+      // Verify it was saved to database
+      const retrievedSession = await PlayerSession.findOne({ userId })
+      expect(retrievedSession).not.toBeNull()
       expect(retrievedSession.clientIP).toBe('192.168.1.1')
     })
   })
@@ -832,10 +904,14 @@ describe('Server Session Management Integration Tests', () => {
         return
       }
 
+      // Generate proper ObjectIds for the test
+      const userId1 = new mongoose.Types.ObjectId().toString()
+      const userId2 = new mongoose.Types.ObjectId().toString()
+
       // Create sessions in database
       const sessions = [
         {
-          userId: 'user1',
+          userId: userId1,
           userSessionId: 'session1',
           name: 'Player1',
           email: 'user1@example.com',
@@ -844,7 +920,7 @@ describe('Server Session Management Integration Tests', () => {
           isActive: true
         },
         {
-          userId: 'user2',
+          userId: userId2,
           userSessionId: 'session2',
           name: 'Player2',
           email: 'user2@example.com',
@@ -869,8 +945,8 @@ describe('Server Session Management Integration Tests', () => {
       }
 
       expect(global.playerSessions.size).toBe(2)
-      expect(global.playerSessions.has('user1')).toBe(true)
-      expect(global.playerSessions.has('user2')).toBe(true)
+      expect(global.playerSessions.has(userId1)).toBe(true)
+      expect(global.playerSessions.has(userId2)).toBe(true)
     })
 
     it('should throw corrupted session data in database with error', async () => {
