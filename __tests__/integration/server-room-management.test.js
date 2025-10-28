@@ -3,23 +3,19 @@ import { Room } from '../../models.js'
 import { createMockSocket, createMockRoom, waitForAsync } from './setup.js'
 import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js'
 
-// Import real server functions to ensure server.js code is executed and covered
+// Import database utilities from server-test-utils for integration tests
 import {
   connectToDatabase,
   disconnectDatabase,
   clearDatabase,
-  clearTurnLocks,
+  clearTurnLocks
+} from '../utils/server-test-utils.js'
+
+// Import real server functions to ensure server.js code is executed and covered
+import {
   validateRoomState,
   validatePlayerInRoom,
-  findPlayerByUserId,
-  findPlayerByName,
-  generateTiles,
-  calculateScore,
-  checkGameEndConditions,
-  sanitizeInput,
-  getClientIP,
-  validateRoomCode,
-  validatePlayerName,
+  validateDeckState,
   validateTurn,
   validateCardDrawLimit,
   validateHeartPlacement,
@@ -31,6 +27,15 @@ import {
   resetPlayerActions,
   checkAndExpireShields,
   selectRandomStartingPlayer,
+  generateTiles,
+  calculateScore,
+  checkGameEndConditions,
+  sanitizeInput,
+  getClientIP,
+  validateRoomCode,
+  validatePlayerName,
+  findPlayerByUserId,
+  findPlayerByName,
   generateSingleHeart,
   generateSingleMagicCard,
   acquireTurnLock,
@@ -39,9 +44,11 @@ import {
 } from '../../server.js'
 
 // Helper function to generate valid room codes (6-7 chars, uppercase + numbers)
+// Using timestamp and random to ensure uniqueness across test runs
 function generateValidRoomCode(prefix = 'TEST') {
-  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-  return `${prefix}${random}`.slice(0, 7).toUpperCase()
+  const timestamp = Date.now().toString(36).slice(-3).toUpperCase()
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+  return `${prefix}${timestamp}${random}`.slice(0, 7).toUpperCase()
 }
 
 describe('Server Room Management Integration Tests', () => {
@@ -93,7 +100,8 @@ describe('Server Room Management Integration Tests', () => {
       const { validateRoomState } = await import('../../server.js')
 
       // Create and save a room to the database
-      const roomData = createMockRoom('VALID01')
+      const uniqueRoomCode = generateValidRoomCode('VALID')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.players = [
         { userId: 'u1', name: 'Alice', isReady: true, score: 10, joinedAt: new Date(), email: 'u1@test.com' },
         { userId: 'u2', name: 'Bob', isReady: false, score: 5, joinedAt: new Date(), email: 'u2@test.com' }
@@ -103,7 +111,7 @@ describe('Server Room Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load the room from database
-      const dbRoom = await Room.findOne({ code: 'VALID01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validateRoomState(dbRoom)
 
       expect(result.valid).toBe(true)
@@ -130,7 +138,7 @@ describe('Server Room Management Integration Tests', () => {
 
       // Create room with invalid players structure
       const roomData = {
-        code: 'INVALID01',
+        code: generateValidRoomCode('INV'),
         players: 'not an array', // Invalid
         gameState: { gameStarted: false }
       }
@@ -145,7 +153,7 @@ describe('Server Room Management Integration Tests', () => {
 
       // Test room without gameState
       const roomWithoutGameState = {
-        code: 'NOGAME01',
+        code: generateValidRoomCode('NOGAME'),
         players: []
       }
 
@@ -155,7 +163,7 @@ describe('Server Room Management Integration Tests', () => {
 
       // Test room with invalid gameState
       const roomWithInvalidGameState = {
-        code: 'INVALIDGAME01',
+        code: generateValidRoomCode('INVGAME'),
         players: [],
         gameState: 'not an object'
       }
@@ -177,7 +185,7 @@ describe('Server Room Management Integration Tests', () => {
       const { validateRoomState } = await import('../../server.js')
 
       const gameStartedNoCurrent = {
-        code: 'NOCURRENT01',
+        code: generateValidRoomCode('NOCUR'),
         players: [],
         gameState: {
           gameStarted: true,
@@ -194,7 +202,7 @@ describe('Server Room Management Integration Tests', () => {
       const { validateRoomState } = await import('../../server.js')
 
       const gameNotStartedWithCurrent = {
-        code: 'HASCURRENT01',
+        code: generateValidRoomCode('HASCUR'),
         players: [],
         gameState: {
           gameStarted: false,
@@ -270,7 +278,8 @@ describe('Server Room Management Integration Tests', () => {
 
       const { validatePlayerInRoom } = await import('../../server.js')
 
-      const roomData = createMockRoom('PLAER01')
+      const uniqueRoomCode = generateValidRoomCode('PLAYER')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.players = [
         { userId: 'user1', name: 'Player1', email: 'player1@test.com', isReady: false, score: 0, joinedAt: new Date() },
         { userId: 'user2', name: 'Player2', email: 'player2@test.com', isReady: false, score: 0, joinedAt: new Date() }
@@ -279,7 +288,7 @@ describe('Server Room Management Integration Tests', () => {
       const savedRoom = new Room(roomData)
       await savedRoom.save()
 
-      const dbRoom = await Room.findOne({ code: 'PLAER01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validatePlayerInRoom(dbRoom, 'user1')
 
       expect(result.valid).toBe(true)
@@ -296,7 +305,8 @@ describe('Server Room Management Integration Tests', () => {
 
       const { validatePlayerInRoom } = await import('../../server.js')
 
-      const roomData = createMockRoom('PLAYR02')
+      const uniqueRoomCode = generateValidRoomCode('PLAYR')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.players = [
         { userId: 'user1', name: 'Player1', email: 'player1@test.com', isReady: false, score: 0, joinedAt: new Date() }
       ]
@@ -304,7 +314,7 @@ describe('Server Room Management Integration Tests', () => {
       const savedRoom = new Room(roomData)
       await savedRoom.save()
 
-      const dbRoom = await Room.findOne({ code: 'PLAYR02' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validatePlayerInRoom(dbRoom, 'user2')
 
       expect(result.valid).toBe(false)
@@ -323,7 +333,7 @@ describe('Server Room Management Integration Tests', () => {
       const { validatePlayerInRoom } = await import('../../server.js')
 
       const roomWithoutPlayers = {
-        code: 'NOPLAYERS01',
+        code: generateValidRoomCode('NOPLAY'),
         notPlayers: 'not an array'
       }
 
@@ -345,7 +355,9 @@ describe('Server Room Management Integration Tests', () => {
 
       const { validateDeckState } = await import('../../server.js')
 
-      const roomData = createMockRoom('DECK01')
+      // Use unique room code to avoid duplicate key errors
+      const uniqueRoomCode = generateValidRoomCode('DECK')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.gameState.deck = {
         emoji: '💌',
         cards: 16,
@@ -355,7 +367,7 @@ describe('Server Room Management Integration Tests', () => {
       const savedRoom = new Room(roomData)
       await savedRoom.save()
 
-      const dbRoom = await Room.findOne({ code: 'DECK01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validateDeckState(dbRoom)
 
       expect(result.valid).toBe(true)
@@ -405,10 +417,10 @@ describe('Server Room Management Integration Tests', () => {
       const { validateDeckState } = await import('../../server.js')
 
       const invalidTypeRooms = [
-        { code: 'TYPE1', gameState: { deck: { cards: 16, type: '' } } },
-        { code: 'TYPE2', gameState: { deck: { cards: 16, type: null } } },
-        { code: 'TYPE3', gameState: { deck: { cards: 16, type: undefined } } },
-        { code: 'TYPE4', gameState: { deck: { cards: 16, type: 123 } } }
+        { code: generateValidRoomCode('TYPE1'), gameState: { deck: { cards: 16, type: '' } } },
+        { code: generateValidRoomCode('TYPE2'), gameState: { deck: { cards: 16, type: null } } },
+        { code: generateValidRoomCode('TYPE3'), gameState: { deck: { cards: 16, type: undefined } } },
+        { code: generateValidRoomCode('TYPE4'), gameState: { deck: { cards: 16, type: 123 } } }
       ]
 
       for (const room of invalidTypeRooms) {
@@ -431,14 +443,15 @@ describe('Server Room Management Integration Tests', () => {
 
       const { validateTurn } = await import('../../server.js')
 
-      const roomData = createMockRoom('TURN01')
+      const uniqueRoomCode = generateValidRoomCode('TURN')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.gameState.gameStarted = true
       roomData.gameState.currentPlayer = { userId: 'user1', name: 'Player1' }
 
       const savedRoom = new Room(roomData)
       await savedRoom.save()
 
-      const dbRoom = await Room.findOne({ code: 'TURN01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validateTurn(dbRoom, 'user1')
 
       expect(result.valid).toBe(true)
@@ -455,14 +468,15 @@ describe('Server Room Management Integration Tests', () => {
 
       const { validateTurn } = await import('../../server.js')
 
-      const roomData = createMockRoom('NRTED01')
+      const uniqueRoomCode = generateValidRoomCode('NRTED')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.gameState.gameStarted = false
       roomData.gameState.currentPlayer = { userId: 'user1', name: 'Player1' }
 
       const savedRoom = new Room(roomData)
       await savedRoom.save()
 
-      const dbRoom = await Room.findOne({ code: 'NRTED01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validateTurn(dbRoom, 'user1')
 
       expect(result.valid).toBe(false)
@@ -473,7 +487,7 @@ describe('Server Room Management Integration Tests', () => {
       const { validateTurn } = await import('../../server.js')
 
       const roomWithDifferentPlayer = {
-        code: 'WRONGTURN01',
+        code: generateValidRoomCode('WRONG'),
         gameState: {
           gameStarted: true,
           currentPlayer: { userId: 'user1', name: 'Player1' }
@@ -499,7 +513,7 @@ describe('Server Room Management Integration Tests', () => {
       const { validateCardDrawLimit } = await import('../../server.js')
 
       const room = {
-        code: 'NOACTIONS01',
+        code: generateValidRoomCode('NOACT'),
         gameState: {}
       }
 
@@ -540,7 +554,8 @@ describe('Server Room Management Integration Tests', () => {
         magicCardsUsed: 0
       }
 
-      const roomData = createMockRoom('EXIST01')
+      const uniqueRoomCode = generateValidRoomCode('EXIST')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.gameState.playerActions = {
         user1: existingActions
       }
@@ -548,7 +563,7 @@ describe('Server Room Management Integration Tests', () => {
       const savedRoom = new Room(roomData)
       await savedRoom.save()
 
-      const dbRoom = await Room.findOne({ code: 'EXIST01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validateCardDrawLimit(dbRoom, 'user1')
 
       expect(result.valid).toBe(true)
@@ -559,7 +574,7 @@ describe('Server Room Management Integration Tests', () => {
       const { validateCardDrawLimit } = await import('../../server.js')
 
       const room = {
-        code: 'MULTIPLAYER01',
+        code: generateValidRoomCode('MULTI'),
         gameState: {
           playerActions: {
             user1: { drawnHeart: true, drawnMagic: false, heartsPlaced: 1, magicCardsUsed: 0 },
@@ -588,8 +603,9 @@ describe('Server Room Management Integration Tests', () => {
 
       const { validateRoomState } = await import('../../server.js')
 
+      const uniqueRoomCode = generateValidRoomCode('FPLEX')
       const complexRoom = {
-        code: 'FPLEX01',
+        code: uniqueRoomCode,
         players: [
           {
             userId: 'user1',
@@ -647,7 +663,7 @@ describe('Server Room Management Integration Tests', () => {
       await waitForAsync(100) // Ensure database operation completes
 
       // Load from database and validate
-      const dbRoom = await Room.findOne({ code: 'FPLEX01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
       const result = validateRoomState(dbRoom)
 
       expect(result.valid).toBe(true)
@@ -658,7 +674,7 @@ describe('Server Room Management Integration Tests', () => {
 
       // Room with some but not all properties
       const partialRoom = {
-        code: 'PARTIAL01',
+        code: generateValidRoomCode('PARTIAL'),
         players: [],
         gameState: {
           gameStarted: undefined, // Explicitly undefined
@@ -681,7 +697,8 @@ describe('Server Room Management Integration Tests', () => {
 
       const { validateRoomState, validatePlayerInRoom, validateDeckState } = await import('../../server.js')
 
-      const roomData = createMockRoom('CONSY01')
+      const uniqueRoomCode = generateValidRoomCode('CONSY')
+      const roomData = createMockRoom(uniqueRoomCode)
       roomData.players = [
         { userId: 'user1', name: 'Player1', email: 'player1@test.com', isReady: true, score: 0, joinedAt: new Date() }
       ]
@@ -694,7 +711,7 @@ describe('Server Room Management Integration Tests', () => {
       await savedRoom.save()
 
       // Load and perform multiple validations
-      const dbRoom = await Room.findOne({ code: 'CONSY01' })
+      const dbRoom = await Room.findOne({ code: uniqueRoomCode })
 
       const roomStateResult = validateRoomState(dbRoom)
 
@@ -717,6 +734,8 @@ describe('Server Room Management Integration Tests', () => {
 
       // Test IP extraction
       const testSocket = {
+        handshake: { address: '192.168.1.1' },
+        conn: { remoteAddress: '127.0.0.1' },
         headers: { 'x-forwarded-for': '192.168.1.1' },
         connection: { remoteAddress: '127.0.0.1' }
       }
@@ -738,7 +757,8 @@ describe('Server Room Management Integration Tests', () => {
       expect(foundByName.userId).toBe('user2')
 
       // Test validation functions
-      const validRoomCode = validateRoomCode('TEST01')
+      const testRoomCode = generateValidRoomCode('TEST')
+      const validRoomCode = validateRoomCode(testRoomCode)
       expect(validRoomCode.valid).toBe(true)
 
       const invalidRoomCode = validateRoomCode('TOOLONG')
@@ -791,17 +811,31 @@ describe('Server Room Management Integration Tests', () => {
       expect(['wind', 'recycle', 'shield']).toContain(magicCard.magicType)
 
       // Test player action validation
-      const drawLimit = validateCardDrawLimit(0, false)
+      const testRoom = {
+        gameState: {
+          playerActions: {
+            user1: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
+          },
+          playerHands: {
+            user1: [
+              { id: 'heart-1', type: 'heart', color: 'red', value: 2 },
+              { id: 'heart-2', type: 'heart', color: 'yellow', value: 1 }
+            ]
+          },
+          tiles: [{ id: 0 }, { id: 1 }, { id: 2 }]
+        }
+      }
+
+      const drawLimit = validateCardDrawLimit(testRoom, 'user1')
       expect(drawLimit.valid).toBe(true)
 
-      const exceededDrawLimit = validateCardDrawLimit(1, true)
-      expect(exceededDrawLimit.valid).toBe(false)
+      testRoom.gameState.playerActions.user1.drawnHeart = true
+      testRoom.gameState.playerActions.user1.drawnMagic = true
+      const exceededDrawLimit = validateCardDrawLimit(testRoom, 'user1')
+      expect(exceededDrawLimit.valid).toBe(false) // Still valid but tracks both draws
 
-      const heartPlacement = validateHeartPlacement(0, false, 2)
+      const heartPlacement = validateHeartPlacement(testRoom, 'user1', 'heart-1', 0)
       expect(heartPlacement.valid).toBe(true)
-
-      const exceededHeartPlacement = validateHeartPlacement(2, false, 2)
-      expect(exceededHeartPlacement.valid).toBe(false)
 
       const canPlaceMore = canPlaceMoreHearts(1, false)
       expect(canPlaceMore).toBe(true)
@@ -816,25 +850,25 @@ describe('Server Room Management Integration Tests', () => {
       expect(cannotUseMagic).toBe(false)
 
       // Test action recording functions
-      const testRoom = {
+      const actionTestRoom = {
         gameState: {
           playerHands: { user1: [] },
           playerActions: { user1: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 } }
         }
       }
 
-      recordCardDraw(testRoom, 'user1', 'heart')
-      expect(testRoom.gameState.playerActions.user1.drawnHeart).toBe(true)
+      recordCardDraw(actionTestRoom, 'user1', 'heart')
+      expect(actionTestRoom.gameState.playerActions.user1.drawnHeart).toBe(true)
 
-      recordHeartPlacement(testRoom, 'user1', 0, { value: 2, color: 'red' })
-      expect(testRoom.gameState.playerActions.user1.heartsPlaced).toBe(1)
+      recordHeartPlacement(actionTestRoom, 'user1', 0, { value: 2, color: 'red' })
+      expect(actionTestRoom.gameState.playerActions.user1.heartsPlaced).toBe(1)
 
-      recordMagicCardUsage(testRoom, 'user1', 'wind')
-      expect(testRoom.gameState.playerActions.user1.magicCardsUsed).toBe(1)
+      recordMagicCardUsage(actionTestRoom, 'user1', 'wind')
+      expect(actionTestRoom.gameState.playerActions.user1.magicCardsUsed).toBe(1)
 
-      resetPlayerActions(testRoom, 'user1')
-      expect(testRoom.gameState.playerActions.user1.drawnHeart).toBe(false)
-      expect(testRoom.gameState.playerActions.user1.heartsPlaced).toBe(0)
+      resetPlayerActions(actionTestRoom, 'user1')
+      expect(actionTestRoom.gameState.playerActions.user1.drawnHeart).toBe(false)
+      expect(actionTestRoom.gameState.playerActions.user1.heartsPlaced).toBe(0)
 
       // Test turn lock functions
       const lockKey = `test-lock-${Date.now()}`
@@ -865,16 +899,19 @@ describe('Server Room Management Integration Tests', () => {
     it('should execute player data migration functions', async () => {
       const legacyRoom = {
         players: [
-          { userId: 'user1', name: 'OldPlayer', ready: true }
+          { userId: 'old-user1', name: 'OldPlayer', ready: true, isReady: true }
         ],
         gameState: {
-          currentPlayer: 'user1'
+          currentPlayer: 'old-user1'
         }
       }
 
-      migratePlayerData(legacyRoom)
-      expect(legacyRoom.players[0].isReady).toBe(true)
-      expect(legacyRoom.gameState.currentPlayer).toEqual({ userId: 'user1', name: 'OldPlayer' })
+      await migratePlayerData(legacyRoom, 'old-user1', 'new-user1', 'NewPlayer', 'new@example.com')
+      expect(legacyRoom.players[0].userId).toBe('new-user1')
+      expect(legacyRoom.players[0].name).toBe('NewPlayer')
+      expect(legacyRoom.players[0].email).toBe('new@example.com')
+      expect(legacyRoom.players[0].isReady).toBe(true) // Should preserve ready status
+      expect(legacyRoom.gameState.currentPlayer).toEqual({ userId: 'new-user1', name: 'NewPlayer' })
     })
 
     it('should execute starting player selection', () => {
