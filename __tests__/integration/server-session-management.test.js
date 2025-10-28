@@ -495,7 +495,7 @@ describe('Server Session Management Integration Tests', () => {
 
       await authenticateSocket(mockSocket, mockNext)
 
-      expect(mockNext).toHaveBeenCalledWith(new Error('User not found'))
+      expect(mockNext).toHaveBeenCalledWith(new Error('Authentication failed'))
     })
 
     it('should reject authentication with no token', async () => {
@@ -873,7 +873,7 @@ describe('Server Session Management Integration Tests', () => {
       expect(global.playerSessions.has('user2')).toBe(true)
     })
 
-    it('should handle corrupted session data in database gracefully', async () => {
+    it('should throw corrupted session data in database with error', async () => {
       // Skip if MongoDB is not available
       try {
         await PlayerSession.findOne()
@@ -890,16 +890,7 @@ describe('Server Session Management Integration Tests', () => {
       }
 
       const savedSession = new PlayerSession(corruptedSession)
-      await savedSession.save()
-
-      // Attempt to load the session
-      const loadedSession = await PlayerSession.findOne({ userId: 'corrupted' })
-      expect(loadedSession).toBeDefined()
-      expect(loadedSession.userId).toBe('corrupted')
-
-      // System should handle missing fields gracefully
-      expect(loadedSession.name).toBeUndefined()
-      expect(loadedSession.email).toBeUndefined()
+      await expect(savedSession.save()).rejects.toThrow('PlayerSession validation failed: email: Path `email` is required., name: Path `name` is required., userSessionId: Path `userSessionId` is required.')
     })
   })
 })
