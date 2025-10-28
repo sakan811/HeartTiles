@@ -61,6 +61,10 @@ const playerSessionSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  clientIP: {
+    type: String,
+    default: null
+  },
   lastSeen: {
     type: Date,
     default: Date.now
