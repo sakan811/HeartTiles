@@ -1027,8 +1027,6 @@ if (process.env.NODE_ENV !== 'test') {
         socket.data.userId = null;
         socket.data.userName = null;
       }
-
-      socket.disconnect(true);
     });
 
     socket.on("player-ready", async ({ roomCode }) => {
