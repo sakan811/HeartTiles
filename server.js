@@ -634,6 +634,11 @@ async function authenticateSocket(socket, next) {
 
     if (!token?.id) return next(new Error('Authentication required'));
 
+    // Validate that token.id is a valid ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(token.id)) {
+      return next(new Error('Invalid user ID format'));
+    }
+
     const user = await User.findById(token.id);
     if (!user) return next(new Error('User not found'));
 
@@ -742,7 +747,7 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
 let playerSessions = new Map();
 
 // Session management functions - real implementation for both server and tests
-async function getPlayerSession(userId, userSessionId, userName, userEmail) {
+async function getPlayerSession(userId, userSessionId, userName, userEmail, clientIP = null) {
   // Use global playerSessions for test compatibility, otherwise fall back to module-level
   const sessions = global.playerSessions || playerSessions;
   let session = sessions.get(userId);
@@ -750,7 +755,7 @@ async function getPlayerSession(userId, userSessionId, userName, userEmail) {
   if (!session) {
     const newSession = {
       userId, userSessionId, name: userName, email: userEmail,
-      currentSocketId: null, lastSeen: new Date(), isActive: true
+      currentSocketId: null, lastSeen: new Date(), isActive: true, clientIP
     };
     sessions.set(userId, newSession);
     await savePlayerSession(newSession);
@@ -758,17 +763,25 @@ async function getPlayerSession(userId, userSessionId, userName, userEmail) {
   } else {
     session.lastSeen = new Date();
     session.isActive = true;
+    // Update clientIP if provided
+    if (clientIP) {
+      session.clientIP = clientIP;
+    }
     await savePlayerSession(session);
   }
 
   return session;
 }
 
-async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail) {
-  const session = await getPlayerSession(userId, userSessionId, userName, userEmail);
+async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail, clientIP = null) {
+  const session = await getPlayerSession(userId, userSessionId, userName, userEmail, clientIP);
   session.currentSocketId = socketId;
   session.lastSeen = new Date();
   session.isActive = true;
+  // Update clientIP if provided
+  if (clientIP) {
+    session.clientIP = clientIP;
+  }
   await savePlayerSession(session);
   return session;
 }
@@ -884,7 +897,7 @@ if (process.env.NODE_ENV !== 'test') {
       }
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
-      await updatePlayerSocket(userId, socket.id, userSessionId, userName, userEmail);
+      await updatePlayerSocket(userId, socket.id, userSessionId, userName, userEmail, clientIP);
 
       let room = rooms.get(roomCode);
 
