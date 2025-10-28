@@ -1,13 +1,42 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
+import { Room } from '../../models.js'
+import { createMockSocket, createMockRoom, waitForAsync } from './setup.js'
+import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js'
+
+// Import real server functions to ensure server.js code is executed and covered
 import {
   connectToDatabase,
   disconnectDatabase,
   clearDatabase,
-  clearTurnLocks
-} from '../utils/server-test-utils.js'
-import { Room } from '../../models.js'
-import { createMockSocket, createMockRoom, waitForAsync } from './setup.js'
-import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js'
+  clearTurnLocks,
+  validateRoomState,
+  validatePlayerInRoom,
+  findPlayerByUserId,
+  findPlayerByName,
+  generateTiles,
+  calculateScore,
+  checkGameEndConditions,
+  sanitizeInput,
+  getClientIP,
+  validateRoomCode,
+  validatePlayerName,
+  validateTurn,
+  validateCardDrawLimit,
+  validateHeartPlacement,
+  canPlaceMoreHearts,
+  canUseMoreMagicCards,
+  recordHeartPlacement,
+  recordMagicCardUsage,
+  recordCardDraw,
+  resetPlayerActions,
+  checkAndExpireShields,
+  selectRandomStartingPlayer,
+  generateSingleHeart,
+  generateSingleMagicCard,
+  acquireTurnLock,
+  releaseTurnLock,
+  migratePlayerData
+} from '../../server.js'
 
 // Helper function to generate valid room codes (6-7 chars, uppercase + numbers)
 function generateValidRoomCode(prefix = 'TEST') {
@@ -675,6 +704,188 @@ describe('Server Room Management Integration Tests', () => {
       expect(roomStateResult.valid).toBe(true)
       expect(playerResult.valid).toBe(true)
       expect(deckResult.valid).toBe(true)
+    })
+  })
+
+  // Direct server.js function tests to maximize coverage
+  describe('Direct Server.js Function Tests', () => {
+    it('should execute all imported server utility functions', async () => {
+      // Test input sanitization
+      const cleanInput = sanitizeInput('<script>alert("xss")</script>')
+      expect(cleanInput).not.toContain('<script>')
+      expect(cleanInput).not.toContain('</script>')
+
+      // Test IP extraction
+      const testSocket = {
+        headers: { 'x-forwarded-for': '192.168.1.1' },
+        connection: { remoteAddress: '127.0.0.1' }
+      }
+      const clientIP = getClientIP(testSocket)
+      expect(clientIP).toBeDefined()
+
+      // Test player finding functions
+      const players = [
+        { userId: 'user1', name: 'Alice', email: 'alice@test.com' },
+        { userId: 'user2', name: 'Bob', email: 'bob@test.com' }
+      ]
+
+      const foundPlayer = findPlayerByUserId(players, 'user1')
+      expect(foundPlayer).toBeDefined()
+      expect(foundPlayer.name).toBe('Alice')
+
+      const foundByName = findPlayerByName(players, 'Bob')
+      expect(foundByName).toBeDefined()
+      expect(foundByName.userId).toBe('user2')
+
+      // Test validation functions
+      const validRoomCode = validateRoomCode('TEST01')
+      expect(validRoomCode.valid).toBe(true)
+
+      const invalidRoomCode = validateRoomCode('TOOLONG')
+      expect(invalidRoomCode.valid).toBe(false)
+
+      const validPlayerName = validatePlayerName('Alice')
+      expect(validPlayerName.valid).toBe(true)
+
+      const invalidPlayerName = validatePlayerName('')
+      expect(invalidPlayerName.valid).toBe(false)
+
+      // Test turn validation
+      const validTurn = validateTurn('user1', { userId: 'user1' })
+      expect(validTurn.valid).toBe(true)
+
+      const invalidTurn = validateTurn('user1', { userId: 'user2' })
+      expect(invalidTurn.valid).toBe(false)
+
+      // Test game logic functions
+      const tiles = generateTiles()
+      expect(tiles).toBeDefined()
+      expect(tiles.tiles).toBeDefined()
+      expect(Array.isArray(tiles.tiles)).toBe(true)
+
+      const score = calculateScore('red', 'red', 2)
+      expect(score).toBe(4) // Double points for matching colors
+
+      const whiteScore = calculateScore('blue', 'white', 3)
+      expect(whiteScore).toBe(3) // Face value for white tiles
+
+      const mismatchScore = calculateScore('red', 'yellow', 2)
+      expect(mismatchScore).toBe(0) // Zero for mismatch
+
+      // Test game end conditions
+      const notEnded = checkGameEndConditions([{ placedHeart: {} }], [{ cards: 1 }], false)
+      expect(notEnded.gameOver).toBe(false)
+
+      const endedByDeck = checkGameEndConditions([{ placedHeart: {} }], [], true)
+      expect(endedByDeck.gameOver).toBe(true)
+
+      // Test card generation
+      const heartCard = generateSingleHeart()
+      expect(heartCard).toBeDefined()
+      expect(heartCard.type).toBe('heart')
+      expect(['red', 'yellow', 'green']).toContain(heartCard.color)
+
+      const magicCard = generateSingleMagicCard()
+      expect(magicCard).toBeDefined()
+      expect(magicCard.type).toBe('magic')
+      expect(['wind', 'recycle', 'shield']).toContain(magicCard.magicType)
+
+      // Test player action validation
+      const drawLimit = validateCardDrawLimit(0, false)
+      expect(drawLimit.valid).toBe(true)
+
+      const exceededDrawLimit = validateCardDrawLimit(1, true)
+      expect(exceededDrawLimit.valid).toBe(false)
+
+      const heartPlacement = validateHeartPlacement(0, false, 2)
+      expect(heartPlacement.valid).toBe(true)
+
+      const exceededHeartPlacement = validateHeartPlacement(2, false, 2)
+      expect(exceededHeartPlacement.valid).toBe(false)
+
+      const canPlaceMore = canPlaceMoreHearts(1, false)
+      expect(canPlaceMore).toBe(true)
+
+      const cannotPlaceMore = canPlaceMoreHearts(2, false)
+      expect(cannotPlaceMore).toBe(false)
+
+      const canUseMagic = canUseMoreMagicCards(0, false)
+      expect(canUseMagic).toBe(true)
+
+      const cannotUseMagic = canUseMoreMagicCards(2, false)
+      expect(cannotUseMagic).toBe(false)
+
+      // Test action recording functions
+      const testRoom = {
+        gameState: {
+          playerHands: { user1: [] },
+          playerActions: { user1: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 } }
+        }
+      }
+
+      recordCardDraw(testRoom, 'user1', 'heart')
+      expect(testRoom.gameState.playerActions.user1.drawnHeart).toBe(true)
+
+      recordHeartPlacement(testRoom, 'user1', 0, { value: 2, color: 'red' })
+      expect(testRoom.gameState.playerActions.user1.heartsPlaced).toBe(1)
+
+      recordMagicCardUsage(testRoom, 'user1', 'wind')
+      expect(testRoom.gameState.playerActions.user1.magicCardsUsed).toBe(1)
+
+      resetPlayerActions(testRoom, 'user1')
+      expect(testRoom.gameState.playerActions.user1.drawnHeart).toBe(false)
+      expect(testRoom.gameState.playerActions.user1.heartsPlaced).toBe(0)
+
+      // Test turn lock functions
+      const lockKey = `test-lock-${Date.now()}`
+      const acquired = await acquireTurnLock(lockKey, 'user1', 5000)
+      expect(acquired).toBe(true)
+
+      const released = await releaseTurnLock(lockKey)
+      expect(released).toBe(true)
+
+      // Test shield expiration
+      const roomWithShields = {
+        gameState: {
+          shields: new Map([
+            ['user1', { remainingTurns: 1, activatedTurn: 1 }],
+            ['user2', { remainingTurns: 0, activatedTurn: 1 }]
+          ])
+        },
+        players: [
+          { userId: 'user1', name: 'Player1' },
+          { userId: 'user2', name: 'Player2' }
+        ]
+      }
+
+      checkAndExpireShields(roomWithShields, 'user2', 2)
+      expect(roomWithShields.gameState.shields.has('user2')).toBe(false)
+    })
+
+    it('should execute player data migration functions', async () => {
+      const legacyRoom = {
+        players: [
+          { userId: 'user1', name: 'OldPlayer', ready: true }
+        ],
+        gameState: {
+          currentPlayer: 'user1'
+        }
+      }
+
+      migratePlayerData(legacyRoom)
+      expect(legacyRoom.players[0].isReady).toBe(true)
+      expect(legacyRoom.gameState.currentPlayer).toEqual({ userId: 'user1', name: 'OldPlayer' })
+    })
+
+    it('should execute starting player selection', () => {
+      const players = [
+        { userId: 'user1', name: 'Alice' },
+        { userId: 'user2', name: 'Bob' }
+      ]
+
+      const startingPlayer = selectRandomStartingPlayer(players)
+      expect(startingPlayer).toBeDefined()
+      expect(players).toContain(startingPlayer)
     })
   })
 })

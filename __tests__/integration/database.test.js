@@ -1,5 +1,8 @@
 // Integration tests for database operations
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { Room, PlayerSession } from '../../models.js'
+
+// Import real server functions to ensure server.js code is executed and covered
 import {
   connectToDatabase,
   disconnectDatabase,
@@ -8,9 +11,14 @@ import {
   saveRoom,
   deleteRoom,
   loadPlayerSessions,
-  savePlayerSession
-} from '../utils/server-test-utils.js'
-import { Room, PlayerSession, User } from '../../models.js'
+  savePlayerSession,
+  validateRoomState,
+  validatePlayerInRoom,
+  generateTiles,
+  calculateScore,
+  sanitizeInput,
+  checkGameEndConditions
+} from '../../server.js'
 
 describe('Database Operations', () => {
   beforeAll(async () => {
@@ -628,6 +636,96 @@ describe('Database Operations', () => {
 
       expect(loadedRoom.players[0].joinedAt).toBeInstanceOf(Date)
       expect(loadedRoom.gameState.turnCount).toBe(5)
+    })
+  })
+
+  // Additional tests to exercise server.js functions and improve coverage
+  describe('Server.js Utility Functions', () => {
+    it('should execute room validation functions from server.js', async () => {
+      // Test room state validation
+      const nullStateResult = validateRoomState(null)
+      expect(nullStateResult.valid).toBe(false)
+      expect(nullStateResult.error).toBeDefined()
+
+      // Test player validation
+      const emptyPlayerResult = validatePlayerInRoom([], 'test-user')
+      expect(emptyPlayerResult.valid).toBe(false)
+      expect(emptyPlayerResult.error).toBeDefined()
+
+      // Test with valid players array
+      const validPlayers = [
+        { userId: 'user1', name: 'Player 1', isReady: true },
+        { userId: 'user2', name: 'Player 2', isReady: false }
+      ]
+      const validPlayerResult = validatePlayerInRoom(validPlayers, 'user1')
+      expect(validPlayerResult.valid).toBe(true)
+
+      // Test room code validation via server.js
+      const { validateRoomCode } = await import('../../server.js')
+      const validCode = validateRoomCode('TEST01')
+      expect(validCode.valid).toBe(true)
+
+      const invalidCode = validateRoomCode('TOOLONG')
+      expect(invalidCode.valid).toBe(false)
+    })
+
+    it('should execute game logic functions from server.js', async () => {
+      // Test tile generation
+      const tiles = generateTiles()
+      expect(tiles).toBeDefined()
+      expect(tiles.tiles).toBeDefined()
+      expect(Array.isArray(tiles.tiles)).toBe(true)
+      expect(tiles.tiles.length).toBeGreaterThan(0)
+
+      // Test score calculation
+      const matchingScore = calculateScore('red', 'red', 3)
+      expect(matchingScore).toBe(6) // Double points for matching colors
+
+      const mismatchScore = calculateScore('red', 'blue', 3)
+      expect(mismatchScore).toBe(0) // Zero points for mismatch
+
+      const whiteTileScore = calculateScore('red', 'white', 2)
+      expect(whiteTileScore).toBe(2) // Face value for white tiles
+
+      // Test game end conditions
+      const emptyState = checkGameEndConditions([], [], false)
+      expect(emptyState.gameOver).toBe(false)
+
+      const fullDeckEmpty = checkGameEndConditions([], [], true)
+      expect(fullDeckEmpty.gameOver).toBe(false) // Tiles not all filled
+
+      // Test utility functions
+      const cleanInput = sanitizeInput('<script>alert("test")</script>')
+      expect(cleanInput).not.toContain('<script>')
+      expect(cleanInput).not.toContain('</script>')
+
+      // Test IP extraction
+      const { getClientIP } = await import('../../server.js')
+      const testIP = getClientIP({ headers: {}, connection: { remoteAddress: '127.0.0.1' } })
+      expect(testIP).toBeDefined()
+    })
+
+    it('should execute database connection functions from server.js', async () => {
+      // Test that the connectToDatabase function from server.js works
+      const connection = await connectToDatabase()
+      expect(connection).toBeDefined()
+
+      // Test additional server utility functions
+      const { validateTurn, validateCardDrawLimit } = await import('../../server.js')
+
+      // Test turn validation
+      const turnResult = validateTurn('player1', { userId: 'player1' })
+      expect(turnResult.valid).toBe(true)
+
+      const wrongTurnResult = validateTurn('player1', { userId: 'player2' })
+      expect(wrongTurnResult.valid).toBe(false)
+
+      // Test card draw validation
+      const drawResult = validateCardDrawLimit(0, false)
+      expect(drawResult.valid).toBe(true)
+
+      const exceededDrawResult = validateCardDrawLimit(1, true)
+      expect(exceededDrawResult.valid).toBe(false)
     })
   })
 })
