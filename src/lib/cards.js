@@ -34,7 +34,8 @@ export class HeartCard extends BaseCard {
 
   canTargetTile(tile) {
     // Hearts can only be placed on empty tiles
-    return !tile.placedHeart;
+    // Due to Mongoose schema defaults, placedHeart exists with default values when empty
+    return !tile.placedHeart || tile.placedHeart.value === 0;
   }
 
   calculateScore(tile) {
@@ -93,7 +94,8 @@ export class WindCard extends MagicCard {
 
   canTargetTile(tile, playerId) {
     // Wind can only target tiles with opponent hearts
-    return Boolean(tile.placedHeart && tile.placedHeart.placedBy !== playerId);
+    // Due to Mongoose schema defaults, check if placedHeart.value > 0
+    return Boolean(tile.placedHeart && tile.placedHeart.value > 0 && tile.placedHeart.placedBy !== playerId);
   }
 
   executeEffect(gameState, targetTileId, playerId) {
@@ -141,7 +143,8 @@ export class RecycleCard extends MagicCard {
 
   canTargetTile(tile) {
     // Recycle can only target empty, non-white tiles
-    return Boolean(!tile.placedHeart && tile.color !== 'white');
+    // Due to Mongoose schema defaults, check if placedHeart.value === 0
+    return Boolean((!tile.placedHeart || tile.placedHeart.value === 0) && tile.color !== 'white');
   }
 
   executeEffect(gameState, targetTileId, currentPlayerId) {

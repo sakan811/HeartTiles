@@ -595,7 +595,10 @@ function validateHeartPlacement(room, userId, heartId, tileId) {
   if (!tile) return { valid: false, error: "Tile not found" };
 
   // Check if tile is already occupied by a heart
-  if (tile.placedHeart) return { valid: false, error: "Tile is already occupied" };
+  // Due to Mongoose schema defaults, placedHeart exists with default values when empty
+  if (tile.placedHeart && tile.placedHeart.value > 0) {
+    return { valid: false, error: "Tile is already occupied" };
+  }
 
   // Use HeartCard's canTargetTile method for additional validation
   // Check if canTargetTile method exists (for testing environments)
