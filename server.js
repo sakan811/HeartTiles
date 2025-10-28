@@ -22,6 +22,21 @@ const handler = app.getRequestHandler();
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/heart-tiles?authSource=admin';
 
+function _hasKey(container, key) {
+  if (container instanceof Map) return container.has(key);
+  return Object.prototype.hasOwnProperty.call(container || {}, key);
+}
+
+function _setKey(container, key, value) {
+  if (container instanceof Map) return container.set(key, value);
+  container[key] = value;
+}
+
+function _deleteKey(container, key) {
+  if (container instanceof Map) return container.delete(key);
+  delete container[key];
+}
+
 async function connectToDatabase() {
   try {
     await mongoose.connect(MONGODB_URI);
@@ -597,43 +612,84 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
   let isReadyStatus = false;
 
   if (playerIndex !== -1) {
-    // Store the isReady status before updating the player
-    isReadyStatus = room.players[playerIndex].isReady || false;
+    isReadyStatus = !!room.players[playerIndex].isReady;
     room.players[playerIndex] = {
       ...room.players[playerIndex],
-      userId: newUserId, name: userName, email: userEmail,
+      userId: newUserId,
+      name: userName,
+      email: userEmail,
       score: room.players[playerIndex].score || 0
     };
   } else {
     room.players.push({
-      userId: newUserId, name: userName, email: userEmail,
-      isReady: false, score: 0, joinedAt: new Date()
+      userId: newUserId,
+      name: userName,
+      email: userEmail,
+      isReady: false,
+      score: 0,
+      joinedAt: new Date()
     });
   }
 
-  if (room.gameState && room.gameState.playerHands && room.gameState.playerHands[oldUserId]) {
-    room.gameState.playerHands[newUserId] = room.gameState.playerHands[oldUserId];
-    delete room.gameState.playerHands[oldUserId];
+  // ensure gameState and nested containers exist
+  room.gameState = room.gameState || {};
+  // If these are Maps in your schema they will already be Map instances;
+  // otherwise we'll use plain objects.
+  room.gameState.playerHands = room.gameState.playerHands || {};
+  room.gameState.shields = room.gameState.shields || {};
+
+  // Migrate playerHands
+  if (_hasKey(room.gameState.playerHands, oldUserId)) {
+    const hand = room.gameState.playerHands instanceof Map
+      ? room.gameState.playerHands.get(oldUserId)
+      : room.gameState.playerHands[oldUserId];
+
+    _setKey(room.gameState.playerHands, newUserId, hand);
+    _deleteKey(room.gameState.playerHands, oldUserId);
+
+    if (typeof room.markModified === 'function') {
+      // tell mongoose the nested path changed
+      room.markModified('gameState.playerHands');
+    } else {
+      // fallback: reassign the whole object so plain objects are noticed
+      room.gameState.playerHands = room.gameState.playerHands;
+    }
   }
 
-  // Migrate shield state
-  if (room.gameState && room.gameState.shields && room.gameState.shields[oldUserId]) {
-    room.gameState.shields[newUserId] = room.gameState.shields[oldUserId];
-    delete room.gameState.shields[oldUserId];
+  // Migrate shields
+  if (_hasKey(room.gameState.shields, oldUserId)) {
+    const shield = room.gameState.shields instanceof Map
+      ? room.gameState.shields.get(oldUserId)
+      : room.gameState.shields[oldUserId];
+
+    _setKey(room.gameState.shields, newUserId, shield);
+    _deleteKey(room.gameState.shields, oldUserId);
+
+    if (typeof room.markModified === 'function') {
+      room.markModified('gameState.shields');
+    } else {
+      room.gameState.shields = room.gameState.shields;
+    }
   }
 
-  if (room.gameState && room.gameState.currentPlayer && room.gameState.currentPlayer.userId === oldUserId) {
+  // Update currentPlayer if needed
+  if (room.gameState.currentPlayer && room.gameState.currentPlayer.userId === oldUserId) {
     room.gameState.currentPlayer = {
-      userId: newUserId, name: userName, email: userEmail,
+      userId: newUserId,
+      name: userName,
+      email: userEmail,
       isReady: isReadyStatus
     };
+    if (typeof room.markModified === 'function') room.markModified('gameState.currentPlayer');
   }
 
-  // Use global turnLocks if available (for testing), otherwise use module-level
+  // Delete any turnLocks that reference the old user
   const locks = global.turnLocks || turnLocks;
-  for (const lockKey of locks.keys()) {
+  for (const lockKey of Array.from(locks.keys())) {
     if (lockKey.includes(oldUserId)) locks.delete(lockKey);
   }
+
+  return room;
 }
 
 // Session management stubs for testing
