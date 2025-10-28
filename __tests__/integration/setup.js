@@ -134,14 +134,8 @@ vi.mock('next-auth/jwt', () => ({
   getToken: vi.fn(),
 }))
 
-// Mock bcryptjs
-vi.mock('bcryptjs', () => ({
-  default: {
-    compare: vi.fn(),
-    hash: vi.fn().mockResolvedValue('hashed_password'),
-    genSalt: vi.fn().mockResolvedValue('salt')
-  }
-}))
+// Note: bcryptjs is NOT mocked for integration tests to test real hashing behavior
+// Only mock for unit tests, not integration tests
 
 // NOTE: For integration tests, we need real models, not mocked ones
 // The models will be imported directly for real database operations
