@@ -120,11 +120,7 @@ export default function RoomPage() {
   const leaveRoom = () => {
     if (socket) {
       socket.emit("leave-room", { roomCode });
-      // Disconnect the socket after leaving room to prevent reconnection
-      setTimeout(() => {
-        disconnect();
-        router.push("/");
-      }, 100);
+      router.push("/");
     } else {
       router.push("/");
     }
