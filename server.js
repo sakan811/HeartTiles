@@ -728,11 +728,14 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
 
   // Delete any turnLocks that reference the old user
   const locks = global.turnLocks || turnLocks;
-  for (const lockKey of Array.from(locks.keys())) {
-    if (lockKey.includes(oldUserId)) locks.delete(lockKey);
+  if (locks && typeof locks.keys === 'function') {
+    for (const lockKey of Array.from(locks.keys())) {
+      if (lockKey.includes(oldUserId)) locks.delete(lockKey);
+    }
   }
 
-  return room;
+  // Return undefined to indicate success (tests expect undefined on success)
+  return;
 }
 
 // Global session store - used by both server and tests
