@@ -455,10 +455,10 @@ describe('Server Utility Functions Integration Tests', () => {
 
         expect(heart).toBeDefined();
         expect(tile).toBeDefined();
-        expect(tile.placedHeart).toBeUndefined(); // Tile should be empty
+        expect(tile.placedHeart.value).toBe(0); // Tile should be empty (value 0 means no heart placed)
 
         // If we get here, the issue might be with canTargetTile
-        fail(`HeartCard validation failed unexpectedly: ${heartCardValidation.error}`);
+        throw new Error(`HeartCard validation failed unexpectedly: ${heartCardValidation.error}`);
       }
 
       expect(heartCardValidation.valid).toBe(true)
