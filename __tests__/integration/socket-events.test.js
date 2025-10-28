@@ -14,7 +14,6 @@ import {
 } from '../helpers/test-utils.js';
 // Import real implementations for game logic - only mock external dependencies
 // The mock server will use real card implementations and game logic
-import { WindCard } from '../../src/lib/cards.js';
 
 describe('Socket.IO Events Integration Tests', () => {
   let mockServer;
@@ -479,7 +478,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle wind card usage correctly', async () => {
-      const { gameData, roomCode, currentClient } = await setupGame(port);
+      const { gameData, roomCode, currentClient, otherClient } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Get the current player and their cards
@@ -489,6 +488,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
       expect(heartCard).toBeDefined();
       expect(emptyTile).toBeDefined();
+      expect(otherClient).toBeDefined();
 
       // Step 1: Current player places a heart on a tile
       currentClient.emit('place-heart', {
@@ -514,14 +514,20 @@ describe('Socket.IO Events Integration Tests', () => {
       const turnResponse = await waitFor(currentClient, 'turn-changed');
 
       // Step 3: Other player should now be current player
-      expect(turnResponse.currentPlayer.userId).toBe(otherClient.auth?.token?.id);
-
-      // Step 4: Set up other player with a wind card for testing
       const otherPlayer = turnResponse.players.find(p => p.userId === turnResponse.currentPlayer.userId);
+      expect(otherPlayer).toBeDefined();
+
+      // Verify that the new current player is different from the original current player
+      expect(turnResponse.currentPlayer.userId).not.toBe(currentPlayer.userId);
 
       // Get the room and manually add a wind card to other player's hand for testing
       const room = mockServer.getRoom(roomCode);
-      const windCard = new WindCard(`test-wind-${Date.now()}`);
+      const windCard = {
+        id: `test-wind-${Date.now()}`,
+        type: 'wind',
+        emoji: '💨',
+        name: 'Wind Card'
+      };
       room.gameState.playerHands[otherPlayer.userId].push(windCard);
 
       // Step 5: Other player uses wind card to remove the heart
@@ -531,7 +537,18 @@ describe('Socket.IO Events Integration Tests', () => {
         targetTileId: emptyTile.id
       });
 
-      const windResponse = await waitFor(otherClient, 'magic-card-used');
+      // Wait for either magic-card-used or room-error
+      const windResponse = await Promise.race([
+        waitFor(otherClient, 'magic-card-used'),
+        waitFor(otherClient, 'room-error')
+      ]);
+
+      // If we got a room-error, fail the test with more info
+      if (typeof windResponse === 'string' && windResponse.includes('not your turn')) {
+        throw new Error(`Got room-error: ${windResponse}. Current player: ${turnResponse.currentPlayer.userId}, Other player: ${otherPlayer.userId}`);
+      } else if (typeof windResponse === 'string') {
+        throw new Error(`Got room-error: ${windResponse}`);
+      }
 
       // Verify wind card effect
       expect(windResponse.actionResult.type).toBe('wind');
@@ -581,7 +598,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should handle shield card activation correctly', async () => {
-      const { gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
+      const { roomCode, currentClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Get a shield card (may need to draw one)
@@ -611,7 +628,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should enforce turn-based magic card usage', async () => {
-      const { roomCode, currentClient, otherClient, currentPlayer } = await setupGame(port);
+      const { roomCode, otherClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       const magicCard = currentPlayer.hand.find(card => card.type !== 'heart');
@@ -638,7 +655,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should allow ending turn after drawing required cards', async () => {
-      const { roomCode, currentClient } = await setupGame(port);
+      const { roomCode, currentClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Draw heart card
@@ -655,11 +672,11 @@ describe('Socket.IO Events Integration Tests', () => {
 
       expect(response.currentPlayer).toBeDefined();
       expect(response.turnCount).toBe(2);
-      expect(response.currentPlayer.userId).not.toBe(currentClient.id);
+      expect(response.currentPlayer.userId).not.toBe(currentPlayer.userId);
     });
 
     it('should handle empty deck scenario correctly', async () => {
-      const { roomCode, currentClient } = await setupGame(port);
+      const { roomCode, currentClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Manually empty the decks for testing
@@ -673,6 +690,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
       expect(response.currentPlayer).toBeDefined();
       expect(response.turnCount).toBe(2);
+      expect(response.currentPlayer.userId).not.toBe(currentPlayer.userId);
     });
 
     it('should track player actions correctly across turns', async () => {
@@ -794,7 +812,7 @@ describe('Socket.IO Events Integration Tests', () => {
 
   describe('Data Consistency & State Management', () => {
     it('should maintain consistent player state across events', async () => {
-      const { clients, gameData, currentPlayer, roomCode } = await setupGame(port);
+      const { gameData, currentPlayer, roomCode } = await setupGame(port);
       testRooms.add(roomCode);
 
       // After game starts, all players should be ready
@@ -826,7 +844,7 @@ describe('Socket.IO Events Integration Tests', () => {
     });
 
     it('should maintain game state integrity during complex scenarios', async () => {
-      const { clients, gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
+      const { gameData, roomCode, currentClient, currentPlayer } = await setupGame(port);
       testRooms.add(roomCode);
 
       // Perform a sequence of actions

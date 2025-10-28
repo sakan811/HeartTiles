@@ -312,6 +312,13 @@ export class MockSocketServer {
 
       for (const player of room.players) {
         room.gameState.playerHands[player.userId] = createInitialHand(player.userId)
+        // Initialize player actions for turn tracking
+        room.gameState.playerActions[player.userId] = {
+          drawnHeart: false,
+          drawnMagic: false,
+          heartsPlaced: 0,
+          magicCardsUsed: 0
+        }
       }
 
       // Mark game as started
@@ -621,7 +628,7 @@ export class MockSocketServer {
 
       if (card.type === 'wind') {
         // Wind card - remove opponent's heart
-        if (!targetTileId) {
+        if (targetTileId === undefined || targetTileId === null) {
           socket.emit('room-error', 'Target tile required for wind card')
           return
         }
@@ -655,7 +662,7 @@ export class MockSocketServer {
 
       } else if (card.type === 'recycle') {
         // Recycle card - change tile to white
-        if (!targetTileId) {
+        if (targetTileId === undefined || targetTileId === null) {
           socket.emit('room-error', 'Target tile required for recycle card')
           return
         }
@@ -788,8 +795,8 @@ export class MockSocketServer {
       }
 
       // Check game end conditions
-      const gameOver = checkGameEndConditions(room.gameState)
-      if (gameOver) {
+      const gameEndResult = checkGameEndConditions(room)
+      if (gameEndResult.shouldEnd) {
         // Final scores
         const finalScores = room.players.map(player => ({
           userId: player.userId,
