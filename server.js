@@ -654,7 +654,8 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
       userId: newUserId,
       name: userName,
       email: userEmail,
-      score: room.players[playerIndex].score || 0
+      score: room.players[playerIndex].score || 0,
+      isReady: isReadyStatus
     };
   } else {
     room.players.push({
