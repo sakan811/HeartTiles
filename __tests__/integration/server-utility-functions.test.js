@@ -252,9 +252,9 @@ describe('Server Utility Functions Integration Tests', () => {
           { userId: 'user3', name: undefined, email: 'player3@test.com', isReady: false, score: 0, joinedAt: new Date() }
         ]
 
-        // Save to database
+        // Save to database - should throw validation error due to null/undefined names
         const savedRoom = new Room(roomData)
-        await expect(savedRoom.save()).rejects.toThrows
+        await expect(savedRoom.save()).rejects.toThrow()
       })
 
       it('should throw validation error for players with non-string names', async () => {
