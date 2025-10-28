@@ -204,9 +204,7 @@ export async function connectToDatabase() {
     bufferCommands: false, // Disable command buffering
     // Add additional options for better error handling
     heartbeatFrequencyMS: 10000, // Keep connection alive
-    maxIdleTimeMS: 30000, // Close idle connections,
-    useNewUrlParser: true,
-    useUnifiedTopology: true
+    maxIdleTimeMS: 30000 // Close idle connections
   }
 
   try {
