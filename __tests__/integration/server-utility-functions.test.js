@@ -273,9 +273,9 @@ describe('Server Utility Functions Integration Tests', () => {
   })
 
   describe('Tile Generation with database persistence', () => {
-    it('should use fallback randomValue calculation when Math.random is mocked', () => {
+    it('should use fallback randomValue calculation when Math.random is mocked', async () => {
       // Import generateTiles from server-test-utils
-      const { generateTiles } = require('../utils/server-test-utils.js')
+      const { generateTiles } = await import('../utils/server-test-utils.js')
 
       // Mock Math.random to return a fixed value
       const originalRandom = Math.random
@@ -310,7 +310,7 @@ describe('Server Utility Functions Integration Tests', () => {
         return
       }
 
-      const { generateTiles } = require('../utils/server-test-utils.js')
+      const { generateTiles } = await import('../utils/server-test-utils.js')
 
       const originalRandom = Math.random
       Math.random = vi.fn().mockImplementation(() => 0.25) // Should produce white tiles
@@ -341,8 +341,8 @@ describe('Server Utility Functions Integration Tests', () => {
       }
     })
 
-    it('should handle mocked Math.random that returns same value', () => {
-      const { generateTiles } = require('../utils/server-test-utils.js')
+    it('should handle mocked Math.random that returns same value', async () => {
+      const { generateTiles } = await import('../utils/server-test-utils.js')
 
       // Mock Math.random to always return the same value
       const originalRandom = Math.random
@@ -376,7 +376,7 @@ describe('Server Utility Functions Integration Tests', () => {
         return
       }
 
-      const { generateTiles } = require('../utils/server-test-utils.js')
+      const { generateTiles } = await import('../utils/server-test-utils.js')
       const tiles = generateTiles()
 
       tiles.forEach((tile, index) => {
@@ -418,7 +418,7 @@ describe('Server Utility Functions Integration Tests', () => {
         return
       }
 
-      const { validateHeartPlacement, generateTiles } = require('../utils/server-test-utils.js')
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
 
       const roomData = createMockRoom('HALID01')
       roomData.gameState.gameStarted = true
@@ -469,7 +469,7 @@ describe('Server Utility Functions Integration Tests', () => {
     })
 
     it('should handle non-HeartCard instances correctly from database', async () => {
-      const { validateHeartPlacement, generateTiles } = require('../utils/server-test-utils.js')
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
 
       const roomData = createMockRoom('NONRT01')
       roomData.gameState.gameStarted = true
@@ -494,7 +494,7 @@ describe('Server Utility Functions Integration Tests', () => {
     })
 
     it('should convert plain objects to HeartCard-like objects for validation', async () => {
-      const { validateHeartPlacement, generateTiles } = require('../utils/server-test-utils.js')
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
 
       const roomData = createMockRoom('CONRT01')
       roomData.gameState.gameStarted = true
@@ -511,7 +511,7 @@ describe('Server Utility Functions Integration Tests', () => {
     })
 
     it('should use HeartCard canTargetTile method when available', async () => {
-      const { validateHeartPlacement, generateTiles } = require('../utils/server-test-utils.js')
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
 
       const roomData = createMockRoom('CAGET01')
       roomData.gameState.gameStarted = true
@@ -543,7 +543,7 @@ describe('Server Utility Functions Integration Tests', () => {
     })
 
     it('should handle validation when canTargetTile method is not available', async () => {
-      const { validateHeartPlacement, generateTiles } = require('../utils/server-test-utils.js')
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
 
       const roomData = createMockRoom('NMEHD01')
       roomData.gameState.gameStarted = true

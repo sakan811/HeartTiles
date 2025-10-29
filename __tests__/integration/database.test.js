@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { Room, PlayerSession } from '../../models.js'
 
-// Import real server functions to ensure server.js code is executed and covered
+// Import database utility functions from server-test-utils.js
 import {
   connectToDatabase,
   disconnectDatabase,
@@ -11,7 +11,11 @@ import {
   saveRoom,
   deleteRoom,
   loadPlayerSessions,
-  savePlayerSession,
+  savePlayerSession
+} from '../utils/server-test-utils.js'
+
+// Import real server functions to ensure server.js code is executed and covered
+import {
   validateRoomState,
   validatePlayerInRoom,
   generateTiles,

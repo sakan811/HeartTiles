@@ -43,12 +43,15 @@ import {
   migratePlayerData
 } from '../../server.js'
 
-// Helper function to generate valid room codes (6-7 chars, uppercase + numbers)
+// Helper function to generate valid room codes (exactly 6 chars, uppercase + numbers)
 // Using timestamp and random to ensure uniqueness across test runs
 function generateValidRoomCode(prefix = 'TEST') {
-  const timestamp = Date.now().toString(36).slice(-3).toUpperCase()
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
-  return `${prefix}${timestamp}${random}`.slice(0, 7).toUpperCase()
+  const timestamp = Date.now().toString(36).slice(-2).toUpperCase()
+  const random = Math.floor(Math.random() * 100).toString().padStart(2, '0')
+  // Take exactly 6 characters from the combination
+  const code = `${prefix}${timestamp}${random}`.slice(0, 6).toUpperCase()
+  // Ensure it's exactly 6 characters and contains only valid characters
+  return code.length === 6 && /^[A-Z0-9]+$/.test(code) ? code : 'TEST12'
 }
 
 describe('Server Room Management Integration Tests', () => {
@@ -743,61 +746,84 @@ describe('Server Room Management Integration Tests', () => {
       expect(clientIP).toBeDefined()
 
       // Test player finding functions
-      const players = [
-        { userId: 'user1', name: 'Alice', email: 'alice@test.com' },
-        { userId: 'user2', name: 'Bob', email: 'bob@test.com' }
-      ]
+      const testRoom = {
+        players: [
+          { userId: 'user1', name: 'Alice', email: 'alice@test.com' },
+          { userId: 'user2', name: 'Bob', email: 'bob@test.com' }
+        ]
+      }
 
-      const foundPlayer = findPlayerByUserId(players, 'user1')
+      const foundPlayer = findPlayerByUserId(testRoom, 'user1')
       expect(foundPlayer).toBeDefined()
       expect(foundPlayer.name).toBe('Alice')
 
-      const foundByName = findPlayerByName(players, 'Bob')
+      const foundByName = findPlayerByName(testRoom, 'Bob')
       expect(foundByName).toBeDefined()
       expect(foundByName.userId).toBe('user2')
 
       // Test validation functions
       const testRoomCode = generateValidRoomCode('TEST')
       const validRoomCode = validateRoomCode(testRoomCode)
-      expect(validRoomCode.valid).toBe(true)
+      expect(validRoomCode).toBe(true)
 
       const invalidRoomCode = validateRoomCode('TOOLONG')
-      expect(invalidRoomCode.valid).toBe(false)
+      expect(invalidRoomCode).toBe(false)
 
       const validPlayerName = validatePlayerName('Alice')
-      expect(validPlayerName.valid).toBe(true)
+      expect(validPlayerName).toBe(true)
 
       const invalidPlayerName = validatePlayerName('')
-      expect(invalidPlayerName.valid).toBe(false)
+      expect(invalidPlayerName).toBe(false)
 
       // Test turn validation
-      const validTurn = validateTurn('user1', { userId: 'user1' })
+      const gameRoom = {
+        gameState: {
+          gameStarted: true,
+          currentPlayer: { userId: 'user1' }
+        }
+      }
+      const validTurn = validateTurn(gameRoom, 'user1')
       expect(validTurn.valid).toBe(true)
 
-      const invalidTurn = validateTurn('user1', { userId: 'user2' })
+      const invalidTurn = validateTurn(gameRoom, 'user2')
       expect(invalidTurn.valid).toBe(false)
 
       // Test game logic functions
       const tiles = generateTiles()
       expect(tiles).toBeDefined()
-      expect(tiles.tiles).toBeDefined()
-      expect(Array.isArray(tiles.tiles)).toBe(true)
+      expect(Array.isArray(tiles)).toBe(true)
 
-      const score = calculateScore('red', 'red', 2)
+      const score = calculateScore({ color: 'red', value: 2 }, { color: 'red' })
       expect(score).toBe(4) // Double points for matching colors
 
-      const whiteScore = calculateScore('blue', 'white', 3)
+      const whiteScore = calculateScore({ color: 'blue', value: 3 }, { color: 'white' })
       expect(whiteScore).toBe(3) // Face value for white tiles
 
-      const mismatchScore = calculateScore('red', 'yellow', 2)
+      const mismatchScore = calculateScore({ color: 'red', value: 2 }, { color: 'yellow' })
       expect(mismatchScore).toBe(0) // Zero for mismatch
 
       // Test game end conditions
-      const notEnded = checkGameEndConditions([{ placedHeart: {} }], [{ cards: 1 }], false)
-      expect(notEnded.gameOver).toBe(false)
+      const gameRoomNotEnded = {
+        gameState: {
+          gameStarted: true,
+          tiles: [{ placedHeart: { value: 2 } }, {}], // One tile filled, one empty
+          deck: { cards: 10 },
+          magicDeck: { cards: 8 }
+        }
+      }
+      const notEnded = checkGameEndConditions(gameRoomNotEnded, false)
+      expect(notEnded.shouldEnd).toBe(false)
 
-      const endedByDeck = checkGameEndConditions([{ placedHeart: {} }], [], true)
-      expect(endedByDeck.gameOver).toBe(true)
+      const gameRoomEnded = {
+        gameState: {
+          gameStarted: true,
+          tiles: [{ placedHeart: { value: 2 } }, { placedHeart: { value: 1 } }], // All tiles filled
+          deck: { cards: 0 }, // Empty deck
+          magicDeck: { cards: 5 }
+        }
+      }
+      const ended = checkGameEndConditions(gameRoomEnded, true)
+      expect(ended.shouldEnd).toBe(true)
 
       // Test card generation
       const heartCard = generateSingleHeart()
@@ -807,11 +833,10 @@ describe('Server Room Management Integration Tests', () => {
 
       const magicCard = generateSingleMagicCard()
       expect(magicCard).toBeDefined()
-      expect(magicCard.type).toBe('magic')
-      expect(['wind', 'recycle', 'shield']).toContain(magicCard.magicType)
+      expect(['wind', 'recycle', 'shield']).toContain(magicCard.type)
 
       // Test player action validation
-      const testRoom = {
+      const actionTestRoom = {
         gameState: {
           playerActions: {
             user1: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
@@ -826,65 +851,95 @@ describe('Server Room Management Integration Tests', () => {
         }
       }
 
-      const drawLimit = validateCardDrawLimit(testRoom, 'user1')
+      const drawLimit = validateCardDrawLimit(actionTestRoom, 'user1')
       expect(drawLimit.valid).toBe(true)
 
-      testRoom.gameState.playerActions.user1.drawnHeart = true
-      testRoom.gameState.playerActions.user1.drawnMagic = true
-      const exceededDrawLimit = validateCardDrawLimit(testRoom, 'user1')
-      expect(exceededDrawLimit.valid).toBe(false) // Still valid but tracks both draws
+      actionTestRoom.gameState.playerActions.user1.drawnHeart = true
+      actionTestRoom.gameState.playerActions.user1.drawnMagic = true
+      const exceededDrawLimit = validateCardDrawLimit(actionTestRoom, 'user1')
+      expect(exceededDrawLimit.valid).toBe(true) // Always valid, just tracks actions
 
-      const heartPlacement = validateHeartPlacement(testRoom, 'user1', 'heart-1', 0)
+      const heartPlacement = validateHeartPlacement(actionTestRoom, 'user1', 'heart-1', 0)
       expect(heartPlacement.valid).toBe(true)
 
-      const canPlaceMore = canPlaceMoreHearts(1, false)
+      // Test heart placement limits
+      const heartLimitRoom = {
+        gameState: {
+          playerActions: {
+            user1: { heartsPlaced: 1 }
+          }
+        }
+      }
+      const canPlaceMore = canPlaceMoreHearts(heartLimitRoom, 'user1')
       expect(canPlaceMore).toBe(true)
 
-      const cannotPlaceMore = canPlaceMoreHearts(2, false)
+      const cannotPlaceMoreRoom = {
+        gameState: {
+          playerActions: {
+            user1: { heartsPlaced: 2 }
+          }
+        }
+      }
+      const cannotPlaceMore = canPlaceMoreHearts(cannotPlaceMoreRoom, 'user1')
       expect(cannotPlaceMore).toBe(false)
 
-      const canUseMagic = canUseMoreMagicCards(0, false)
+      // Test magic card usage limits
+      const magicLimitRoom = {
+        gameState: {
+          playerActions: {
+            user1: { magicCardsUsed: 0 }
+          }
+        }
+      }
+      const canUseMagic = canUseMoreMagicCards(magicLimitRoom, 'user1')
       expect(canUseMagic).toBe(true)
 
-      const cannotUseMagic = canUseMoreMagicCards(2, false)
+      const cannotUseMagicRoom = {
+        gameState: {
+          playerActions: {
+            user1: { magicCardsUsed: 1 }
+          }
+        }
+      }
+      const cannotUseMagic = canUseMoreMagicCards(cannotUseMagicRoom, 'user1')
       expect(cannotUseMagic).toBe(false)
 
       // Test action recording functions
-      const actionTestRoom = {
+      const recordingTestRoom = {
         gameState: {
           playerHands: { user1: [] },
           playerActions: { user1: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 } }
         }
       }
 
-      recordCardDraw(actionTestRoom, 'user1', 'heart')
-      expect(actionTestRoom.gameState.playerActions.user1.drawnHeart).toBe(true)
+      recordCardDraw(recordingTestRoom, 'user1', 'heart')
+      expect(recordingTestRoom.gameState.playerActions.user1.drawnHeart).toBe(true)
 
-      recordHeartPlacement(actionTestRoom, 'user1', 0, { value: 2, color: 'red' })
-      expect(actionTestRoom.gameState.playerActions.user1.heartsPlaced).toBe(1)
+      recordHeartPlacement(recordingTestRoom, 'user1', 0, { value: 2, color: 'red' })
+      expect(recordingTestRoom.gameState.playerActions.user1.heartsPlaced).toBe(1)
 
-      recordMagicCardUsage(actionTestRoom, 'user1', 'wind')
-      expect(actionTestRoom.gameState.playerActions.user1.magicCardsUsed).toBe(1)
+      recordMagicCardUsage(recordingTestRoom, 'user1', 'wind')
+      expect(recordingTestRoom.gameState.playerActions.user1.magicCardsUsed).toBe(1)
 
-      resetPlayerActions(actionTestRoom, 'user1')
-      expect(actionTestRoom.gameState.playerActions.user1.drawnHeart).toBe(false)
-      expect(actionTestRoom.gameState.playerActions.user1.heartsPlaced).toBe(0)
+      resetPlayerActions(recordingTestRoom, 'user1')
+      expect(recordingTestRoom.gameState.playerActions.user1.drawnHeart).toBe(false)
+      expect(recordingTestRoom.gameState.playerActions.user1.heartsPlaced).toBe(0)
 
       // Test turn lock functions
       const lockKey = `test-lock-${Date.now()}`
       const acquired = await acquireTurnLock(lockKey, 'user1', 5000)
       expect(acquired).toBe(true)
 
-      const released = await releaseTurnLock(lockKey)
-      expect(released).toBe(true)
+      const released = await releaseTurnLock(lockKey, 'user1')
+      expect(released).toBeUndefined() // Function doesn't return a value
 
       // Test shield expiration
       const roomWithShields = {
         gameState: {
-          shields: new Map([
-            ['user1', { remainingTurns: 1, activatedTurn: 1 }],
-            ['user2', { remainingTurns: 0, activatedTurn: 1 }]
-          ])
+          shields: {
+            user1: { remainingTurns: 1, activatedTurn: 1 },
+            user2: { remainingTurns: 0, activatedTurn: 1 }
+          }
         },
         players: [
           { userId: 'user1', name: 'Player1' },
@@ -892,8 +947,8 @@ describe('Server Room Management Integration Tests', () => {
         ]
       }
 
-      checkAndExpireShields(roomWithShields, 'user2', 2)
-      expect(roomWithShields.gameState.shields.has('user2')).toBe(false)
+      checkAndExpireShields(roomWithShields)
+      expect(roomWithShields.gameState.shields.user2).toBeUndefined()
     })
 
     it('should execute player data migration functions', async () => {
