@@ -207,6 +207,40 @@ describe('Game State Management and Turn-Based Gameplay', () => {
       expect(room.gameState.playerActions[userId].magicCardsUsed).toBe(1)
     })
 
+    it('should initialize playerActions when recording heart placement', async () => {
+      const { recordHeartPlacement } = await import('../../server.js')
+
+      const room = { gameState: {} } // No playerActions initially
+      const userId = 'user123'
+
+      // Should initialize playerActions structure (line 522-526 edge case)
+      recordHeartPlacement(room, userId)
+
+      expect(room.gameState.playerActions).toBeDefined()
+      expect(room.gameState.playerActions[userId]).toBeDefined()
+      expect(room.gameState.playerActions[userId].drawnHeart).toBe(false)
+      expect(room.gameState.playerActions[userId].drawnMagic).toBe(false)
+      expect(room.gameState.playerActions[userId].heartsPlaced).toBe(1)
+      expect(room.gameState.playerActions[userId].magicCardsUsed).toBe(0)
+    })
+
+    it('should initialize playerActions when recording magic card usage', async () => {
+      const { recordMagicCardUsage } = await import('../../server.js')
+
+      const room = { gameState: {} } // No playerActions initially
+      const userId = 'user123'
+
+      // Should initialize playerActions structure (line 539-543 edge case)
+      recordMagicCardUsage(room, userId)
+
+      expect(room.gameState.playerActions).toBeDefined()
+      expect(room.gameState.playerActions[userId]).toBeDefined()
+      expect(room.gameState.playerActions[userId].drawnHeart).toBe(false)
+      expect(room.gameState.playerActions[userId].drawnMagic).toBe(false)
+      expect(room.gameState.playerActions[userId].heartsPlaced).toBe(0)
+      expect(room.gameState.playerActions[userId].magicCardsUsed).toBe(1)
+    })
+
     it('should validate heart placement limits', async () => {
       const room = {
         gameState: {
@@ -247,6 +281,26 @@ describe('Game State Management and Turn-Based Gameplay', () => {
       expect(canUseMoreMagicCards(room, 'user1')).toBe(true) // Used 0, can use 1
       expect(canUseMoreMagicCards(room, 'user2')).toBe(false) // Used 1, at limit
       expect(canUseMoreMagicCards(room, 'user3')).toBe(true) // No usage yet
+    })
+
+    it('should allow heart placement when playerActions tracking is missing', async () => {
+      const { canPlaceMoreHearts } = await import('../../server.js')
+
+      const room = { gameState: {} } // No playerActions tracking (line 556 edge case)
+      const userId = 'user123'
+
+      const result = canPlaceMoreHearts(room, userId)
+      expect(result).toBe(true) // Should allow placement when tracking is missing
+    })
+
+    it('should allow magic card usage when playerActions tracking is missing', async () => {
+      const { canUseMoreMagicCards } = await import('../../server.js')
+
+      const room = { gameState: {} } // No playerActions tracking (line 564 edge case)
+      const userId = 'user123'
+
+      const result = canUseMoreMagicCards(room, userId)
+      expect(result).toBe(true) // Should allow usage when tracking is missing
     })
 
     it('should reset player actions', async () => {
@@ -478,6 +532,28 @@ describe('Game State Management and Turn-Based Gameplay', () => {
       result = validatePlayerInRoom(room, 'user3')
       expect(result.valid).toBe(false)
       expect(result.error).toBe('Player not in room')
+    })
+
+    it('should handle validateRoomState edge case when gameStarted property is missing with empty players', async () => {
+      const { validateRoomState } = await import('../../server.js')
+
+      // Room with missing gameStarted property and empty players (line 242 edge case)
+      const roomWithMissingGameStarted = {
+        players: [],
+        gameState: {
+          currentPlayer: null,
+          tiles: [],
+          deck: { emoji: '💌', cards: 16 },
+          magicDeck: { emoji: '🔮', cards: 16 },
+          playerHands: {},
+          turnCount: 0
+          // Note: gameStarted property is completely missing
+        }
+      }
+
+      const result = validateRoomState(roomWithMissingGameStarted)
+      expect(result.valid).toBe(false)
+      expect(result.error).toBe("Invalid players state")
     })
   })
 

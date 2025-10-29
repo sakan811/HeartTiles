@@ -367,6 +367,79 @@ describe('Server Utility Functions Integration Tests', () => {
       }
     })
 
+    it('should use fallback Math.random calculation when mocked Math.random returns undefined', async () => {
+      const { generateTiles } = await import('../utils/server-test-utils.js')
+
+      // Mock Math.random to return undefined (line 441 edge case)
+      const originalRandom = Math.random
+      Math.random = vi.fn().mockReturnValue(undefined)
+
+      try {
+        const tiles = generateTiles()
+        expect(tiles).toHaveLength(8)
+
+        // Should still generate valid tiles using fallback calculation (line 443)
+        tiles.forEach((tile, index) => {
+          expect(tile).toHaveProperty('id')
+          expect(tile).toHaveProperty('color')
+          expect(tile).toHaveProperty('emoji')
+          expect(tile.id).toBe(index)
+          expect(['red', 'yellow', 'green', 'white']).toContain(tile.color)
+          expect(['🟥', '🟨', '🟩', '⬜']).toContain(tile.emoji)
+        })
+      } finally {
+        Math.random = originalRandom
+      }
+    })
+
+    it('should use fallback Math.random calculation when mocked Math.random returns null', async () => {
+      const { generateTiles } = await import('../utils/server-test-utils.js')
+
+      // Mock Math.random to return null (line 441 edge case)
+      const originalRandom = Math.random
+      Math.random = vi.fn().mockReturnValue(null)
+
+      try {
+        const tiles = generateTiles()
+        expect(tiles).toHaveLength(8)
+
+        // Should still generate valid tiles using fallback calculation (line 443)
+        tiles.forEach((tile, index) => {
+          expect(tile).toHaveProperty('id')
+          expect(tile).toHaveProperty('color')
+          expect(tile).toHaveProperty('emoji')
+          expect(tile.id).toBe(index)
+          expect(['red', 'yellow', 'green', 'white']).toContain(tile.color)
+        })
+      } finally {
+        Math.random = originalRandom
+      }
+    })
+
+    it('should use fallback calculation when Math.random is not available', async () => {
+      const { generateTiles } = await import('../utils/server-test-utils.js')
+
+      // Mock Math.random to not exist (line 447 edge case)
+      const originalRandom = Math.random
+      delete Math.random
+
+      try {
+        const tiles = generateTiles()
+        expect(tiles).toHaveLength(8)
+
+        // Should generate valid tiles using fallback calculation (line 447)
+        tiles.forEach((tile, index) => {
+          expect(tile).toHaveProperty('id')
+          expect(tile).toHaveProperty('color')
+          expect(tile).toHaveProperty('emoji')
+          expect(tile.id).toBe(index)
+          expect(['red', 'yellow', 'green', 'white']).toContain(tile.color)
+        })
+      } finally {
+        Math.random = originalRandom
+      }
+    })
+
     it('should produce consistent tile structure for database storage', async () => {
       // Skip if MongoDB is not available
       try {
@@ -558,6 +631,92 @@ describe('Server Utility Functions Integration Tests', () => {
       // Should not throw error even if canTargetTile method is missing
       const validation = validateHeartPlacement(roomData, 'player1', 'heart-plain', 0)
       expect(validation.valid).toBe(true)
+    })
+
+    it('should handle HeartCard instance validation branch', async () => {
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
+
+      const roomData = createMockRoom('HCINS01')
+      roomData.gameState.gameStarted = true
+      roomData.gameState.currentPlayer = { userId: 'player1', name: 'Player1' }
+      roomData.gameState.tiles = generateTiles()
+      roomData.gameState.playerHands = {
+        player1: [
+          new HeartCard('heart-1', 'red', 2, '❤️') // Real HeartCard instance
+        ]
+      }
+
+      // Test HeartCard instance branch (line 588)
+      const validation = validateHeartPlacement(roomData, 'player1', 'heart-1', 0)
+      expect(validation.valid).toBe(true)
+    })
+
+    it('should handle tile not found error case', async () => {
+      const { validateHeartPlacement } = await import('../utils/server-test-utils.js')
+
+      const roomData = createMockRoom('TNFND01')
+      roomData.gameState.gameStarted = true
+      roomData.gameState.currentPlayer = { userId: 'player1', name: 'Player1' }
+      roomData.gameState.tiles = [] // No tiles
+      roomData.gameState.playerHands = {
+        player1: [
+          { id: 'heart-1', color: 'red', value: 2, type: 'heart' }
+        ]
+      }
+
+      // Test tile not found error case (line 595)
+      const validation = validateHeartPlacement(roomData, 'player1', 'heart-1', 999)
+      expect(validation.valid).toBe(false)
+      expect(validation.error).toBe("Tile not found")
+    })
+
+    it('should handle tile already occupied error case', async () => {
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
+
+      const roomData = createMockRoom('TOCCP01')
+      roomData.gameState.gameStarted = true
+      roomData.gameState.currentPlayer = { userId: 'player1', name: 'Player1' }
+      roomData.gameState.tiles = generateTiles()
+
+      // Occupy first tile with a heart
+      roomData.gameState.tiles[0].placedHeart = { value: 2, color: 'red' }
+
+      roomData.gameState.playerHands = {
+        player1: [
+          { id: 'heart-1', color: 'red', value: 2, type: 'heart' }
+        ]
+      }
+
+      // Test tile already occupied error case (line 600)
+      const validation = validateHeartPlacement(roomData, 'player1', 'heart-1', 0)
+      expect(validation.valid).toBe(false)
+      expect(validation.error).toBe("Tile is already occupied")
+    })
+
+    it('should handle HeartCard canTargetTile rejection error case', async () => {
+      const { validateHeartPlacement, generateTiles } = await import('../utils/server-test-utils.js')
+
+      const roomData = createMockRoom('CTGTI01')
+      roomData.gameState.gameStarted = true
+      roomData.gameState.currentPlayer = { userId: 'player1', name: 'Player1' }
+      roomData.gameState.tiles = generateTiles()
+      roomData.gameState.playerHands = {
+        player1: [
+          new HeartCard('heart-1', 'red', 2, '❤️')
+        ]
+      }
+
+      // Mock canTargetTile to return false (line 607 edge case)
+      const originalCanTargetTile = HeartCard.prototype.canTargetTile
+      HeartCard.prototype.canTargetTile = vi.fn().mockReturnValue(false)
+
+      try {
+        const validation = validateHeartPlacement(roomData, 'player1', 'heart-1', 0)
+        expect(validation.valid).toBe(false)
+        expect(validation.error).toBe("This heart cannot be placed on this tile")
+      } finally {
+        HeartCard.prototype.canTargetTile = originalCanTargetTile
+      }
     })
   })
 
