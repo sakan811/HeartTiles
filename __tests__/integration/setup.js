@@ -52,8 +52,6 @@ Math.random = robustMathRandom
 const mockDate = new Date('2024-01-01T00:00:00.000Z')
 global.Date.now = vi.fn(() => mockDate.getTime())
 
-// Import mongoose after unmocking
-import mongoose from 'mongoose'
 import {
   connectToDatabase,
   disconnectDatabase,
@@ -186,9 +184,19 @@ export function createMockUser(userId = 'test-user-1', userName = 'Test User', u
 }
 
 // Helper function to create mock room
-export function createMockRoom(roomCode = 'TEST01') {
-  return {
-    code: roomCode.toUpperCase(),
+export function createMockRoom(roomCode = 'TEST01', overrides = {}) {
+  // Handle case where roomCode is passed as an object (legacy usage)
+  if (typeof roomCode === 'object' && roomCode !== null) {
+    // If roomCode is an object, treat it as overrides and use default room code
+    overrides = roomCode
+    roomCode = 'TEST01'
+  }
+
+  // Ensure roomCode is a string, handle edge cases
+  const roomCodeStr = String(roomCode || 'TEST01')
+
+  const baseRoom = {
+    code: roomCodeStr.toUpperCase(),
     players: [],
     maxPlayers: 2,
     gameState: {
@@ -201,6 +209,16 @@ export function createMockRoom(roomCode = 'TEST01') {
       shields: {},
       turnCount: 0,
       playerActions: {}
+    }
+  }
+
+  // Merge overrides if provided
+  return {
+    ...baseRoom,
+    ...overrides,
+    gameState: {
+      ...baseRoom.gameState,
+      ...(overrides.gameState || {})
     }
   }
 }
