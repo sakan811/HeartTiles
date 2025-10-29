@@ -957,7 +957,7 @@ describe('Server Room Management Integration Tests', () => {
           { userId: 'old-user1', name: 'OldPlayer', ready: true, isReady: true }
         ],
         gameState: {
-          currentPlayer: 'old-user1'
+          currentPlayer: { userId: 'old-user1', name: 'OldPlayer', email: 'old@example.com' }
         }
       }
 
@@ -966,7 +966,12 @@ describe('Server Room Management Integration Tests', () => {
       expect(legacyRoom.players[0].name).toBe('NewPlayer')
       expect(legacyRoom.players[0].email).toBe('new@example.com')
       expect(legacyRoom.players[0].isReady).toBe(true) // Should preserve ready status
-      expect(legacyRoom.gameState.currentPlayer).toEqual({ userId: 'new-user1', name: 'NewPlayer' })
+      expect(legacyRoom.gameState.currentPlayer).toEqual({
+        userId: 'new-user1',
+        name: 'NewPlayer',
+        email: 'new@example.com',
+        isReady: true
+      })
     })
 
     it('should execute starting player selection', () => {
