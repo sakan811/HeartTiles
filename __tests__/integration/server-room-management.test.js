@@ -14,9 +14,16 @@ import {
   clearTurnLocks
 } from '../utils/server-test-utils.js'
 
-function waitFor(socket, event) {
-  return new Promise((resolve) => {
-    socket.once(event, resolve)
+function waitFor(socket, event, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout waiting for '${event}' event after ${timeoutMs}ms`))
+    }, timeoutMs)
+
+    socket.once(event, (data) => {
+      clearTimeout(timer)
+      resolve(data)
+    })
   })
 }
 
@@ -66,6 +73,7 @@ function generateValidRoomCode(prefix = 'TEST') {
 describe('Server Room Management Integration Tests', () => {
   let io, serverSocket, clientSocket, player1Socket, player2Socket
   let httpServer, port
+  let rooms // Shared room state across all socket connections
 
   beforeAll(async () => {
     // Connect to database
@@ -98,10 +106,13 @@ describe('Server Room Management Integration Tests', () => {
         next()
       })
 
+      // Initialize shared room state
+      rooms = new Map()
+
       // Setup socket handlers for room management testing
       io.on('connection', (socket) => {
         serverSocket = socket
-        setupRoomSocketHandlers(socket, io)
+        setupRoomSocketHandlers(socket, io, rooms)
       })
 
       httpServer.listen(() => {
@@ -129,8 +140,7 @@ describe('Server Room Management Integration Tests', () => {
   })
 
   // Setup socket handlers for room management testing
-  function setupRoomSocketHandlers(socket, io) {
-    const rooms = new Map()
+  function setupRoomSocketHandlers(socket, io, rooms) {
 
     socket.on('join-room', async ({ roomCode }) => {
       const { userId, userName, userEmail } = socket.data
@@ -169,7 +179,13 @@ describe('Server Room Management Integration Tests', () => {
 
       const existingPlayer = room.players.find(p => p.userId === userId)
 
-      if (!existingPlayer && room.players.length < room.maxPlayers) {
+      // Check if room is full and player doesn't already exist
+      if (!existingPlayer && room.players.length >= room.maxPlayers) {
+        socket.emit('room-error', 'Room is full')
+        return
+      }
+
+      if (!existingPlayer) {
         room.players.push({
           userId,
           name: userName,
@@ -245,18 +261,48 @@ describe('Server Room Management Integration Tests', () => {
       console.warn('Database clear failed:', error.message)
     }
 
-    // Create authenticated client sockets
+    // Don't clear rooms map here as it might affect test isolation
+    // Let each test manage its own room state
+
+    // Create authenticated client sockets with better error handling
     player1Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: 'player1', userName: 'Player 1', userEmail: 'player1@test.com' }
+      auth: { userId: 'player1', userName: 'Player 1', userEmail: 'player1@test.com' },
+      timeout: 5000
     })
 
     player2Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: 'player2', userName: 'Player 2', userEmail: 'player2@test.com' }
+      auth: { userId: 'player2', userName: 'Player 2', userEmail: 'player2@test.com' },
+      timeout: 5000
     })
 
+    // Wait for connections with timeout and error handling
     await Promise.all([
-      new Promise(resolve => player1Socket.on('connect', resolve)),
-      new Promise(resolve => player2Socket.on('connect', resolve))
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Player 1 connection timeout')), 5000)
+        player1Socket.on('connect', () => {
+          clearTimeout(timer)
+          console.log('Player 1 connected successfully')
+          resolve()
+        })
+        player1Socket.on('connect_error', (err) => {
+          clearTimeout(timer)
+          console.error('Player 1 connection error:', err.message)
+          reject(err)
+        })
+      }),
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Player 2 connection timeout')), 5000)
+        player2Socket.on('connect', () => {
+          clearTimeout(timer)
+          console.log('Player 2 connected successfully')
+          resolve()
+        })
+        player2Socket.on('connect_error', (err) => {
+          clearTimeout(timer)
+          console.error('Player 2 connection error:', err.message)
+          reject(err)
+        })
+      })
     ])
 
     vi.clearAllMocks()
