@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
 import { createServer } from 'node:http'
-import { io as ioc } from 'socket.io-client'
 import { Server } from 'socket.io'
 import {
   connectToDatabase,
@@ -10,12 +9,7 @@ import {
 } from '../utils/server-test-utils.js'
 import { Room } from '../../models.js'
 import { createMockRoom } from './setup.js'
-
-function waitFor(socket, event) {
-  return new Promise((resolve) => {
-    socket.once(event, resolve)
-  })
-}
+import { waitFor, setupTestSockets, cleanupTestSockets } from '../helpers/socket-test-utils.js'
 
 describe('Server Turn Management Integration Tests', () => {
   let io, serverSocket, clientSocket, player1Socket, player2Socket
@@ -30,46 +24,58 @@ describe('Server Turn Management Integration Tests', () => {
     }
 
     // Set up Socket.IO server with turn management handlers
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       httpServer = createServer()
       io = new Server(httpServer, {
         cors: {
           origin: "*",
           methods: ["GET", "POST"]
-        }
+        },
+        transports: ['websocket']
       })
 
       // Mock authentication middleware
       io.use(async (socket, next) => {
-        const { userId, userName, userEmail } = socket.handshake.auth || {}
-        if (!userId || !userName || !userEmail) {
-          return next(new Error('Authentication required'))
+        try {
+          const { userId, userName, userEmail } = socket.handshake.auth || {}
+          if (!userId || !userName || !userEmail) {
+            return next(new Error('Authentication required'))
+          }
+          socket.data.userId = userId
+          socket.data.userEmail = userEmail
+          socket.data.userName = userName
+          socket.data.userSessionId = `session_${userId}`
+          next()
+        } catch (error) {
+          next(error)
         }
-        socket.data.userId = userId
-        socket.data.userEmail = userEmail
-        socket.data.userName = userName
-        socket.data.userSessionId = `session_${userId}`
-        next()
       })
 
       // Setup socket handlers for turn management testing
       io.on('connection', (socket) => {
         serverSocket = socket
+        console.log(`Socket connected: ${socket.id}`)
         setupTurnSocketHandlers(socket, io)
       })
 
-      httpServer.listen(() => {
+      io.on('connect_error', (error) => {
+        console.error('Socket connection error:', error)
+      })
+
+      httpServer.listen(0, () => {
         port = httpServer.address().port
+        console.log(`Test server started on port ${port}`)
         resolve()
       })
+
+      httpServer.on('error', reject)
     })
-  }, 15000)
+  }, 30000)
 
   afterAll(async () => {
-    // Clean up sockets
-    if (player1Socket) player1Socket.disconnect()
-    if (player2Socket) player2Socket.disconnect()
-    if (clientSocket) clientSocket.disconnect()
+    // Clean up sockets with improved error handling
+    cleanupTestSockets({ player1Socket, player2Socket, clientSocket })
+
     if (io) io.close()
     if (httpServer) httpServer.close()
 
@@ -123,11 +129,13 @@ describe('Server Turn Management Integration Tests', () => {
 
     socket.on('join-room', async ({ roomCode }) => {
       const { userId, userName, userEmail } = socket.data
+      console.log(`Player ${userId} joining room ${roomCode}`)
 
       roomCode = roomCode.toUpperCase()
       let room = rooms.get(roomCode)
 
       if (!room) {
+        console.log(`Creating new room ${roomCode}`)
         room = {
           code: roomCode,
           players: [],
@@ -154,6 +162,7 @@ describe('Server Turn Management Integration Tests', () => {
 
       const existingPlayer = room.players.find(p => p.userId === userId)
       if (!existingPlayer && room.players.length < room.maxPlayers) {
+        console.log(`Adding player ${userId} to room ${roomCode}`)
         room.players.push({
           userId,
           name: userName,
@@ -162,10 +171,16 @@ describe('Server Turn Management Integration Tests', () => {
           score: 0,
           joinedAt: new Date()
         })
+      } else if (existingPlayer) {
+        console.log(`Player ${userId} already in room ${roomCode}`)
+      } else {
+        console.log(`Room ${roomCode} is full`)
       }
 
       socket.join(roomCode)
       socket.data.roomCode = roomCode
+
+      console.log(`Room ${roomCode} now has ${room.players.length} players`)
 
       socket.emit('room-joined', {
         players: room.players,
@@ -177,17 +192,26 @@ describe('Server Turn Management Integration Tests', () => {
 
     socket.on('player-ready', async ({ roomCode }) => {
       const { userId } = socket.data
+      console.log(`Player ${userId} ready in room ${roomCode}`)
       const room = rooms.get(roomCode)
 
-      if (!room) return
+      if (!room) {
+        console.log(`Room ${roomCode} not found`)
+        return
+      }
 
       const player = room.players.find(p => p.userId === userId)
-      if (!player) return
+      if (!player) {
+        console.log(`Player ${userId} not found in room ${roomCode}`)
+        return
+      }
 
       player.isReady = !player.isReady
+      console.log(`Player ${userId} ready status: ${player.isReady}`)
 
       // Start game if both players are ready
       if (room.players.length === 2 && room.players.every(p => p.isReady)) {
+        console.log('Starting game - both players ready')
         room.gameState.gameStarted = true
         room.gameState.currentPlayer = room.players[0]
         room.gameState.turnCount = 1
@@ -225,10 +249,14 @@ describe('Server Turn Management Integration Tests', () => {
           const playerSocket = Array.from(io.sockets.sockets.values())
             .find(s => s.data.userId === player.userId)
           if (playerSocket) {
+            console.log(`Emitting game-start to player ${player.userId}`)
             playerSocket.emit('game-start', { ...gameStartData, playerId: player.userId })
+          } else {
+            console.log(`No socket found for player ${player.userId}`)
           }
         })
       } else {
+        console.log(`Game not starting. Players: ${room.players.length}, Ready: ${room.players.map(p => `${p.userId}: ${p.isReady}`).join(', ')}`)
         io.to(roomCode).emit('player-ready', { players: room.players })
       }
     })
@@ -316,19 +344,10 @@ describe('Server Turn Management Integration Tests', () => {
       console.warn('Database clear failed:', error.message)
     }
 
-    // Create authenticated client sockets
-    player1Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: 'player1', userName: 'Player 1', userEmail: 'player1@test.com' }
-    })
-
-    player2Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: 'player2', userName: 'Player 2', userEmail: 'player2@test.com' }
-    })
-
-    await Promise.all([
-      new Promise(resolve => player1Socket.on('connect', resolve)),
-      new Promise(resolve => player2Socket.on('connect', resolve))
-    ])
+    // Create authenticated client sockets with improved error handling
+    const sockets = await setupTestSockets(port)
+    player1Socket = sockets.player1Socket
+    player2Socket = sockets.player2Socket
 
     vi.clearAllMocks()
     global.turnLocks = new Map()
@@ -339,21 +358,33 @@ describe('Server Turn Management Integration Tests', () => {
     if (global.turnLocks) {
       global.turnLocks.clear()
     }
+
+    // Clean up socket connections with improved error handling
+    cleanupTestSockets({ player1Socket, player2Socket, clientSocket })
   })
 
   describe('Socket.IO Turn Management Events', () => {
     it('should handle turn changes via Socket.IO events', async () => {
       const roomCode = 'TURN01'
 
+      console.log('Starting test - player1Socket connected:', player1Socket.connected)
+      console.log('Starting test - player2Socket connected:', player2Socket.connected)
+
       // Both players join and ready up
+      console.log('Emitting join-room events')
       player1Socket.emit('join-room', { roomCode })
       player2Socket.emit('join-room', { roomCode })
+
+      console.log('Waiting for room-joined events')
       await waitFor(player1Socket, 'room-joined')
       await waitFor(player2Socket, 'room-joined')
+      console.log('Both players joined room')
 
+      console.log('Emitting player-ready events')
       player1Socket.emit('player-ready', { roomCode })
       player2Socket.emit('player-ready', { roomCode })
 
+      console.log('Waiting for game-start event')
       const gameStartData = await waitFor(player1Socket, 'game-start')
       expect(gameStartData.currentPlayer.userId).toBe('player1')
       expect(gameStartData.turnCount).toBe(1)
