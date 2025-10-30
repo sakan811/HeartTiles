@@ -10,16 +10,18 @@ function waitFor(socket, event) {
   });
 }
 
+// Shared rooms Map for all sockets in the test server
+const sharedTestRooms = new Map();
+
 // Enhanced socket handlers for testing with real game logic
 function setupBasicSocketHandlers(socket, io) {
-  const rooms = new Map();
 
   socket.on('join-room', (data) => {
     const { roomCode } = data;
     const { userId, userName, userEmail } = socket.data || {};
 
-    if (!rooms.has(roomCode)) {
-      rooms.set(roomCode, {
+    if (!sharedTestRooms.has(roomCode)) {
+      sharedTestRooms.set(roomCode, {
         code: roomCode,
         players: [],
         maxPlayers: 2,
@@ -42,7 +44,7 @@ function setupBasicSocketHandlers(socket, io) {
       });
     }
 
-    const room = rooms.get(roomCode);
+    const room = sharedTestRooms.get(roomCode);
 
     // Check if room is full
     if (room.players.length >= room.maxPlayers) {
@@ -78,7 +80,7 @@ function setupBasicSocketHandlers(socket, io) {
   socket.on('player-ready', (data) => {
     const { roomCode } = data;
     const { userId } = socket.data || {};
-    const room = rooms.get(roomCode);
+    const room = sharedTestRooms.get(roomCode);
 
     if (!room) {
       socket.emit('room-error', 'Room not found');
@@ -147,7 +149,7 @@ function setupBasicSocketHandlers(socket, io) {
   socket.on('leave-room', (data) => {
     const { roomCode } = data;
     const { userId } = socket.data || {};
-    const room = rooms.get(roomCode);
+    const room = sharedTestRooms.get(roomCode);
 
     if (room) {
       room.players = room.players.filter(p => p.userId !== (userId || socket.userId));
@@ -160,7 +162,7 @@ function setupBasicSocketHandlers(socket, io) {
       });
 
       if (room.players.length === 0) {
-        rooms.delete(roomCode);
+        sharedTestRooms.delete(roomCode);
       }
     }
   });
@@ -170,12 +172,12 @@ function setupBasicSocketHandlers(socket, io) {
     const { userId } = socket.data || {};
 
     if (roomCode) {
-      const room = rooms.get(roomCode);
+      const room = sharedTestRooms.get(roomCode);
       if (room) {
         room.players = room.players.filter(p => p.userId !== (userId || socket.userId));
 
         if (room.players.length === 0) {
-          rooms.delete(roomCode);
+          sharedTestRooms.delete(roomCode);
         } else {
           io.to(roomCode).emit('player-left', {
             roomCode,
@@ -231,13 +233,13 @@ describe('Socket.IO Events Integration Tests', () => {
 
   // Setup and cleanup for each test
   beforeEach(() => {
-    testRooms.clear();
+    sharedTestRooms.clear();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     // Clean up rooms created during this test
-    testRooms.clear();
+    sharedTestRooms.clear();
   });
 
   describe('Enhanced Socket.IO Event Patterns', () => {
@@ -445,10 +447,39 @@ describe('Socket.IO Events Integration Tests', () => {
       client2.disconnect();
     });
 
-    it('should handle player not in room errors', async () => {
+    it('should handle room not found errors', async () => {
       const roomCode = 'ERROR01';
 
-      // Try to ready up without joining room
+      // Try to ready up in a room that doesn't exist
+      clientSocket.emit('player-ready', { roomCode });
+      const errorEvent = await waitFor(clientSocket, 'room-error');
+      expect(errorEvent).toBe('Room not found');
+    });
+
+    it('should handle player not in room errors', async () => {
+      const roomCode = 'PLAYERNOT01';
+
+      // First, manually create a room in the shared testRooms
+      sharedTestRooms.set(roomCode, {
+        code: roomCode,
+        players: [
+          { userId: 'user2', userName: 'User 2', isReady: false, score: 0 }
+        ],
+        maxPlayers: 2,
+        gameState: {
+          tiles: [],
+          gameStarted: false,
+          currentPlayer: null,
+          deck: { emoji: '💌', cards: 16, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+          playerHands: {},
+          shields: {},
+          turnCount: 0,
+          playerActions: {}
+        }
+      });
+
+      // Client1 (who hasn't joined) tries to ready up in that room
       clientSocket.emit('player-ready', { roomCode });
       const errorEvent = await waitFor(clientSocket, 'room-error');
       expect(errorEvent).toBe('Player not in room');
