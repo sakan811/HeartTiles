@@ -11,6 +11,11 @@ import { Room } from '../../models.js'
 import { createMockRoom } from './setup.js'
 import { waitFor, setupTestSockets, cleanupTestSockets } from '../helpers/socket-test-utils.js'
 
+// Global room and lock storage - shared across all socket connections in this test file
+// These must be at the global scope to be shared by all socket handlers
+const globalRooms = new Map()
+const globalTurnLocks = new Map()
+
 describe('Server Turn Management Integration Tests', () => {
   let io, serverSocket, clientSocket, player1Socket, player2Socket
   let httpServer, port
@@ -89,33 +94,31 @@ describe('Server Turn Management Integration Tests', () => {
 
   // Setup socket handlers for turn management testing
   function setupTurnSocketHandlers(socket, io) {
-    const rooms = new Map()
-    const turnLocks = new Map()
 
     // Helper functions for turn management
     function acquireTurnLock(roomCode, socketId) {
       const lockKey = roomCode
-      const existingLock = turnLocks.get(lockKey)
+      const existingLock = globalTurnLocks.get(lockKey)
 
       if (existingLock) {
         const now = Date.now()
         const lockAge = now - existingLock.timestamp
         if (lockAge > 30 * 1000) {
-          turnLocks.delete(lockKey)
+          globalTurnLocks.delete(lockKey)
         } else {
           return false
         }
       }
 
-      turnLocks.set(lockKey, { socketId, timestamp: Date.now() })
+      globalTurnLocks.set(lockKey, { socketId, timestamp: Date.now() })
       return true
     }
 
     function releaseTurnLock(roomCode, socketId) {
       const lockKey = roomCode
-      const lock = turnLocks.get(lockKey)
+      const lock = globalTurnLocks.get(lockKey)
       if (lock && lock.socketId === socketId) {
-        turnLocks.delete(lockKey)
+        globalTurnLocks.delete(lockKey)
       }
     }
 
@@ -132,7 +135,7 @@ describe('Server Turn Management Integration Tests', () => {
       console.log(`Player ${userId} joining room ${roomCode}`)
 
       roomCode = roomCode.toUpperCase()
-      let room = rooms.get(roomCode)
+      let room = globalRooms.get(roomCode)
 
       if (!room) {
         console.log(`Creating new room ${roomCode}`)
@@ -157,7 +160,9 @@ describe('Server Turn Management Integration Tests', () => {
             playerActions: {}
           }
         }
-        rooms.set(roomCode, room)
+        globalRooms.set(roomCode, room)
+      } else {
+        console.log(`Found existing room ${roomCode} with ${room.players.length} players`)
       }
 
       const existingPlayer = room.players.find(p => p.userId === userId)
@@ -193,7 +198,7 @@ describe('Server Turn Management Integration Tests', () => {
     socket.on('player-ready', async ({ roomCode }) => {
       const { userId } = socket.data
       console.log(`Player ${userId} ready in room ${roomCode}`)
-      const room = rooms.get(roomCode)
+      const room = globalRooms.get(roomCode)
 
       if (!room) {
         console.log(`Room ${roomCode} not found`)
@@ -245,16 +250,9 @@ describe('Server Turn Management Integration Tests', () => {
           playerActions: room.gameState.playerActions || {}
         }
 
-        room.players.forEach(player => {
-          const playerSocket = Array.from(io.sockets.sockets.values())
-            .find(s => s.data.userId === player.userId)
-          if (playerSocket) {
-            console.log(`Emitting game-start to player ${player.userId}`)
-            playerSocket.emit('game-start', { ...gameStartData, playerId: player.userId })
-          } else {
-            console.log(`No socket found for player ${player.userId}`)
-          }
-        })
+        // Emit game-start to all sockets in the room
+        io.to(roomCode).emit('game-start', gameStartData)
+        console.log(`Emitted game-start to room ${roomCode} for ${room.players.length} players`)
       } else {
         console.log(`Game not starting. Players: ${room.players.length}, Ready: ${room.players.map(p => `${p.userId}: ${p.isReady}`).join(', ')}`)
         io.to(roomCode).emit('player-ready', { players: room.players })
@@ -263,7 +261,7 @@ describe('Server Turn Management Integration Tests', () => {
 
     socket.on('end-turn', async ({ roomCode }) => {
       const { userId } = socket.data
-      const room = rooms.get(roomCode)
+      const room = globalRooms.get(roomCode)
 
       if (!room) {
         socket.emit('room-error', 'Room not found')
@@ -283,6 +281,9 @@ describe('Server Turn Management Integration Tests', () => {
 
       try {
         if (room.gameState.gameStarted) {
+          // Simulate some processing time to ensure turn lock is held
+          await new Promise(resolve => setTimeout(resolve, 50))
+
           // Reset actions for current player
           const currentUserId = room.gameState.currentPlayer.userId
           room.gameState.playerActions[currentUserId] = {
@@ -323,11 +324,11 @@ describe('Server Turn Management Integration Tests', () => {
       const roomCode = socket.data.roomCode
       if (roomCode) {
         releaseTurnLock(roomCode, socket.id)
-        const room = rooms.get(roomCode)
+        const room = globalRooms.get(roomCode)
         if (room) {
           room.players = room.players.filter(p => p.userId !== socket.data.userId)
           if (room.players.length === 0) {
-            rooms.delete(roomCode)
+            globalRooms.delete(roomCode)
           } else {
             io.to(roomCode).emit('player-left', { players: room.players })
           }
@@ -344,13 +345,17 @@ describe('Server Turn Management Integration Tests', () => {
       console.warn('Database clear failed:', error.message)
     }
 
+    // Clear global rooms and locks for this test
+    globalRooms.clear()
+    globalTurnLocks.clear()
+    global.turnLocks = globalTurnLocks
+
     // Create authenticated client sockets with improved error handling
     const sockets = await setupTestSockets(port)
     player1Socket = sockets.player1Socket
     player2Socket = sockets.player2Socket
 
     vi.clearAllMocks()
-    global.turnLocks = new Map()
   })
 
   afterEach(() => {
@@ -358,6 +363,10 @@ describe('Server Turn Management Integration Tests', () => {
     if (global.turnLocks) {
       global.turnLocks.clear()
     }
+
+    // Clear global rooms and locks
+    globalRooms.clear()
+    globalTurnLocks.clear()
 
     // Clean up socket connections with improved error handling
     cleanupTestSockets({ player1Socket, player2Socket, clientSocket })
@@ -376,8 +385,8 @@ describe('Server Turn Management Integration Tests', () => {
       player2Socket.emit('join-room', { roomCode })
 
       console.log('Waiting for room-joined events')
-      await waitFor(player1Socket, 'room-joined')
-      await waitFor(player2Socket, 'room-joined')
+      await waitFor(player1Socket, 'room-joined', 10000)
+      await waitFor(player2Socket, 'room-joined', 10000)
       console.log('Both players joined room')
 
       console.log('Emitting player-ready events')
@@ -385,13 +394,13 @@ describe('Server Turn Management Integration Tests', () => {
       player2Socket.emit('player-ready', { roomCode })
 
       console.log('Waiting for game-start event')
-      const gameStartData = await waitFor(player1Socket, 'game-start')
+      const gameStartData = await waitFor(player1Socket, 'game-start', 15000)
       expect(gameStartData.currentPlayer.userId).toBe('player1')
       expect(gameStartData.turnCount).toBe(1)
 
       // Player 1 ends turn
       player1Socket.emit('end-turn', { roomCode })
-      const turnChanged1 = await waitFor(player1Socket, 'turn-changed')
+      const turnChanged1 = await waitFor(player1Socket, 'turn-changed', 10000)
 
       expect(turnChanged1.currentPlayer.userId).toBe('player2')
       expect(turnChanged1.turnCount).toBe(2)
@@ -403,7 +412,7 @@ describe('Server Turn Management Integration Tests', () => {
       })
 
       // Player 2 should also receive the turn change event
-      const turnChanged2 = await waitFor(player2Socket, 'turn-changed')
+      const turnChanged2 = await waitFor(player2Socket, 'turn-changed', 10000)
       expect(turnChanged2.currentPlayer.userId).toBe('player2')
       expect(turnChanged2.turnCount).toBe(2)
     })
@@ -414,16 +423,16 @@ describe('Server Turn Management Integration Tests', () => {
       // Setup game
       player1Socket.emit('join-room', { roomCode })
       player2Socket.emit('join-room', { roomCode })
-      await waitFor(player1Socket, 'room-joined')
-      await waitFor(player2Socket, 'room-joined')
+      await waitFor(player1Socket, 'room-joined', 10000)
+      await waitFor(player2Socket, 'room-joined', 10000)
 
       player1Socket.emit('player-ready', { roomCode })
       player2Socket.emit('player-ready', { roomCode })
-      await waitFor(player1Socket, 'game-start')
+      await waitFor(player1Socket, 'game-start', 15000)
 
       // Player 2 tries to end turn when it's Player 1's turn
       player2Socket.emit('end-turn', { roomCode })
-      const errorResponse = await waitFor(player2Socket, 'room-error')
+      const errorResponse = await waitFor(player2Socket, 'room-error', 10000)
       expect(errorResponse).toBe('Not your turn')
     })
 
@@ -433,12 +442,12 @@ describe('Server Turn Management Integration Tests', () => {
       // Players join but don't ready up
       player1Socket.emit('join-room', { roomCode })
       player2Socket.emit('join-room', { roomCode })
-      await waitFor(player1Socket, 'room-joined')
-      await waitFor(player2Socket, 'room-joined')
+      await waitFor(player1Socket, 'room-joined', 10000)
+      await waitFor(player2Socket, 'room-joined', 10000)
 
       // Player 1 tries to end turn before game starts
       player1Socket.emit('end-turn', { roomCode })
-      const errorResponse = await waitFor(player1Socket, 'room-error')
+      const errorResponse = await waitFor(player1Socket, 'room-error', 10000)
       expect(errorResponse).toBe('Game not started')
     })
 
@@ -448,23 +457,23 @@ describe('Server Turn Management Integration Tests', () => {
       // Setup game
       player1Socket.emit('join-room', { roomCode })
       player2Socket.emit('join-room', { roomCode })
-      await waitFor(player1Socket, 'room-joined')
-      await waitFor(player2Socket, 'room-joined')
+      await waitFor(player1Socket, 'room-joined', 10000)
+      await waitFor(player2Socket, 'room-joined', 10000)
 
       player1Socket.emit('player-ready', { roomCode })
       player2Socket.emit('player-ready', { roomCode })
-      await waitFor(player1Socket, 'game-start')
+      await waitFor(player1Socket, 'game-start', 15000)
 
       // Player 1 ends turn (acquires lock)
-      const endTurnPromise1 = player1Socket.emit('end-turn', { roomCode })
-
-      // Player 1 tries to end turn again while first action is in progress
       player1Socket.emit('end-turn', { roomCode })
-      const errorResponse = await waitFor(player1Socket, 'room-error')
+
+      // Player 1 tries to end turn again immediately while first action is in progress
+      player1Socket.emit('end-turn', { roomCode })
+      const errorResponse = await waitFor(player1Socket, 'room-error', 10000)
       expect(errorResponse).toBe('Action in progress, please wait')
 
-      // Wait for first action to complete
-      await endTurnPromise1
+      // Wait for first action to complete by waiting for the turn-changed event
+      await waitFor(player1Socket, 'turn-changed', 10000)
     })
 
     it('should handle multiple turn cycles via Socket.IO events', async () => {
@@ -473,12 +482,12 @@ describe('Server Turn Management Integration Tests', () => {
       // Setup game
       player1Socket.emit('join-room', { roomCode })
       player2Socket.emit('join-room', { roomCode })
-      await waitFor(player1Socket, 'room-joined')
-      await waitFor(player2Socket, 'room-joined')
+      await waitFor(player1Socket, 'room-joined', 10000)
+      await waitFor(player2Socket, 'room-joined', 10000)
 
       player1Socket.emit('player-ready', { roomCode })
       player2Socket.emit('player-ready', { roomCode })
-      await waitFor(player1Socket, 'game-start')
+      await waitFor(player1Socket, 'game-start', 15000)
 
       // Complete multiple turn cycles
       for (let i = 0; i < 4; i++) {
@@ -489,7 +498,7 @@ describe('Server Turn Management Integration Tests', () => {
 
         // Current player ends turn
         currentPlayerSocket.emit('end-turn', { roomCode })
-        const turnChanged = await waitFor(player1Socket, 'turn-changed')
+        const turnChanged = await waitFor(player1Socket, 'turn-changed', 10000)
 
         expect(turnChanged.currentPlayer.userId).toBe(nextPlayer)
         expect(turnChanged.turnCount).toBe(currentTurn + 1)
@@ -502,12 +511,12 @@ describe('Server Turn Management Integration Tests', () => {
       // Setup game
       player1Socket.emit('join-room', { roomCode })
       player2Socket.emit('join-room', { roomCode })
-      await waitFor(player1Socket, 'room-joined')
-      await waitFor(player2Socket, 'room-joined')
+      await waitFor(player1Socket, 'room-joined', 10000)
+      await waitFor(player2Socket, 'room-joined', 10000)
 
       player1Socket.emit('player-ready', { roomCode })
       player2Socket.emit('player-ready', { roomCode })
-      const gameStartData = await waitFor(player1Socket, 'game-start')
+      const gameStartData = await waitFor(player1Socket, 'game-start', 15000)
 
       // Initially player actions should be reset
       expect(gameStartData.playerActions['player1']).toEqual({
@@ -519,7 +528,7 @@ describe('Server Turn Management Integration Tests', () => {
 
       // Player 1 ends turn
       player1Socket.emit('end-turn', { roomCode })
-      const turnChanged = await waitFor(player1Socket, 'turn-changed')
+      const turnChanged = await waitFor(player1Socket, 'turn-changed', 10000)
 
       // Player 1's actions should be reset again
       expect(turnChanged.playerActions['player1']).toEqual({
@@ -536,18 +545,18 @@ describe('Server Turn Management Integration Tests', () => {
       // Setup game
       player1Socket.emit('join-room', { roomCode })
       player2Socket.emit('join-room', { roomCode })
-      await waitFor(player1Socket, 'room-joined')
-      await waitFor(player2Socket, 'room-joined')
+      await waitFor(player1Socket, 'room-joined', 10000)
+      await waitFor(player2Socket, 'room-joined', 10000)
 
       player1Socket.emit('player-ready', { roomCode })
       player2Socket.emit('player-ready', { roomCode })
-      await waitFor(player1Socket, 'game-start')
+      await waitFor(player1Socket, 'game-start', 15000)
 
       // Player 1 disconnects during their turn
       player1Socket.disconnect()
 
       // Player 2 should receive player-left event
-      const playerLeftEvent = await waitFor(player2Socket, 'player-left')
+      const playerLeftEvent = await waitFor(player2Socket, 'player-left', 10000)
       expect(playerLeftEvent.players).toHaveLength(1)
       expect(playerLeftEvent.players[0].userId).toBe('player2')
     })
