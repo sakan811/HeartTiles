@@ -1,5 +1,8 @@
 // Integration tests for User schema pre-save middleware with real MongoDB and bcrypt
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
+import { createServer } from 'node:http'
+import { io as ioc } from 'socket.io-client'
+import { Server } from 'socket.io'
 import bcrypt from 'bcryptjs'
 
 // Import real database utilities and models
@@ -12,10 +15,37 @@ import {
 // Import the real User model - no mocking for integration tests
 import { User } from '../../models.js'
 
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve)
+  })
+}
+
 describe('User Schema Pre-Save Middleware Integration Tests', () => {
   let connection
+  let io, serverSocket, clientSocket
 
   beforeAll(async () => {
+    // Set up Socket.IO server
+    await new Promise((resolve) => {
+      const httpServer = createServer()
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      httpServer.listen(() => {
+        const port = httpServer.address().port
+        clientSocket = ioc(`http://localhost:${port}`)
+        io.on("connection", (socket) => {
+          serverSocket = socket
+        })
+        clientSocket.on("connect", resolve)
+      })
+    })
+
     try {
       connection = await connectToDatabase()
       console.log('Database connected for User schema pre-save integration tests')
@@ -30,6 +60,10 @@ describe('User Schema Pre-Save Middleware Integration Tests', () => {
   })
 
   afterAll(async () => {
+    // Clean up Socket.IO server
+    if (io) io.close()
+    if (clientSocket) clientSocket.disconnect()
+
     try {
       if (connection) {
         await disconnectDatabase()
