@@ -1056,63 +1056,69 @@ app.prepare().then(async () => {
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
 
-      if (room) {
-        const player = room.players.find(p => p.userId === userId);
-        if (player) {
-          player.isReady = !player.isReady;
-          io.to(roomCode).emit("player-ready", { players: room.players });
+      if (!room) {
+        socket.emit("room-error", "Room not found");
+        return;
+      }
 
-          if (room.players.length === 2 && room.players.every(p => p.isReady)) {
-            console.log(`Game starting in room ${roomCode}`);
+      const player = room.players.find(p => p.userId === userId);
+      if (!player) {
+        socket.emit("room-error", "Player not in room");
+        return;
+      }
 
-            room.gameState.tiles = generateTiles();
-            room.gameState.gameStarted = true;
-            room.gameState.deck.cards = 16;
-            room.gameState.magicDeck.cards = 16;
-            room.gameState.playerActions = {};
-            await saveRoom(room);
+      player.isReady = !player.isReady;
+      io.to(roomCode).emit("player-ready", { players: room.players });
 
-            room.players.forEach(player => {
-              room.gameState.playerHands[player.userId] = [];
-              for (let i = 0; i < 3; i++) {
-                room.gameState.playerHands[player.userId].push(generateSingleHeart());
-              }
-              for (let i = 0; i < 2; i++) {
-                room.gameState.playerHands[player.userId].push(generateSingleMagicCard());
-              }
-            });
+      if (room.players.length === 2 && room.players.every(p => p.isReady)) {
+        console.log(`Game starting in room ${roomCode}`);
 
-            room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
-            room.gameState.turnCount = 1;
+        room.gameState.tiles = generateTiles();
+        room.gameState.gameStarted = true;
+        room.gameState.deck.cards = 16;
+        room.gameState.magicDeck.cards = 16;
+        room.gameState.playerActions = {};
+        await saveRoom(room);
 
-            const playersWithHands = room.players.map(player => ({
-              ...player,
-              hand: room.gameState.playerHands[player.userId] || [],
-              score: player.score || 0
-            }));
-
-            const gameStartData = {
-              tiles: room.gameState.tiles,
-              currentPlayer: room.gameState.currentPlayer,
-              players: playersWithHands,
-              playerHands: room.gameState.playerHands,
-              deck: room.gameState.deck,
-              magicDeck: room.gameState.magicDeck,
-              turnCount: room.gameState.turnCount,
-              shields: room.gameState.shields || {},
-              playerActions: room.gameState.playerActions || {}
-            };
-
-            room.players.forEach(player => {
-              const personalizedData = { ...gameStartData, playerId: player.userId };
-              const playerSocket = Array.from(io.sockets.sockets.values())
-                .find(s => s.data.userId === player.userId);
-              if (playerSocket) {
-                playerSocket.emit("game-start", personalizedData);
-              }
-            });
+        room.players.forEach(player => {
+          room.gameState.playerHands[player.userId] = [];
+          for (let i = 0; i < 3; i++) {
+            room.gameState.playerHands[player.userId].push(generateSingleHeart());
           }
-        }
+          for (let i = 0; i < 2; i++) {
+            room.gameState.playerHands[player.userId].push(generateSingleMagicCard());
+          }
+        });
+
+        room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
+        room.gameState.turnCount = 1;
+
+        const playersWithHands = room.players.map(player => ({
+          ...player,
+          hand: room.gameState.playerHands[player.userId] || [],
+          score: player.score || 0
+        }));
+
+        const gameStartData = {
+          tiles: room.gameState.tiles,
+          currentPlayer: room.gameState.currentPlayer,
+          players: playersWithHands,
+          playerHands: room.gameState.playerHands,
+          deck: room.gameState.deck,
+          magicDeck: room.gameState.magicDeck,
+          turnCount: room.gameState.turnCount,
+          shields: room.gameState.shields || {},
+          playerActions: room.gameState.playerActions || {}
+        };
+
+        room.players.forEach(player => {
+          const personalizedData = { ...gameStartData, playerId: player.userId };
+          const playerSocket = Array.from(io.sockets.sockets.values())
+            .find(s => s.data.userId === player.userId);
+          if (playerSocket) {
+            playerSocket.emit("game-start", personalizedData);
+          }
+        });
       }
     });
 
