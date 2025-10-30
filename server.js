@@ -39,6 +39,26 @@ function _deleteKey(container, key) {
 
 async function connectToDatabase() {
   try {
+    // Check if already connected
+    if (mongoose.connection.readyState === 1) {
+      console.log('Already connected to MongoDB');
+      return mongoose.connection;
+    }
+
+    // Check if connecting
+    if (mongoose.connection.readyState === 2) {
+      console.log('Already connecting to MongoDB...');
+      // Wait for connection to complete
+      return new Promise((resolve, reject) => {
+        mongoose.connection.once('connected', () => {
+          console.log('Connected to MongoDB');
+          resolve(mongoose.connection);
+        });
+        mongoose.connection.once('error', reject);
+      });
+    }
+
+    // New connection
     await mongoose.connect(MONGODB_URI);
     console.log('Connected to MongoDB');
     return mongoose.connection;
