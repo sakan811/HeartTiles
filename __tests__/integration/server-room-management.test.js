@@ -384,15 +384,26 @@ describe('Server Room Management Integration Tests', () => {
       player2Socket.emit('join-room', { roomCode })
       await waitFor(player2Socket, 'room-joined')
 
+      // Set up event listeners BEFORE emitting leave-room to avoid race conditions
+      const player1LeavePromise = waitFor(player1Socket, 'player-left')
+      const player2LeavePromise = waitFor(player2Socket, 'player-left')
+
       // Player 1 leaves room
       player1Socket.emit('leave-room', { roomCode })
-      const leaveEvent = await waitFor(player2Socket, 'player-left')
-      expect(leaveEvent.players).toHaveLength(1)
-      expect(leaveEvent.players[0].userId).toBe('player2')
+
+      // Wait for both players to receive the event
+      const [leaveEvent1, leaveEvent2] = await Promise.all([
+        player1LeavePromise,
+        player2LeavePromise
+      ])
+
+      // Player 2 should see only themselves remaining
+      expect(leaveEvent2.players).toHaveLength(1)
+      expect(leaveEvent2.players[0].userId).toBe('player2')
 
       // Player 1 should also receive the event
-      const leaveEvent1 = await waitFor(player1Socket, 'player-left')
       expect(leaveEvent1.players).toHaveLength(1)
+      expect(leaveEvent1.players[0].userId).toBe('player2')
     })
 
     it('should handle player disconnect cleanup via Socket.IO events', async () => {
@@ -405,11 +416,14 @@ describe('Server Room Management Integration Tests', () => {
       player2Socket.emit('join-room', { roomCode })
       await waitFor(player2Socket, 'room-joined')
 
+      // Set up event listener BEFORE disconnecting to avoid race conditions
+      const disconnectPromise = waitFor(player2Socket, 'player-left')
+
       // Player 1 disconnects
       player1Socket.disconnect()
 
       // Player 2 should receive player-left event
-      const disconnectEvent = await waitFor(player2Socket, 'player-left')
+      const disconnectEvent = await disconnectPromise
       expect(disconnectEvent.players).toHaveLength(1)
       expect(disconnectEvent.players[0].userId).toBe('player2')
     })
