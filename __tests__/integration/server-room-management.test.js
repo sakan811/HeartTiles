@@ -227,13 +227,19 @@ describe('Server Room Management Integration Tests', () => {
 
       if (room) {
         room.players = room.players.filter(player => player.userId !== userId)
+
+        // Emit to the room BEFORE the socket leaves
         io.to(roomCode).emit('player-left', { players: room.players })
+
+        // Also emit directly to the leaving socket to ensure they receive it
+        socket.emit('player-left', { players: room.players })
 
         if (room.players.length === 0) {
           rooms.delete(roomCode)
         }
       }
 
+      // Leave the room AFTER emitting events
       socket.leave(roomCode)
       socket.data.roomCode = null
     })
@@ -262,8 +268,8 @@ describe('Server Room Management Integration Tests', () => {
       console.warn('Database clear failed:', error.message)
     }
 
-    // Don't clear rooms map here as it might affect test isolation
-    // Let each test manage its own room state
+    // Clear rooms map for test isolation
+    rooms.clear()
 
     // Create authenticated client sockets using test utilities
     player1Socket = createAuthenticatedClient(port, 'player1')
@@ -344,18 +350,12 @@ describe('Server Room Management Integration Tests', () => {
     })
 
     it('should handle player ready toggle via Socket.IO events', async () => {
-      const roomCode = 'READY01'
-
-      // Ensure sockets are connected
-      console.log(`Test Debug: Player1 socket connected: ${player1Socket.connected}`)
-      console.log(`Test Debug: Player2 socket connected: ${player2Socket.connected}`)
+      const roomCode = 'READY1'
 
       // Both players join - sequential to avoid race conditions
-      console.log(`Test Debug: Player1 joining room ${roomCode}`)
       player1Socket.emit('join-room', { roomCode })
       await waitFor(player1Socket, 'room-joined')
 
-      console.log(`Test Debug: Player2 joining room ${roomCode}`)
       player2Socket.emit('join-room', { roomCode })
       await waitFor(player2Socket, 'room-joined')
 
@@ -375,7 +375,7 @@ describe('Server Room Management Integration Tests', () => {
     })
 
     it('should handle room leaving via Socket.IO events', async () => {
-      const roomCode = 'LEAVE01'
+      const roomCode = 'LEAVE1'
 
       // Both players join - sequential to avoid race conditions
       player1Socket.emit('join-room', { roomCode })
