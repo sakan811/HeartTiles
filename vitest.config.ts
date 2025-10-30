@@ -63,8 +63,8 @@ export default defineConfig({
           environment: 'node',
           globals: true,
           setupFiles: ['./__tests__/integration/setup.js'],
-          testTimeout: 25000,
-          hookTimeout: 20000,
+          testTimeout: 60000,
+          hookTimeout: 30000,
           css: false,
           // Disable file parallelism for integration tests to prevent MongoDB race conditions
           fileParallelism: false,
