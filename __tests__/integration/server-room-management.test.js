@@ -14,18 +14,13 @@ import {
   clearTurnLocks
 } from '../utils/server-test-utils.js'
 
-function waitFor(socket, event, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Timeout waiting for '${event}' event after ${timeoutMs}ms`))
-    }, timeoutMs)
-
-    socket.once(event, (data) => {
-      clearTimeout(timer)
-      resolve(data)
-    })
-  })
-}
+// Import better test utilities for Socket.IO testing
+import {
+  waitFor,
+  waitForConnection,
+  createAuthenticatedClient,
+  cleanupClients
+} from '../helpers/test-utils.js'
 
 // Import real server functions to ensure server.js code is executed and covered
 import {
@@ -93,16 +88,24 @@ describe('Server Room Management Integration Tests', () => {
         }
       })
 
-      // Mock authentication middleware
+      // Mock authentication middleware - matches createAuthenticatedClient pattern
       io.use(async (socket, next) => {
-        const { userId, userName, userEmail } = socket.handshake.auth || {}
+        // Support both direct auth and token-based auth from test utilities
+        const auth = socket.handshake.auth || {}
+        const token = auth.token || {}
+
+        const userId = token.id || auth.userId
+        const userName = token.name || auth.userName
+        const userEmail = token.email || auth.userEmail
+
         if (!userId || !userName || !userEmail) {
           return next(new Error('Authentication required'))
         }
+
         socket.data.userId = userId
         socket.data.userEmail = userEmail
         socket.data.userName = userName
-        socket.data.userSessionId = `session_${userId}`
+        socket.data.userSessionId = token.jti || `session_${userId}`
         next()
       })
 
@@ -123,10 +126,8 @@ describe('Server Room Management Integration Tests', () => {
   }, 15000)
 
   afterAll(async () => {
-    // Cleanup sockets
-    if (player1Socket) player1Socket.disconnect()
-    if (player2Socket) player2Socket.disconnect()
-    if (clientSocket) clientSocket.disconnect()
+    // Cleanup sockets using test utilities
+    cleanupClients([player1Socket, player2Socket, clientSocket])
     if (io) io.close()
     if (httpServer) httpServer.close()
 
@@ -199,7 +200,7 @@ describe('Server Room Management Integration Tests', () => {
       socket.join(roomCode)
       socket.data.roomCode = roomCode
 
-      socket.emit('room-joined', {
+      io.to(socket.id).emit('room-joined', {
         players: room.players,
         playerId: userId
       })
@@ -264,45 +265,14 @@ describe('Server Room Management Integration Tests', () => {
     // Don't clear rooms map here as it might affect test isolation
     // Let each test manage its own room state
 
-    // Create authenticated client sockets with better error handling
-    player1Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: 'player1', userName: 'Player 1', userEmail: 'player1@test.com' },
-      timeout: 5000
-    })
+    // Create authenticated client sockets using test utilities
+    player1Socket = createAuthenticatedClient(port, 'player1')
+    player2Socket = createAuthenticatedClient(port, 'player2')
 
-    player2Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: 'player2', userName: 'Player 2', userEmail: 'player2@test.com' },
-      timeout: 5000
-    })
-
-    // Wait for connections with timeout and error handling
+    // Wait for connections using test utilities
     await Promise.all([
-      new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('Player 1 connection timeout')), 5000)
-        player1Socket.on('connect', () => {
-          clearTimeout(timer)
-          console.log('Player 1 connected successfully')
-          resolve()
-        })
-        player1Socket.on('connect_error', (err) => {
-          clearTimeout(timer)
-          console.error('Player 1 connection error:', err.message)
-          reject(err)
-        })
-      }),
-      new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('Player 2 connection timeout')), 5000)
-        player2Socket.on('connect', () => {
-          clearTimeout(timer)
-          console.log('Player 2 connected successfully')
-          resolve()
-        })
-        player2Socket.on('connect_error', (err) => {
-          clearTimeout(timer)
-          console.error('Player 2 connection error:', err.message)
-          reject(err)
-        })
-      })
+      waitForConnection(player1Socket),
+      waitForConnection(player2Socket)
     ])
 
     vi.clearAllMocks()
@@ -323,7 +293,7 @@ describe('Server Room Management Integration Tests', () => {
 
       expect(joinResponse1.players).toHaveLength(1)
       expect(joinResponse1.players[0].userId).toBe('player1')
-      expect(joinResponse1.players[0].name).toBe('Player 1')
+      expect(joinResponse1.players[0].name).toBe('User player1')
       expect(joinResponse1.players[0].isReady).toBe(false)
       expect(joinResponse1.playerId).toBe('player1')
 
@@ -333,7 +303,7 @@ describe('Server Room Management Integration Tests', () => {
 
       expect(joinResponse2.players).toHaveLength(2)
       expect(joinResponse2.players[1].userId).toBe('player2')
-      expect(joinResponse2.players[1].name).toBe('Player 2')
+      expect(joinResponse2.players[1].name).toBe('User player2')
 
       // Player 1 should also receive player-joined event
       const playerJoinedEvent = await waitFor(player1Socket, 'player-joined')
@@ -361,27 +331,32 @@ describe('Server Room Management Integration Tests', () => {
       player2Socket.emit('join-room', { roomCode })
       await waitFor(player2Socket, 'room-joined')
 
-      // Create player 3 socket
-      const player3Socket = ioc(`http://localhost:${port}`, {
-        auth: { userId: 'player3', userName: 'Player 3', userEmail: 'player3@test.com' }
-      })
-      await new Promise(resolve => player3Socket.on('connect', resolve))
+      // Create player 3 socket using test utilities
+      const player3Socket = createAuthenticatedClient(port, 'player3')
+      await waitForConnection(player3Socket)
 
       // Player 3 tries to join full room
       player3Socket.emit('join-room', { roomCode })
       const errorResponse = await waitFor(player3Socket, 'room-error')
       expect(errorResponse).toBe('Room is full')
 
-      player3Socket.disconnect()
+      cleanupClients([player3Socket])
     })
 
     it('should handle player ready toggle via Socket.IO events', async () => {
       const roomCode = 'READY01'
 
-      // Both players join
+      // Ensure sockets are connected
+      console.log(`Test Debug: Player1 socket connected: ${player1Socket.connected}`)
+      console.log(`Test Debug: Player2 socket connected: ${player2Socket.connected}`)
+
+      // Both players join - sequential to avoid race conditions
+      console.log(`Test Debug: Player1 joining room ${roomCode}`)
       player1Socket.emit('join-room', { roomCode })
-      player2Socket.emit('join-room', { roomCode })
       await waitFor(player1Socket, 'room-joined')
+
+      console.log(`Test Debug: Player2 joining room ${roomCode}`)
+      player2Socket.emit('join-room', { roomCode })
       await waitFor(player2Socket, 'room-joined')
 
       // Player 1 toggles ready to true
@@ -402,10 +377,11 @@ describe('Server Room Management Integration Tests', () => {
     it('should handle room leaving via Socket.IO events', async () => {
       const roomCode = 'LEAVE01'
 
-      // Both players join
+      // Both players join - sequential to avoid race conditions
       player1Socket.emit('join-room', { roomCode })
-      player2Socket.emit('join-room', { roomCode })
       await waitFor(player1Socket, 'room-joined')
+
+      player2Socket.emit('join-room', { roomCode })
       await waitFor(player2Socket, 'room-joined')
 
       // Player 1 leaves room
@@ -422,10 +398,11 @@ describe('Server Room Management Integration Tests', () => {
     it('should handle player disconnect cleanup via Socket.IO events', async () => {
       const roomCode = 'DISC01'
 
-      // Both players join
+      // Both players join - sequential to avoid race conditions
       player1Socket.emit('join-room', { roomCode })
-      player2Socket.emit('join-room', { roomCode })
       await waitFor(player1Socket, 'room-joined')
+
+      player2Socket.emit('join-room', { roomCode })
       await waitFor(player2Socket, 'room-joined')
 
       // Player 1 disconnects

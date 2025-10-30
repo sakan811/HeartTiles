@@ -393,6 +393,65 @@ describe('Server Shield Event Integration', () => {
 
   describe('Shield Protection Event Blocking', () => {
     beforeEach(async () => {
+      // Create test room with game state for shield testing
+      player1Id = 'player1_protected';
+      player2Id = 'player2_attacker';
+
+      testRoom = {
+        code: 'SHIELD_TEST',
+        players: [
+          { userId: player1Id, name: 'Player 1', isReady: true, score: 0 },
+          { userId: player2Id, name: 'Player 2', isReady: true, score: 0 }
+        ],
+        gameState: {
+          tiles: [
+            {
+              id: 1,
+              color: 'red',
+              emoji: '🟥',
+              placedHeart: {
+                color: 'red',
+                value: 2,
+                emoji: '❤️',
+                placedBy: player1Id,
+                originalTileColor: 'red'
+              }
+            },
+            {
+              id: 2,
+              color: 'yellow',
+              emoji: '🟨',
+              placedHeart: {
+                color: 'yellow',
+                value: 1,
+                emoji: '💛',
+                placedBy: player1Id,
+                originalTileColor: 'yellow'
+              }
+            },
+            { id: 3, color: 'green', emoji: '🟩', placedHeart: null },
+            { id: 4, color: 'white', emoji: '⬜', placedHeart: null }
+          ],
+          gameStarted: true,
+          currentPlayer: { userId: player1Id },
+          turnCount: 1,
+          deck: { emoji: '💌', cards: 10, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+          playerHands: {
+            [player1Id]: [
+              { id: 'shield1', type: 'shield', emoji: '🛡️', name: 'Shield Card' },
+              { id: 'heart1', type: 'heart', color: 'red', value: 2, emoji: '❤️' }
+            ],
+            [player2Id]: [
+              { id: 'wind1', type: 'wind', emoji: '💨', name: 'Wind Card' },
+              { id: 'recycle1', type: 'recycle', emoji: '♻️', name: 'Recycle Card' }
+            ]
+          },
+          shields: {},
+          playerActions: {}
+        }
+      };
+
       // Activate shield for player1
       const { ShieldCard } = await import('../../src/lib/cards.js');
       const shield = new ShieldCard('shield1');
