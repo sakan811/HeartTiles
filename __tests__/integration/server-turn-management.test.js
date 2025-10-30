@@ -18,12 +18,20 @@ function waitFor(socket, event) {
 }
 
 describe('Server Turn Management Integration Tests', () => {
-  let io, serverSocket, clientSocket
+  let io, serverSocket, clientSocket, player1Socket, player2Socket
+  let httpServer, port
 
   beforeAll(async () => {
-    // Set up Socket.IO server
-    await new Promise((resolve) => {
-      const httpServer = createServer()
+    // Connect to database
+    try {
+      await connectToDatabase()
+    } catch (error) {
+      console.warn('Database connection failed, skipping tests:', error.message)
+    }
+
+    // Set up Socket.IO server with turn management handlers
+    return new Promise((resolve) => {
+      httpServer = createServer()
       io = new Server(httpServer, {
         cors: {
           origin: "*",
@@ -31,27 +39,39 @@ describe('Server Turn Management Integration Tests', () => {
         }
       })
 
+      // Mock authentication middleware
+      io.use(async (socket, next) => {
+        const { userId, userName, userEmail } = socket.handshake.auth || {}
+        if (!userId || !userName || !userEmail) {
+          return next(new Error('Authentication required'))
+        }
+        socket.data.userId = userId
+        socket.data.userEmail = userEmail
+        socket.data.userName = userName
+        socket.data.userSessionId = `session_${userId}`
+        next()
+      })
+
+      // Setup socket handlers for turn management testing
+      io.on('connection', (socket) => {
+        serverSocket = socket
+        setupTurnSocketHandlers(socket, io)
+      })
+
       httpServer.listen(() => {
-        const port = httpServer.address().port
-        clientSocket = ioc(`http://localhost:${port}`)
-        io.on("connection", (socket) => {
-          serverSocket = socket
-        })
-        clientSocket.on("connect", resolve)
+        port = httpServer.address().port
+        resolve()
       })
     })
-
-    try {
-      await connectToDatabase()
-    } catch (error) {
-      console.warn('Database connection failed, skipping tests:', error.message)
-    }
   }, 15000)
 
   afterAll(async () => {
-    // Clean up Socket.IO server
-    if (io) io.close()
+    // Clean up sockets
+    if (player1Socket) player1Socket.disconnect()
+    if (player2Socket) player2Socket.disconnect()
     if (clientSocket) clientSocket.disconnect()
+    if (io) io.close()
+    if (httpServer) httpServer.close()
 
     try {
       await clearDatabase()
@@ -61,6 +81,233 @@ describe('Server Turn Management Integration Tests', () => {
     }
   })
 
+  // Setup socket handlers for turn management testing
+  function setupTurnSocketHandlers(socket, io) {
+    const rooms = new Map()
+    const turnLocks = new Map()
+
+    // Helper functions for turn management
+    function acquireTurnLock(roomCode, socketId) {
+      const lockKey = roomCode
+      const existingLock = turnLocks.get(lockKey)
+
+      if (existingLock) {
+        const now = Date.now()
+        const lockAge = now - existingLock.timestamp
+        if (lockAge > 30 * 1000) {
+          turnLocks.delete(lockKey)
+        } else {
+          return false
+        }
+      }
+
+      turnLocks.set(lockKey, { socketId, timestamp: Date.now() })
+      return true
+    }
+
+    function releaseTurnLock(roomCode, socketId) {
+      const lockKey = roomCode
+      const lock = turnLocks.get(lockKey)
+      if (lock && lock.socketId === socketId) {
+        turnLocks.delete(lockKey)
+      }
+    }
+
+    function validateTurn(room, userId) {
+      if (!room?.gameState?.gameStarted) return { valid: false, error: "Game not started" }
+      if (!room.gameState.currentPlayer || room.gameState.currentPlayer.userId !== userId) {
+        return { valid: false, error: "Not your turn" }
+      }
+      return { valid: true }
+    }
+
+    socket.on('join-room', async ({ roomCode }) => {
+      const { userId, userName, userEmail } = socket.data
+
+      roomCode = roomCode.toUpperCase()
+      let room = rooms.get(roomCode)
+
+      if (!room) {
+        room = {
+          code: roomCode,
+          players: [],
+          maxPlayers: 2,
+          gameState: {
+            tiles: [
+              { id: 0, color: 'red', emoji: '🟥', placedHeart: null },
+              { id: 1, color: 'yellow', emoji: '🟨', placedHeart: null },
+              { id: 2, color: 'green', emoji: '🟩', placedHeart: null },
+              { id: 3, color: 'white', emoji: '⬜', placedHeart: null }
+            ],
+            gameStarted: false,
+            currentPlayer: null,
+            deck: { emoji: '💌', cards: 16, type: 'hearts' },
+            magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+            playerHands: {},
+            shields: {},
+            turnCount: 0,
+            playerActions: {}
+          }
+        }
+        rooms.set(roomCode, room)
+      }
+
+      const existingPlayer = room.players.find(p => p.userId === userId)
+      if (!existingPlayer && room.players.length < room.maxPlayers) {
+        room.players.push({
+          userId,
+          name: userName,
+          email: userEmail,
+          isReady: false,
+          score: 0,
+          joinedAt: new Date()
+        })
+      }
+
+      socket.join(roomCode)
+      socket.data.roomCode = roomCode
+
+      socket.emit('room-joined', {
+        players: room.players,
+        playerId: userId
+      })
+
+      io.to(roomCode).emit('player-joined', { players: room.players })
+    })
+
+    socket.on('player-ready', async ({ roomCode }) => {
+      const { userId } = socket.data
+      const room = rooms.get(roomCode)
+
+      if (!room) return
+
+      const player = room.players.find(p => p.userId === userId)
+      if (!player) return
+
+      player.isReady = !player.isReady
+
+      // Start game if both players are ready
+      if (room.players.length === 2 && room.players.every(p => p.isReady)) {
+        room.gameState.gameStarted = true
+        room.gameState.currentPlayer = room.players[0]
+        room.gameState.turnCount = 1
+
+        // Initialize player hands and actions
+        room.players.forEach(player => {
+          room.gameState.playerHands[player.userId] = []
+          room.gameState.playerActions[player.userId] = {
+            drawnHeart: false,
+            drawnMagic: false,
+            heartsPlaced: 0,
+            magicCardsUsed: 0
+          }
+        })
+
+        const playersWithHands = room.players.map(player => ({
+          ...player,
+          hand: room.gameState.playerHands[player.userId] || [],
+          score: player.score || 0
+        }))
+
+        const gameStartData = {
+          tiles: room.gameState.tiles,
+          currentPlayer: room.gameState.currentPlayer,
+          players: playersWithHands,
+          playerHands: room.gameState.playerHands,
+          deck: room.gameState.deck,
+          magicDeck: room.gameState.magicDeck,
+          turnCount: room.gameState.turnCount,
+          shields: room.gameState.shields || {},
+          playerActions: room.gameState.playerActions || {}
+        }
+
+        room.players.forEach(player => {
+          const playerSocket = Array.from(io.sockets.sockets.values())
+            .find(s => s.data.userId === player.userId)
+          if (playerSocket) {
+            playerSocket.emit('game-start', { ...gameStartData, playerId: player.userId })
+          }
+        })
+      } else {
+        io.to(roomCode).emit('player-ready', { players: room.players })
+      }
+    })
+
+    socket.on('end-turn', async ({ roomCode }) => {
+      const { userId } = socket.data
+      const room = rooms.get(roomCode)
+
+      if (!room) {
+        socket.emit('room-error', 'Room not found')
+        return
+      }
+
+      const turnValidation = validateTurn(room, userId)
+      if (!turnValidation.valid) {
+        socket.emit('room-error', turnValidation.error)
+        return
+      }
+
+      if (!acquireTurnLock(roomCode, socket.id)) {
+        socket.emit('room-error', 'Action in progress, please wait')
+        return
+      }
+
+      try {
+        if (room.gameState.gameStarted) {
+          // Reset actions for current player
+          const currentUserId = room.gameState.currentPlayer.userId
+          room.gameState.playerActions[currentUserId] = {
+            drawnHeart: false,
+            drawnMagic: false,
+            heartsPlaced: 0,
+            magicCardsUsed: 0
+          }
+
+          // Switch to next player
+          const currentPlayerIndex = room.players.findIndex(p => p.userId === currentUserId)
+          const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length
+
+          room.gameState.currentPlayer = room.players[nextPlayerIndex]
+          room.gameState.turnCount++
+
+          const playersWithHands = room.players.map(player => ({
+            ...player,
+            hand: room.gameState.playerHands[player.userId] || []
+          }))
+
+          io.to(roomCode).emit('turn-changed', {
+            currentPlayer: room.gameState.currentPlayer,
+            turnCount: room.gameState.turnCount,
+            players: playersWithHands,
+            playerHands: room.gameState.playerHands,
+            deck: room.gameState.deck,
+            shields: room.gameState.shields || {},
+            playerActions: room.gameState.playerActions || {}
+          })
+        }
+      } finally {
+        releaseTurnLock(roomCode, socket.id)
+      }
+    })
+
+    socket.on('disconnect', () => {
+      const roomCode = socket.data.roomCode
+      if (roomCode) {
+        releaseTurnLock(roomCode, socket.id)
+        const room = rooms.get(roomCode)
+        if (room) {
+          room.players = room.players.filter(p => p.userId !== socket.data.userId)
+          if (room.players.length === 0) {
+            rooms.delete(roomCode)
+          } else {
+            io.to(roomCode).emit('player-left', { players: room.players })
+          }
+        }
+      }
+    })
+  }
+
   beforeEach(async () => {
     try {
       await clearDatabase()
@@ -68,8 +315,22 @@ describe('Server Turn Management Integration Tests', () => {
     } catch (error) {
       console.warn('Database clear failed:', error.message)
     }
+
+    // Create authenticated client sockets
+    player1Socket = ioc(`http://localhost:${port}`, {
+      auth: { userId: 'player1', userName: 'Player 1', userEmail: 'player1@test.com' }
+    })
+
+    player2Socket = ioc(`http://localhost:${port}`, {
+      auth: { userId: 'player2', userName: 'Player 2', userEmail: 'player2@test.com' }
+    })
+
+    await Promise.all([
+      new Promise(resolve => player1Socket.on('connect', resolve)),
+      new Promise(resolve => player2Socket.on('connect', resolve))
+    ])
+
     vi.clearAllMocks()
-    // Set up global turnLocks for testing
     global.turnLocks = new Map()
   })
 
@@ -78,6 +339,187 @@ describe('Server Turn Management Integration Tests', () => {
     if (global.turnLocks) {
       global.turnLocks.clear()
     }
+  })
+
+  describe('Socket.IO Turn Management Events', () => {
+    it('should handle turn changes via Socket.IO events', async () => {
+      const roomCode = 'TURN01'
+
+      // Both players join and ready up
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      player1Socket.emit('player-ready', { roomCode })
+      player2Socket.emit('player-ready', { roomCode })
+
+      const gameStartData = await waitFor(player1Socket, 'game-start')
+      expect(gameStartData.currentPlayer.userId).toBe('player1')
+      expect(gameStartData.turnCount).toBe(1)
+
+      // Player 1 ends turn
+      player1Socket.emit('end-turn', { roomCode })
+      const turnChanged1 = await waitFor(player1Socket, 'turn-changed')
+
+      expect(turnChanged1.currentPlayer.userId).toBe('player2')
+      expect(turnChanged1.turnCount).toBe(2)
+      expect(turnChanged1.playerActions['player1']).toEqual({
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      })
+
+      // Player 2 should also receive the turn change event
+      const turnChanged2 = await waitFor(player2Socket, 'turn-changed')
+      expect(turnChanged2.currentPlayer.userId).toBe('player2')
+      expect(turnChanged2.turnCount).toBe(2)
+    })
+
+    it('should reject turn ending when not player\'s turn via Socket.IO events', async () => {
+      const roomCode = 'TURN02'
+
+      // Setup game
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      player1Socket.emit('player-ready', { roomCode })
+      player2Socket.emit('player-ready', { roomCode })
+      await waitFor(player1Socket, 'game-start')
+
+      // Player 2 tries to end turn when it's Player 1's turn
+      player2Socket.emit('end-turn', { roomCode })
+      const errorResponse = await waitFor(player2Socket, 'room-error')
+      expect(errorResponse).toBe('Not your turn')
+    })
+
+    it('should reject turn ending when game not started via Socket.IO events', async () => {
+      const roomCode = 'TURN03'
+
+      // Players join but don't ready up
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      // Player 1 tries to end turn before game starts
+      player1Socket.emit('end-turn', { roomCode })
+      const errorResponse = await waitFor(player1Socket, 'room-error')
+      expect(errorResponse).toBe('Game not started')
+    })
+
+    it('should handle turn lock mechanism via Socket.IO events', async () => {
+      const roomCode = 'TURN04'
+
+      // Setup game
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      player1Socket.emit('player-ready', { roomCode })
+      player2Socket.emit('player-ready', { roomCode })
+      await waitFor(player1Socket, 'game-start')
+
+      // Player 1 ends turn (acquires lock)
+      const endTurnPromise1 = player1Socket.emit('end-turn', { roomCode })
+
+      // Player 1 tries to end turn again while first action is in progress
+      player1Socket.emit('end-turn', { roomCode })
+      const errorResponse = await waitFor(player1Socket, 'room-error')
+      expect(errorResponse).toBe('Action in progress, please wait')
+
+      // Wait for first action to complete
+      await endTurnPromise1
+    })
+
+    it('should handle multiple turn cycles via Socket.IO events', async () => {
+      const roomCode = 'TURN05'
+
+      // Setup game
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      player1Socket.emit('player-ready', { roomCode })
+      player2Socket.emit('player-ready', { roomCode })
+      await waitFor(player1Socket, 'game-start')
+
+      // Complete multiple turn cycles
+      for (let i = 0; i < 4; i++) {
+        const currentTurn = i + 1
+        const expectedPlayer = currentTurn % 2 === 1 ? 'player1' : 'player2'
+        const nextPlayer = currentTurn % 2 === 1 ? 'player2' : 'player1'
+        const currentPlayerSocket = expectedPlayer === 'player1' ? player1Socket : player2Socket
+
+        // Current player ends turn
+        currentPlayerSocket.emit('end-turn', { roomCode })
+        const turnChanged = await waitFor(player1Socket, 'turn-changed')
+
+        expect(turnChanged.currentPlayer.userId).toBe(nextPlayer)
+        expect(turnChanged.turnCount).toBe(currentTurn + 1)
+      }
+    })
+
+    it('should reset player actions on turn end via Socket.IO events', async () => {
+      const roomCode = 'TURN06'
+
+      // Setup game
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      player1Socket.emit('player-ready', { roomCode })
+      player2Socket.emit('player-ready', { roomCode })
+      const gameStartData = await waitFor(player1Socket, 'game-start')
+
+      // Initially player actions should be reset
+      expect(gameStartData.playerActions['player1']).toEqual({
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      })
+
+      // Player 1 ends turn
+      player1Socket.emit('end-turn', { roomCode })
+      const turnChanged = await waitFor(player1Socket, 'turn-changed')
+
+      // Player 1's actions should be reset again
+      expect(turnChanged.playerActions['player1']).toEqual({
+        drawnHeart: false,
+        drawnMagic: false,
+        heartsPlaced: 0,
+        magicCardsUsed: 0
+      })
+    })
+
+    it('should handle turn cleanup on player disconnect via Socket.IO events', async () => {
+      const roomCode = 'TURN07'
+
+      // Setup game
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      player1Socket.emit('player-ready', { roomCode })
+      player2Socket.emit('player-ready', { roomCode })
+      await waitFor(player1Socket, 'game-start')
+
+      // Player 1 disconnects during their turn
+      player1Socket.disconnect()
+
+      // Player 2 should receive player-left event
+      const playerLeftEvent = await waitFor(player2Socket, 'player-left')
+      expect(playerLeftEvent.players).toHaveLength(1)
+      expect(playerLeftEvent.players[0].userId).toBe('player2')
+    })
   })
 
   describe('recordCardDraw function with database persistence', () => {

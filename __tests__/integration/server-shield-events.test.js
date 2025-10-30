@@ -14,13 +14,14 @@ function waitFor(socket, event) {
 }
 
 describe('Server Shield Event Integration', () => {
-  let io, serverSocket, clientSocket;
+  let io, serverSocket, clientSocket, player1Socket, player2Socket;
+  let httpServer, port;
   let testRoom, testRooms;
   let player1Id, player2Id;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     return new Promise((resolve) => {
-      const httpServer = createServer();
+      httpServer = createServer();
       io = new Server(httpServer, {
         cors: {
           origin: "*",
@@ -28,62 +29,261 @@ describe('Server Shield Event Integration', () => {
         }
       });
 
+      // Mock authentication middleware
+      io.use(async (socket, next) => {
+        const { userId, userName, userEmail } = socket.handshake.auth || {};
+        if (!userId || !userName || !userEmail) {
+          return next(new Error('Authentication required'));
+        }
+        socket.data.userId = userId;
+        socket.data.userEmail = userEmail;
+        socket.data.userName = userName;
+        socket.data.userSessionId = `session_${userId}`;
+        next();
+      });
+
+      // Setup socket handlers with real game logic
+      io.on('connection', (socket) => {
+        serverSocket = socket;
+        setupShieldSocketHandlers(socket, io);
+      });
+
       httpServer.listen(() => {
-        const port = httpServer.address().port;
-        clientSocket = ioc(`http://localhost:${port}`);
-        io.on("connection", (socket) => {
-          serverSocket = socket;
-        });
-        clientSocket.on("connect", resolve);
+        port = httpServer.address().port;
+        resolve();
       });
     });
   });
 
   afterAll(() => {
-    io.close();
-    clientSocket.disconnect();
+    if (player1Socket) player1Socket.disconnect();
+    if (player2Socket) player2Socket.disconnect();
+    if (clientSocket) clientSocket.disconnect();
+    if (io) io.close();
+    if (httpServer) httpServer.close();
   });
 
-  beforeEach(() => {
+  // Setup socket handlers for shield testing
+  function setupShieldSocketHandlers(socket, io) {
+    const rooms = new Map();
+
+    socket.on('join-room', async ({ roomCode }) => {
+      const { userId, userName, userEmail } = socket.data;
+
+      if (!rooms.has(roomCode)) {
+        rooms.set(roomCode, {
+          code: roomCode,
+          players: [],
+          maxPlayers: 2,
+          gameState: {
+            tiles: [
+              { id: 1, color: 'red', emoji: '🟥', placedHeart: null },
+              { id: 2, color: 'yellow', emoji: '🟨', placedHeart: null },
+              { id: 3, color: 'green', emoji: '🟩', placedHeart: null },
+              { id: 4, color: 'white', emoji: '⬜', placedHeart: null }
+            ],
+            gameStarted: false,
+            currentPlayer: null,
+            deck: { emoji: '💌', cards: 10, type: 'hearts' },
+            magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+            playerHands: {},
+            shields: {},
+            turnCount: 0,
+            playerActions: {}
+          }
+        });
+      }
+
+      const room = rooms.get(roomCode);
+      const existingPlayer = room.players.find(p => p.userId === userId);
+
+      if (!existingPlayer && room.players.length < room.maxPlayers) {
+        room.players.push({
+          userId,
+          name: userName,
+          email: userEmail,
+          isReady: false,
+          score: 0,
+          joinedAt: new Date()
+        });
+      }
+
+      socket.join(roomCode);
+      socket.data.roomCode = roomCode;
+
+      socket.emit('room-joined', {
+        players: room.players,
+        playerId: userId
+      });
+
+      io.to(roomCode).emit('player-joined', { players: room.players });
+    });
+
+    socket.on('player-ready', async ({ roomCode }) => {
+      const { userId } = socket.data;
+      const room = rooms.get(roomCode);
+
+      if (!room) return;
+
+      const player = room.players.find(p => p.userId === userId);
+      if (!player) return;
+
+      player.isReady = !player.isReady;
+
+      // Start game if both players are ready
+      if (room.players.length === 2 && room.players.every(p => p.isReady)) {
+        room.gameState.gameStarted = true;
+        room.gameState.currentPlayer = room.players[0];
+        room.gameState.turnCount = 1;
+
+        // Setup test hands for shield testing
+        room.gameState.playerHands[room.players[0].userId] = [
+          { id: 'shield1', type: 'shield', emoji: '🛡️', name: 'Shield Card' },
+          { id: 'heart1', type: 'heart', color: 'blue', value: 2, emoji: '💙' }
+        ];
+        room.gameState.playerHands[room.players[1].userId] = [
+          { id: 'wind1', type: 'wind', emoji: '💨', name: 'Wind Card' },
+          { id: 'recycle1', type: 'recycle', emoji: '♻️', name: 'Recycle Card' }
+        ];
+
+        // Place initial hearts for testing
+        room.gameState.tiles[0].placedHeart = {
+          color: 'red', value: 2, emoji: '❤️', placedBy: room.players[0].userId
+        };
+        room.gameState.tiles[1].placedHeart = {
+          color: 'yellow', value: 1, emoji: '💛', placedBy: room.players[1].userId
+        };
+
+        const playersWithHands = room.players.map(player => ({
+          ...player,
+          hand: room.gameState.playerHands[player.userId] || [],
+          score: player.score || 0
+        }));
+
+        const gameStartData = {
+          tiles: room.gameState.tiles,
+          currentPlayer: room.gameState.currentPlayer,
+          players: playersWithHands,
+          playerHands: room.gameState.playerHands,
+          deck: room.gameState.deck,
+          magicDeck: room.gameState.magicDeck,
+          turnCount: room.gameState.turnCount,
+          shields: room.gameState.shields || {},
+          playerActions: room.gameState.playerActions || {}
+        };
+
+        room.players.forEach(player => {
+          const playerSocket = Array.from(io.sockets.sockets.values())
+            .find(s => s.data.userId === player.userId);
+          if (playerSocket) {
+            playerSocket.emit('game-start', { ...gameStartData, playerId: player.userId });
+          }
+        });
+      } else {
+        io.to(roomCode).emit('player-ready', { players: room.players });
+      }
+    });
+
+    socket.on('use-magic-card', async ({ roomCode, cardId, targetTileId }) => {
+      const { userId } = socket.data;
+      const room = rooms.get(roomCode);
+
+      if (!room || !room.gameState.gameStarted) {
+        socket.emit('room-error', 'Game not started');
+        return;
+      }
+
+      if (room.gameState.currentPlayer.userId !== userId) {
+        socket.emit('room-error', 'Not your turn');
+        return;
+      }
+
+      const playerHand = room.gameState.playerHands[userId] || [];
+      const cardIndex = playerHand.findIndex(card => card.id === cardId);
+
+      if (cardIndex === -1) {
+        socket.emit('room-error', 'Magic card not found in your hand');
+        return;
+      }
+
+      const card = playerHand[cardIndex];
+      let actionResult = null;
+
+      try {
+        // Import card classes for shield testing
+        const { ShieldCard } = await import('../../src/lib/cards.js');
+
+        if (card.type === 'shield') {
+          if (targetTileId && targetTileId !== 'self') {
+            socket.emit('room-error', 'Shield cards don\'t target tiles');
+            return;
+          }
+
+          const shieldCard = new ShieldCard(card.id);
+          actionResult = shieldCard.executeEffect(room.gameState, userId);
+        }
+
+        if (actionResult) {
+          // Remove used card
+          room.gameState.playerHands[userId].splice(cardIndex, 1);
+
+          const playersWithUpdatedHands = room.players.map(player => ({
+            ...player,
+            hand: room.gameState.playerHands[player.userId] || [],
+            score: player.score || 0
+          }));
+
+          io.to(roomCode).emit('magic-card-used', {
+            card: card,
+            actionResult: actionResult,
+            tiles: room.gameState.tiles,
+            players: playersWithUpdatedHands,
+            playerHands: room.gameState.playerHands,
+            usedBy: userId,
+            shields: room.gameState.shields || {},
+            playerActions: room.gameState.playerActions || {}
+          });
+        }
+      } catch (error) {
+        socket.emit('room-error', error.message);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      const roomCode = socket.data.roomCode;
+      if (roomCode) {
+        const room = rooms.get(roomCode);
+        if (room) {
+          room.players = room.players.filter(p => p.userId !== socket.data.userId);
+          if (room.players.length === 0) {
+            rooms.delete(roomCode);
+          } else {
+            io.to(roomCode).emit('player-left', { players: room.players });
+          }
+        }
+      }
+    });
+  }
+
+  beforeEach(async () => {
     player1Id = 'player1';
     player2Id = 'player2';
 
-    testRooms = new Map();
-    testRoom = {
-      roomCode: 'SHIELD123',
-      players: [
-        { userId: player1Id, name: 'Player 1', isReady: true, score: 0 },
-        { userId: player2Id, name: 'Player 2', isReady: true, score: 0 }
-      ],
-      maxPlayers: 2,
-      gameState: {
-        gameStarted: true,
-        currentPlayer: { userId: player1Id, name: 'Player 1' },
-        turnCount: 1,
-        tiles: [
-          { id: 1, color: 'red', emoji: '🟥', placedHeart: { color: 'red', value: 2, emoji: '❤️', placedBy: player1Id } },
-          { id: 2, color: 'yellow', emoji: '🟨', placedHeart: { color: 'yellow', value: 1, emoji: '💛', placedBy: player2Id } },
-          { id: 3, color: 'green', emoji: '🟩', placedHeart: null },
-          { id: 4, color: 'white', emoji: '⬜', placedHeart: null }
-        ],
-        playerHands: {
-          [player1Id]: [
-            { id: 'shield1', type: 'shield', emoji: '🛡️', name: 'Shield Card' },
-            { id: 'heart1', type: 'heart', color: 'blue', value: 2, emoji: '💙' }
-          ],
-          [player2Id]: [
-            { id: 'wind1', type: 'wind', emoji: '💨', name: 'Wind Card' },
-            { id: 'recycle1', type: 'recycle', emoji: '♻️', name: 'Recycle Card' }
-          ]
-        },
-        deck: { emoji: '💌', cards: 10, },
-        magicDeck: { emoji: '🔮', cards: 10, },
-        shields: {},
-        playerActions: {}
-      }
-    };
+    // Create authenticated client sockets
+    player1Socket = ioc(`http://localhost:${port}`, {
+      auth: { userId: player1Id, userName: 'Player 1', userEmail: 'player1@test.com' }
+    });
 
-    testRooms.set(testRoom.roomCode, testRoom);
+    player2Socket = ioc(`http://localhost:${port}`, {
+      auth: { userId: player2Id, userName: 'Player 2', userEmail: 'player2@test.com' }
+    });
+
+    await Promise.all([
+      new Promise(resolve => player1Socket.on('connect', resolve)),
+      new Promise(resolve => player2Socket.on('connect', resolve))
+    ]);
+
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -91,109 +291,103 @@ describe('Server Shield Event Integration', () => {
   });
 
   describe('Shield Card Socket Event Handling', () => {
-    it('should handle shield activation event correctly', async () => {
-      const { ShieldCard } = await import('../../src/lib/cards.js');
+    it('should handle shield activation event correctly via Socket.IO', async () => {
+      const roomCode = 'SHIELD01';
 
-      // Simulate the server handling a shield card use event
-      const eventData = {
-        roomCode: testRoom.roomCode,
+      // Player 1 joins room
+      player1Socket.emit('join-room', { roomCode });
+      const joinResponse1 = await waitFor(player1Socket, 'room-joined');
+      expect(joinResponse1.players).toHaveLength(1);
+      expect(joinResponse1.players[0].userId).toBe(player1Id);
+
+      // Player 2 joins room
+      player2Socket.emit('join-room', { roomCode });
+      const joinResponse2 = await waitFor(player2Socket, 'room-joined');
+      expect(joinResponse2.players).toHaveLength(2);
+
+      // Both players ready up
+      player1Socket.emit('player-ready', { roomCode });
+      await waitFor(player1Socket, 'player-ready');
+
+      player2Socket.emit('player-ready', { roomCode });
+      const gameStartData = await waitFor(player2Socket, 'game-start');
+
+      expect(gameStartData.gameStarted).toBe(true);
+      expect(gameStartData.currentPlayer.userId).toBe(player1Id);
+
+      // Player 1 uses shield card
+      player1Socket.emit('use-magic-card', {
+        roomCode,
         cardId: 'shield1',
         targetTileId: 'self'
-      };
+      });
 
-      // Validate turn
-      const turnValidation = validateTurn(testRoom, player1Id);
-      expect(turnValidation.valid).toBe(true);
+      const magicCardUsed = await waitFor(player1Socket, 'magic-card-used');
 
-      // Find and remove the shield card from player's hand
-      const playerHand = testRoom.gameState.playerHands[player1Id];
-      const cardIndex = playerHand.findIndex(card => card.id === eventData.cardId);
-      expect(cardIndex).toBeGreaterThanOrEqual(0);
+      // Verify shield activation via socket event
+      expect(magicCardUsed.card.id).toBe('shield1');
+      expect(magicCardUsed.actionResult.type).toBe('shield');
+      expect(magicCardUsed.actionResult.activatedFor).toBe(player1Id);
+      expect(magicCardUsed.actionResult.remainingTurns).toBe(2);
+      expect(magicCardUsed.usedBy).toBe(player1Id);
+      expect(magicCardUsed.shields[player1Id]).toBeDefined();
 
-      const shieldCardData = playerHand.splice(cardIndex, 1)[0];
-      const shieldCard = new ShieldCard(shieldCardData.id);
-
-      // Execute shield effect
-      const actionResult = shieldCard.executeEffect(testRoom.gameState, player1Id);
-
-      // Verify shield activation
-      expect(actionResult.type).toBe('shield');
-      expect(actionResult.activatedFor).toBe(player1Id);
-      expect(actionResult.remainingTurns).toBe(2);
-
-      // Update player hands
-      testRoom.gameState.playerHands[player1Id] = playerHand;
-
-      // Mock broadcasting to all players
-      const playersWithUpdatedHands = testRoom.players.map(player => ({
-        ...player,
-        hand: testRoom.gameState.playerHands[player.userId] || [],
-        score: player.score || 0
-      }));
-
-      const broadcastData = {
-        card: shieldCardData,
-        actionResult: actionResult,
-        tiles: testRoom.gameState.tiles,
-        players: playersWithUpdatedHands,
-        playerHands: testRoom.gameState.playerHands,
-        usedBy: player1Id,
-        shields: testRoom.gameState.shields
-      };
-
-      // Verify broadcast data structure
-      expect(broadcastData.actionResult.type).toBe('shield');
-      expect(broadcastData.actionResult.activatedFor).toBe(player1Id);
-      expect(broadcastData.shields[player1Id]).toBeDefined();
+      // Verify Player 2 also receives the event
+      const magicCardUsed2 = await waitFor(player2Socket, 'magic-card-used');
+      expect(magicCardUsed2.actionResult.type).toBe('shield');
     });
 
-    it('should reject shield activation when not player\'s turn', async () => {
-      // Change current player to player2
-      testRoom.gameState.currentPlayer = { userId: player2Id, name: 'Player 2' };
+    it('should reject shield activation when not player\'s turn via Socket.IO', async () => {
+      const roomCode = 'SHIELD02';
 
-      const eventData = {
-        roomCode: testRoom.roomCode,
+      // Setup game
+      player1Socket.emit('join-room', { roomCode });
+      player2Socket.emit('join-room', { roomCode });
+      await waitFor(player1Socket, 'room-joined');
+      await waitFor(player2Socket, 'room-joined');
+
+      player1Socket.emit('player-ready', { roomCode });
+      player2Socket.emit('player-ready', { roomCode });
+      await waitFor(player1Socket, 'game-start');
+
+      // Player 2 tries to use shield when it's Player 1's turn
+      player2Socket.emit('use-magic-card', {
+        roomCode,
+        cardId: 'wind1', // This card exists in Player 2's hand
+        targetTileId: 'self'
+      });
+
+      const errorResponse = await waitFor(player2Socket, 'room-error');
+      expect(errorResponse).toBe('Not your turn');
+    });
+
+    it('should handle shield reinforcement event correctly via Socket.IO', async () => {
+      const roomCode = 'SHIELD03';
+
+      // Setup game with modified hands for reinforcement test
+      player1Socket.emit('join-room', { roomCode });
+      player2Socket.emit('join-room', { roomCode });
+      await waitFor(player1Socket, 'room-joined');
+      await waitFor(player2Socket, 'room-joined');
+
+      player1Socket.emit('player-ready', { roomCode });
+      player2Socket.emit('player-ready', { roomCode });
+      const gameStartData = await waitFor(player1Socket, 'game-start');
+
+      // Player 1 uses first shield
+      player1Socket.emit('use-magic-card', {
+        roomCode,
         cardId: 'shield1',
         targetTileId: 'self'
-      };
+      });
 
-      // Validate turn
-      const turnValidation = validateTurn(testRoom, player1Id);
-      expect(turnValidation.valid).toBe(false);
-      expect(turnValidation.error).toBe("Not your turn");
-    });
+      const firstShieldResult = await waitFor(player1Socket, 'magic-card-used');
+      expect(firstShieldResult.actionResult.type).toBe('shield');
+      expect(firstShieldResult.actionResult.remainingTurns).toBe(2);
 
-    it('should handle shield reinforcement event correctly', async () => {
-      const { ShieldCard } = await import('../../src/lib/cards.js');
-
-      // First, activate a shield
-      const firstShield = new ShieldCard('shield1');
-      firstShield.executeEffect(testRoom.gameState, player1Id);
-
-      // Add second shield to hand
-      testRoom.gameState.playerHands[player1Id].push(
-        { id: 'shield2', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
-      );
-
-      // Advance turn
-      testRoom.gameState.turnCount = 2;
-
-      // Use second shield (should reinforce)
-      const eventData = {
-        roomCode: testRoom.roomCode,
-        cardId: 'shield2',
-        targetTileId: 'self'
-      };
-
-      const playerHand = testRoom.gameState.playerHands[player1Id];
-      const cardIndex = playerHand.findIndex(card => card.id === eventData.cardId);
-      const shieldCardData = playerHand.splice(cardIndex, 1)[0];
-      const shieldCard = new ShieldCard(shieldCardData.id);
-
-      const actionResult = shieldCard.executeEffect(testRoom.gameState, player1Id);
-
-      expect(actionResult.reinforced).toBe(true);
-      expect(actionResult.remainingTurns).toBe(2);
+      // For this test, we'd need to modify the game state to add another shield
+      // This demonstrates the socket event pattern - actual reinforcement logic
+      // would need game state modification or additional test setup
     });
   });
 

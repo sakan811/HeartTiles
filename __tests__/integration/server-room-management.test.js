@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
+import { createServer } from 'node:http'
+import { io as ioc } from 'socket.io-client'
+import { Server } from 'socket.io'
 import { Room } from '../../models.js'
 import { createMockSocket, createMockRoom, waitForAsync } from './setup.js'
 import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js'
@@ -10,6 +13,12 @@ import {
   clearDatabase,
   clearTurnLocks
 } from '../utils/server-test-utils.js'
+
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve)
+  })
+}
 
 // Import real server functions to ensure server.js code is executed and covered
 import {
@@ -55,18 +64,62 @@ function generateValidRoomCode(prefix = 'TEST') {
 }
 
 describe('Server Room Management Integration Tests', () => {
-  let mockServer
-  let port
+  let io, serverSocket, clientSocket, player1Socket, player2Socket
+  let httpServer, port
 
   beforeAll(async () => {
+    // Connect to database
     try {
       await connectToDatabase()
     } catch (error) {
       console.warn('Database connection failed, skipping tests:', error.message)
     }
+
+    // Setup Socket.IO server
+    return new Promise((resolve) => {
+      httpServer = createServer()
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      // Mock authentication middleware
+      io.use(async (socket, next) => {
+        const { userId, userName, userEmail } = socket.handshake.auth || {}
+        if (!userId || !userName || !userEmail) {
+          return next(new Error('Authentication required'))
+        }
+        socket.data.userId = userId
+        socket.data.userEmail = userEmail
+        socket.data.userName = userName
+        socket.data.userSessionId = `session_${userId}`
+        next()
+      })
+
+      // Setup socket handlers for room management testing
+      io.on('connection', (socket) => {
+        serverSocket = socket
+        setupRoomSocketHandlers(socket, io)
+      })
+
+      httpServer.listen(() => {
+        port = httpServer.address().port
+        resolve()
+      })
+    })
   }, 15000)
 
   afterAll(async () => {
+    // Cleanup sockets
+    if (player1Socket) player1Socket.disconnect()
+    if (player2Socket) player2Socket.disconnect()
+    if (clientSocket) clientSocket.disconnect()
+    if (io) io.close()
+    if (httpServer) httpServer.close()
+
+    // Cleanup database
     try {
       await clearDatabase()
       await disconnectDatabase()
@@ -75,6 +128,115 @@ describe('Server Room Management Integration Tests', () => {
     }
   })
 
+  // Setup socket handlers for room management testing
+  function setupRoomSocketHandlers(socket, io) {
+    const rooms = new Map()
+
+    socket.on('join-room', async ({ roomCode }) => {
+      const { userId, userName, userEmail } = socket.data
+
+      // Validate room code using real server function
+      const { validateRoomCode, sanitizeInput } = await import('../../server.js')
+
+      if (!validateRoomCode(roomCode)) {
+        socket.emit('room-error', 'Invalid room code')
+        return
+      }
+
+      roomCode = sanitizeInput(roomCode.toUpperCase())
+
+      let room = rooms.get(roomCode)
+
+      if (!room) {
+        room = {
+          code: roomCode,
+          players: [],
+          maxPlayers: 2,
+          gameState: {
+            tiles: [],
+            gameStarted: false,
+            currentPlayer: null,
+            deck: { emoji: '💌', cards: 16, type: 'hearts' },
+            magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+            playerHands: {},
+            shields: {},
+            turnCount: 0,
+            playerActions: {}
+          }
+        }
+        rooms.set(roomCode, room)
+      }
+
+      const existingPlayer = room.players.find(p => p.userId === userId)
+
+      if (!existingPlayer && room.players.length < room.maxPlayers) {
+        room.players.push({
+          userId,
+          name: userName,
+          email: userEmail,
+          isReady: false,
+          score: 0,
+          joinedAt: new Date()
+        })
+      }
+
+      socket.join(roomCode)
+      socket.data.roomCode = roomCode
+
+      socket.emit('room-joined', {
+        players: room.players,
+        playerId: userId
+      })
+
+      io.to(roomCode).emit('player-joined', { players: room.players })
+    })
+
+    socket.on('player-ready', async ({ roomCode }) => {
+      const { userId } = socket.data
+      const room = rooms.get(roomCode)
+
+      if (!room) return
+
+      const player = room.players.find(p => p.userId === userId)
+      if (!player) return
+
+      player.isReady = !player.isReady
+      io.to(roomCode).emit('player-ready', { players: room.players })
+    })
+
+    socket.on('leave-room', async ({ roomCode }) => {
+      const { userId } = socket.data
+      const room = rooms.get(roomCode)
+
+      if (room) {
+        room.players = room.players.filter(player => player.userId !== userId)
+        io.to(roomCode).emit('player-left', { players: room.players })
+
+        if (room.players.length === 0) {
+          rooms.delete(roomCode)
+        }
+      }
+
+      socket.leave(roomCode)
+      socket.data.roomCode = null
+    })
+
+    socket.on('disconnect', () => {
+      const roomCode = socket.data.roomCode
+      if (roomCode) {
+        const room = rooms.get(roomCode)
+        if (room) {
+          room.players = room.players.filter(p => p.userId !== socket.data.userId)
+          if (room.players.length === 0) {
+            rooms.delete(roomCode)
+          } else {
+            io.to(roomCode).emit('player-left', { players: room.players })
+          }
+        }
+      }
+    })
+  }
+
   beforeEach(async () => {
     try {
       await clearDatabase()
@@ -82,12 +244,152 @@ describe('Server Room Management Integration Tests', () => {
     } catch (error) {
       console.warn('Database clear failed:', error.message)
     }
+
+    // Create authenticated client sockets
+    player1Socket = ioc(`http://localhost:${port}`, {
+      auth: { userId: 'player1', userName: 'Player 1', userEmail: 'player1@test.com' }
+    })
+
+    player2Socket = ioc(`http://localhost:${port}`, {
+      auth: { userId: 'player2', userName: 'Player 2', userEmail: 'player2@test.com' }
+    })
+
+    await Promise.all([
+      new Promise(resolve => player1Socket.on('connect', resolve)),
+      new Promise(resolve => player2Socket.on('connect', resolve))
+    ])
+
     vi.clearAllMocks()
     process.env.NODE_ENV = 'test'
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  describe('Socket.IO Room Management Events', () => {
+    it('should handle room joining via Socket.IO events', async () => {
+      const roomCode = 'ROOM01'
+
+      // Player 1 joins room
+      player1Socket.emit('join-room', { roomCode })
+      const joinResponse1 = await waitFor(player1Socket, 'room-joined')
+
+      expect(joinResponse1.players).toHaveLength(1)
+      expect(joinResponse1.players[0].userId).toBe('player1')
+      expect(joinResponse1.players[0].name).toBe('Player 1')
+      expect(joinResponse1.players[0].isReady).toBe(false)
+      expect(joinResponse1.playerId).toBe('player1')
+
+      // Player 2 joins same room
+      player2Socket.emit('join-room', { roomCode })
+      const joinResponse2 = await waitFor(player2Socket, 'room-joined')
+
+      expect(joinResponse2.players).toHaveLength(2)
+      expect(joinResponse2.players[1].userId).toBe('player2')
+      expect(joinResponse2.players[1].name).toBe('Player 2')
+
+      // Player 1 should also receive player-joined event
+      const playerJoinedEvent = await waitFor(player1Socket, 'player-joined')
+      expect(playerJoinedEvent.players).toHaveLength(2)
+    })
+
+    it('should reject invalid room codes via Socket.IO events', async () => {
+      const invalidRoomCodes = ['short', 'toolong12345', 'invalid@code', 'lowercase', '']
+
+      for (const roomCode of invalidRoomCodes) {
+        player1Socket.emit('join-room', { roomCode })
+        const errorResponse = await waitFor(player1Socket, 'room-error')
+        expect(errorResponse).toBe('Invalid room code')
+      }
+    })
+
+    it('should handle room full scenario via Socket.IO events', async () => {
+      const roomCode = 'FULL01'
+
+      // Player 1 joins
+      player1Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+
+      // Player 2 joins
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player2Socket, 'room-joined')
+
+      // Create player 3 socket
+      const player3Socket = ioc(`http://localhost:${port}`, {
+        auth: { userId: 'player3', userName: 'Player 3', userEmail: 'player3@test.com' }
+      })
+      await new Promise(resolve => player3Socket.on('connect', resolve))
+
+      // Player 3 tries to join full room
+      player3Socket.emit('join-room', { roomCode })
+      const errorResponse = await waitFor(player3Socket, 'room-error')
+      expect(errorResponse).toBe('Room is full')
+
+      player3Socket.disconnect()
+    })
+
+    it('should handle player ready toggle via Socket.IO events', async () => {
+      const roomCode = 'READY01'
+
+      // Both players join
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      // Player 1 toggles ready to true
+      player1Socket.emit('player-ready', { roomCode })
+      const readyEvent1 = await waitFor(player1Socket, 'player-ready')
+      expect(readyEvent1.players[0].isReady).toBe(true)
+
+      // Player 2 should also receive the ready event
+      const readyEvent2 = await waitFor(player2Socket, 'player-ready')
+      expect(readyEvent2.players[0].isReady).toBe(true)
+
+      // Player 1 toggles ready back to false
+      player1Socket.emit('player-ready', { roomCode })
+      const notReadyEvent = await waitFor(player1Socket, 'player-ready')
+      expect(notReadyEvent.players[0].isReady).toBe(false)
+    })
+
+    it('should handle room leaving via Socket.IO events', async () => {
+      const roomCode = 'LEAVE01'
+
+      // Both players join
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      // Player 1 leaves room
+      player1Socket.emit('leave-room', { roomCode })
+      const leaveEvent = await waitFor(player2Socket, 'player-left')
+      expect(leaveEvent.players).toHaveLength(1)
+      expect(leaveEvent.players[0].userId).toBe('player2')
+
+      // Player 1 should also receive the event
+      const leaveEvent1 = await waitFor(player1Socket, 'player-left')
+      expect(leaveEvent1.players).toHaveLength(1)
+    })
+
+    it('should handle player disconnect cleanup via Socket.IO events', async () => {
+      const roomCode = 'DISC01'
+
+      // Both players join
+      player1Socket.emit('join-room', { roomCode })
+      player2Socket.emit('join-room', { roomCode })
+      await waitFor(player1Socket, 'room-joined')
+      await waitFor(player2Socket, 'room-joined')
+
+      // Player 1 disconnects
+      player1Socket.disconnect()
+
+      // Player 2 should receive player-left event
+      const disconnectEvent = await waitFor(player2Socket, 'player-left')
+      expect(disconnectEvent.players).toHaveLength(1)
+      expect(disconnectEvent.players[0].userId).toBe('player2')
+    })
   })
 
   describe('validateRoomState function with real database', () => {
