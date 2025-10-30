@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
+import { createServer } from 'node:http'
+import { io as ioc } from 'socket.io-client'
+import { Server } from 'socket.io'
 import {
   connectToDatabase,
   disconnectDatabase,
@@ -8,6 +11,12 @@ import {
 import { Room } from '../../models.js'
 import { createMockRoom, createMockUser, createMockGameState } from './setup.js'
 import { HeartCard, WindCard, RecycleCard, ShieldCard } from '../../src/lib/cards.js'
+
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve)
+  })
+}
 
 // Import functions directly from server.js for testing real implementation
 let validateRoomState,
@@ -19,7 +28,29 @@ let validateRoomState,
   validateHeartPlacement
 
 describe('Server Uncovered Functions Integration Tests', () => {
+  let io, serverSocket, clientSocket
+
   beforeAll(async () => {
+    // Set up Socket.IO server
+    await new Promise((resolve) => {
+      const httpServer = createServer()
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      httpServer.listen(() => {
+        const port = httpServer.address().port
+        clientSocket = ioc(`http://localhost:${port}`)
+        io.on("connection", (socket) => {
+          serverSocket = socket
+        })
+        clientSocket.on("connect", resolve)
+      })
+    })
+
     try {
       await connectToDatabase()
       // Import functions from server.js to test real implementation
@@ -37,6 +68,10 @@ describe('Server Uncovered Functions Integration Tests', () => {
   }, 15000)
 
   afterAll(async () => {
+    // Clean up Socket.IO server
+    if (io) io.close()
+    if (clientSocket) clientSocket.disconnect()
+
     try {
       await clearDatabase()
       await disconnectDatabase()

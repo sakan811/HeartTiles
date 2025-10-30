@@ -786,9 +786,7 @@ async function updatePlayerSocket(userId, socketId, userSessionId, userName, use
   return session;
 }
 
-// Prevent server from starting during tests
-if (process.env.NODE_ENV !== 'test') {
-  app.prepare().then(async () => {
+app.prepare().then(async () => {
     await connectToDatabase();
 
   const httpServer = createServer(handler);
@@ -812,7 +810,7 @@ if (process.env.NODE_ENV !== 'test') {
 
   console.log(`Loaded ${rooms.size} rooms, ${playerSessions.size} sessions`);
 
-  
+
   // These functions are now defined globally for testing
 
   // Helper functions that need access to closure variables
@@ -1783,7 +1781,6 @@ if (process.env.NODE_ENV !== 'test') {
         console.log(`> Ready on http://${hostname}:${port}`);
       });
   });
-}
 
 // Export functions for testing (they are accessible within the same scope)
 export {

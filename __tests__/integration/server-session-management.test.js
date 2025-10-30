@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest'
+import { createServer } from 'node:http'
+import { io as ioc } from 'socket.io-client'
+import { Server } from 'socket.io'
 import {
   connectToDatabase,
   disconnectDatabase,
@@ -11,6 +14,12 @@ import { Room, PlayerSession, User } from '../../models.js'
 import mongoose from 'mongoose'
 import { createMockSocket, createMockRoom, waitForAsync } from './setup.js'
 
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve)
+  })
+}
+
 // Helper function to generate a valid ObjectId that won't exist in the database
 function generateNonexistentObjectId() {
   // Generate a valid ObjectId using high timestamp values that are unlikely to exist
@@ -20,10 +29,29 @@ function generateNonexistentObjectId() {
 }
 
 describe('Server Session Management Integration Tests', () => {
-  let mockServer
-  let port
+  let io, serverSocket, clientSocket
 
   beforeAll(async () => {
+    // Set up Socket.IO server
+    await new Promise((resolve) => {
+      const httpServer = createServer()
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      httpServer.listen(() => {
+        const port = httpServer.address().port
+        clientSocket = ioc(`http://localhost:${port}`)
+        io.on("connection", (socket) => {
+          serverSocket = socket
+        })
+        clientSocket.on("connect", resolve)
+      })
+    })
+
     try {
       await connectToDatabase()
     } catch (error) {
@@ -32,6 +60,10 @@ describe('Server Session Management Integration Tests', () => {
   }, 15000)
 
   afterAll(async () => {
+    // Clean up Socket.IO server
+    if (io) io.close()
+    if (clientSocket) clientSocket.disconnect()
+
     try {
       await clearDatabase()
       await disconnectDatabase()

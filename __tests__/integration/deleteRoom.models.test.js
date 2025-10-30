@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
+import { createServer } from 'node:http'
+import { io as ioc } from 'socket.io-client'
+import { Server } from 'socket.io'
 import {
   connectToDatabase,
   disconnectDatabase,
@@ -10,7 +13,43 @@ import { deleteRoom } from '../../models.js'
 // Mock console methods to test logging behavior
 const originalConsoleError = console.error
 
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve)
+  })
+}
+
 describe('deleteRoom function Integration Tests (models.js lines 213-220)', () => {
+  let io, serverSocket, clientSocket
+
+  beforeAll(async () => {
+    // Set up Socket.IO server
+    await new Promise((resolve) => {
+      const httpServer = createServer()
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      httpServer.listen(() => {
+        const port = httpServer.address().port
+        clientSocket = ioc(`http://localhost:${port}`)
+        io.on("connection", (socket) => {
+          serverSocket = socket
+        })
+        clientSocket.on("connect", resolve)
+      })
+    })
+  })
+
+  afterAll(() => {
+    // Clean up Socket.IO server
+    if (io) io.close()
+    if (clientSocket) clientSocket.disconnect()
+  })
+
   beforeEach(async () => {
     // Mock console.error to test error logging
     vi.spyOn(console, 'error').mockImplementation(() => {})

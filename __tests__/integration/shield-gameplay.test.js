@@ -1,24 +1,55 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import { createServer } from 'node:http';
+import { io as ioc } from 'socket.io-client';
+import { Server } from 'socket.io';
 import { ShieldCard, WindCard, RecycleCard, HeartCard } from '../../src/lib/cards.js';
 
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve);
+  });
+}
+
 describe('Shield Card Gameplay Integration', () => {
-  let mockRoom;
-  let mockSocket;
-  let mockIo;
+  let io, serverSocket, clientSocket;
   let player1Id, player2Id;
-  let player1Socket, player2Socket;
+  let testRoom;
+
+  beforeAll(() => {
+    return new Promise((resolve) => {
+      const httpServer = createServer();
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      });
+
+      httpServer.listen(() => {
+        const port = httpServer.address().port;
+        clientSocket = ioc(`http://localhost:${port}`);
+        io.on("connection", (socket) => {
+          serverSocket = socket;
+        });
+        clientSocket.on("connect", resolve);
+      });
+    });
+  });
+
+  afterAll(() => {
+    io.close();
+    clientSocket.disconnect();
+  });
 
   beforeEach(() => {
     player1Id = 'player1';
     player2Id = 'player2';
-    player1Socket = { id: 'socket1', userId: player1Id, emit: vi.fn() };
-    player2Socket = { id: 'socket2', userId: player2Id, emit: vi.fn() };
 
-    mockRoom = {
+    testRoom = {
       roomCode: 'TEST123',
       players: [
-        { userId: player1Id, name: 'Player 1', socketId: 'socket1', ready: true },
-        { userId: player2Id, name: 'Player 2', socketId: 'socket2', ready: true }
+        { userId: player1Id, name: 'Player 1', isReady: true, score: 0 },
+        { userId: player2Id, name: 'Player 2', isReady: true, score: 0 }
       ],
       gameState: {
         gameStarted: true,
@@ -48,112 +79,108 @@ describe('Shield Card Gameplay Integration', () => {
         shields: {}
       }
     };
+  });
 
-    mockIo = {
-      to: vi.fn(() => ({
-        emit: vi.fn()
-      }))
-    };
-
-    mockSocket = player1Socket;
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('Shield Activation Flow', () => {
     it('should complete full shield activation flow', () => {
-      const shieldCard = mockRoom.gameState.playerHands[player1Id][0];
+      const shieldCard = testRoom.gameState.playerHands[player1Id][0];
 
       // Simulate shield activation
-      const result = shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      const result = shieldCard.executeEffect(testRoom.gameState, player1Id);
 
       expect(result.type).toBe('shield');
       expect(result.activatedFor).toBe(player1Id);
-      expect(mockRoom.gameState.shields[player1Id]).toBeDefined();
+      expect(testRoom.gameState.shields[player1Id]).toBeDefined();
 
       // Verify shield state
-      const shield = mockRoom.gameState.shields[player1Id];
+      const shield = testRoom.gameState.shields[player1Id];
       expect(shield.active).toBe(true);
       expect(shield.remainingTurns).toBe(2);
       expect(shield.protectedPlayerId).toBe(player1Id);
     });
 
     it('should handle shield reinforcement correctly', () => {
-      const shieldCard = mockRoom.gameState.playerHands[player1Id][0];
+      const shieldCard = testRoom.gameState.playerHands[player1Id][0];
 
       // First activation
-      shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      shieldCard.executeEffect(testRoom.gameState, player1Id);
 
       // Advance turn
-      mockRoom.gameState.turnCount = 2;
+      testRoom.gameState.turnCount = 2;
 
       // Reinforcement
-      const result = shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      const result = shieldCard.executeEffect(testRoom.gameState, player1Id);
 
       expect(result.reinforced).toBe(true);
-      expect(mockRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
+      expect(testRoom.gameState.shields[player1Id].remainingTurns).toBe(2);
     });
   });
 
   describe('Shield Protection Scenarios', () => {
     beforeEach(() => {
       // Activate shield for player1
-      const shieldCard = mockRoom.gameState.playerHands[player1Id][0];
-      shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      const shieldCard = testRoom.gameState.playerHands[player1Id][0];
+      shieldCard.executeEffect(testRoom.gameState, player1Id);
     });
 
     it('should protect from Wind card when shield is active', () => {
-      const windCard = mockRoom.gameState.playerHands[player2Id][1];
+      const windCard = testRoom.gameState.playerHands[player2Id][1];
 
       // Player2 tries to use Wind on Player1's tile
       expect(() => {
-        windCard.executeEffect(mockRoom.gameState, 1, player2Id);
+        windCard.executeEffect(testRoom.gameState, 1, player2Id);
       }).toThrow("Opponent is protected by Shield");
 
       // Verify tile is unchanged
-      expect(mockRoom.gameState.tiles[0].placedHeart).toBeDefined();
-      expect(mockRoom.gameState.tiles[0].placedHeart.placedBy).toBe(player1Id);
+      expect(testRoom.gameState.tiles[0].placedHeart).toBeDefined();
+      expect(testRoom.gameState.tiles[0].placedHeart.placedBy).toBe(player1Id);
     });
 
     it('should allow Wind card after shield expires', () => {
-      mockRoom.gameState.turnCount = 4; // Shield expires
+      testRoom.gameState.turnCount = 4; // Shield expires
 
-      const windCard = mockRoom.gameState.playerHands[player2Id][1];
-      const result = windCard.executeEffect(mockRoom.gameState, 1, player2Id);
+      const windCard = testRoom.gameState.playerHands[player2Id][1];
+      const result = windCard.executeEffect(testRoom.gameState, 1, player2Id);
 
       expect(result.type).toBe('wind');
       expect(result.removedHeart.placedBy).toBe(player1Id);
 
       // Apply the result to update game state (as server would do)
-      const tile = mockRoom.gameState.tiles.find(t => t.id === result.tileId);
+      const tile = testRoom.gameState.tiles.find(t => t.id === result.tileId);
       if (tile && result.newTileState) {
         Object.assign(tile, result.newTileState);
       }
 
-      expect(mockRoom.gameState.tiles[0].placedHeart).toBeUndefined();
+      expect(testRoom.gameState.tiles[0].placedHeart).toBeUndefined();
     });
 
     it('should protect from Recycle card on tiles with player hearts', () => {
-      const recycleCard = mockRoom.gameState.playerHands[player2Id][0];
+      const recycleCard = testRoom.gameState.playerHands[player2Id][0];
 
       // Player2 tries to use Recycle on tile with Player1's heart
       // This fails basic targeting first (tile has heart)
       expect(() => {
-        recycleCard.executeEffect(mockRoom.gameState, 1);
+        recycleCard.executeEffect(testRoom.gameState, 1);
       }).toThrow("Invalid target for Recycle card");
 
       // Player2 tries to use Recycle on empty tile (basic targeting passes, but shield blocks)
       expect(() => {
-        recycleCard.executeEffect(mockRoom.gameState, 3);
+        recycleCard.executeEffect(testRoom.gameState, 3);
       }).toThrow("Tile is protected by Shield");
     });
 
     it('should allow Recycle card on empty tiles when shielded player has no hearts', () => {
-      const recycleCard = mockRoom.gameState.playerHands[player2Id][0];
+      const recycleCard = testRoom.gameState.playerHands[player2Id][0];
 
       // Remove Player1's hearts from the board
-      mockRoom.gameState.tiles[0].placedHeart = null;
-      mockRoom.gameState.tiles[4].placedHeart = null;
+      testRoom.gameState.tiles[0].placedHeart = null;
+      testRoom.gameState.tiles[4].placedHeart = null;
 
-      const result = recycleCard.executeEffect(mockRoom.gameState, 3); // Empty tile
+      const result = recycleCard.executeEffect(testRoom.gameState, 3); // Empty tile
 
       expect(result.type).toBe('recycle');
       expect(result.newColor).toBe('white');
@@ -163,74 +190,74 @@ describe('Shield Card Gameplay Integration', () => {
   describe('Multi-Shield Interactions', () => {
     it('should prevent both players from having active shields simultaneously', () => {
       // Player1 activates shield
-      const player1Shield = mockRoom.gameState.playerHands[player1Id][0];
-      player1Shield.executeEffect(mockRoom.gameState, player1Id);
+      const player1Shield = testRoom.gameState.playerHands[player1Id][0];
+      player1Shield.executeEffect(testRoom.gameState, player1Id);
 
       // Player2 should not be able to activate shield
-      const player2Shield = mockRoom.gameState.playerHands[player2Id][2];
+      const player2Shield = testRoom.gameState.playerHands[player2Id][2];
 
       expect(() => {
-        player2Shield.executeEffect(mockRoom.gameState, player2Id);
+        player2Shield.executeEffect(testRoom.gameState, player2Id);
       }).toThrow("Cannot activate Shield while opponent has active Shield");
     });
 
     it('should allow shield activation after opponent\'s shield expires', () => {
       // Player1 activates shield
-      const player1Shield = mockRoom.gameState.playerHands[player1Id][0];
-      player1Shield.executeEffect(mockRoom.gameState, player1Id);
+      const player1Shield = testRoom.gameState.playerHands[player1Id][0];
+      player1Shield.executeEffect(testRoom.gameState, player1Id);
 
       // Advance turns until shield expires
-      mockRoom.gameState.turnCount = 4;
+      testRoom.gameState.turnCount = 4;
 
       // Player2 should now be able to activate shield
-      const player2Shield = mockRoom.gameState.playerHands[player2Id][2];
-      const result = player2Shield.executeEffect(mockRoom.gameState, player2Id);
+      const player2Shield = testRoom.gameState.playerHands[player2Id][2];
+      const result = player2Shield.executeEffect(testRoom.gameState, player2Id);
 
       expect(result.type).toBe('shield');
       expect(result.activatedFor).toBe(player2Id);
-      expect(mockRoom.gameState.shields[player2Id]).toBeDefined();
+      expect(testRoom.gameState.shields[player2Id]).toBeDefined();
     });
   });
 
   describe('Shield Turn Management', () => {
     it('should correctly manage shield state through turn changes', () => {
-      const shieldCard = mockRoom.gameState.playerHands[player1Id][0];
-      shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      const shieldCard = testRoom.gameState.playerHands[player1Id][0];
+      shieldCard.executeEffect(testRoom.gameState, player1Id);
 
       // Turn 1: Shield active
-      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 1)).toBe(true);
+      expect(ShieldCard.isActive(testRoom.gameState.shields[player1Id], 1)).toBe(true);
 
       // Simulate turn change
-      mockRoom.gameState.currentPlayer = { userId: player2Id, name: 'Player 2' };
-      mockRoom.gameState.turnCount = 2;
+      testRoom.gameState.currentPlayer = { userId: player2Id, name: 'Player 2' };
+      testRoom.gameState.turnCount = 2;
 
       // Turn 2: Shield still active (opponent's turn)
-      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 2)).toBe(true);
+      expect(ShieldCard.isActive(testRoom.gameState.shields[player1Id], 2)).toBe(true);
 
       // Turn 3: Shield expires (player's next turn)
-      mockRoom.gameState.turnCount = 3;
-      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 3)).toBe(false);
+      testRoom.gameState.turnCount = 3;
+      expect(ShieldCard.isActive(testRoom.gameState.shields[player1Id], 3)).toBe(false);
 
       // Turn 4: Shield still expired
-      mockRoom.gameState.turnCount = 4;
-      expect(ShieldCard.isActive(mockRoom.gameState.shields[player1Id], 4)).toBe(false);
+      testRoom.gameState.turnCount = 4;
+      expect(ShieldCard.isActive(testRoom.gameState.shields[player1Id], 4)).toBe(false);
     });
 
     it('should remove expired shields during cleanup', () => {
-      const shieldCard = mockRoom.gameState.playerHands[player1Id][0];
-      shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      const shieldCard = testRoom.gameState.playerHands[player1Id][0];
+      shieldCard.executeEffect(testRoom.gameState, player1Id);
 
       // Simulate shield expiration cleanup
-      mockRoom.gameState.turnCount = 4;
+      testRoom.gameState.turnCount = 4;
 
       // Simulate cleanup function (similar to server.js checkAndExpireShields)
-      for (const [userId, shield] of Object.entries(mockRoom.gameState.shields)) {
-        if (!ShieldCard.isActive(shield, mockRoom.gameState.turnCount)) {
-          delete mockRoom.gameState.shields[userId];
+      for (const [userId, shield] of Object.entries(testRoom.gameState.shields)) {
+        if (!ShieldCard.isActive(shield, testRoom.gameState.turnCount)) {
+          delete testRoom.gameState.shields[userId];
         }
       }
 
-      expect(mockRoom.gameState.shields[player1Id]).toBeUndefined();
+      expect(testRoom.gameState.shields[player1Id]).toBeUndefined();
     });
   });
 
@@ -246,24 +273,24 @@ describe('Shield Card Gameplay Integration', () => {
 
     it('should handle shield protection checks on tiles without hearts', () => {
       const shieldCard = new ShieldCard('test-shield');
-      shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      shieldCard.executeEffect(testRoom.gameState, player1Id);
 
       const emptyTile = { id: 99, color: 'white', emoji: '⬜', placedHeart: null };
 
-      expect(ShieldCard.isTileProtected(mockRoom.gameState, emptyTile, 1)).toBe(false);
+      expect(ShieldCard.isTileProtected(testRoom.gameState, emptyTile, 1)).toBe(false);
     });
 
     it('should maintain game state consistency during shield operations', () => {
-      const shieldCard = mockRoom.gameState.playerHands[player1Id][0];
-      const originalTileCount = mockRoom.gameState.tiles.length;
-      const originalHandSize = mockRoom.gameState.playerHands[player1Id].length;
+      const shieldCard = testRoom.gameState.playerHands[player1Id][0];
+      const originalTileCount = testRoom.gameState.tiles.length;
+      const originalHandSize = testRoom.gameState.playerHands[player1Id].length;
 
-      shieldCard.executeEffect(mockRoom.gameState, player1Id);
+      shieldCard.executeEffect(testRoom.gameState, player1Id);
 
       // Verify game state integrity
-      expect(mockRoom.gameState.tiles.length).toBe(originalTileCount);
-      expect(mockRoom.gameState.playerHands[player1Id].length).toBe(originalHandSize);
-      expect(mockRoom.gameState.shields[player1Id]).toBeDefined();
+      expect(testRoom.gameState.tiles.length).toBe(originalTileCount);
+      expect(testRoom.gameState.playerHands[player1Id].length).toBe(originalHandSize);
+      expect(testRoom.gameState.shields[player1Id]).toBeDefined();
     });
   });
 
@@ -273,36 +300,36 @@ describe('Shield Card Gameplay Integration', () => {
       const iterations = 100;
 
       for (let i = 0; i < iterations; i++) {
-        mockRoom.gameState.turnCount = i;
+        testRoom.gameState.turnCount = i;
 
         if (i % 10 === 0) {
-          shieldCard.executeEffect(mockRoom.gameState, player1Id);
+          shieldCard.executeEffect(testRoom.gameState, player1Id);
         }
 
         // Check shield status without errors
-        const isProtected = ShieldCard.isPlayerProtected(mockRoom.gameState, player1Id, i);
+        const isProtected = ShieldCard.isPlayerProtected(testRoom.gameState, player1Id, i);
         expect(typeof isProtected).toBe('boolean');
       }
     });
 
     it('should not cause memory leaks with repeated shield operations', () => {
       const shieldCard = new ShieldCard('memory-test');
-      const initialMemory = Object.keys(mockRoom.gameState).length;
+      const initialMemory = Object.keys(testRoom.gameState).length;
 
       // Activate shield multiple times
       for (let i = 0; i < 50; i++) {
-        mockRoom.gameState.turnCount = i;
-        shieldCard.executeEffect(mockRoom.gameState, player1Id);
+        testRoom.gameState.turnCount = i;
+        shieldCard.executeEffect(testRoom.gameState, player1Id);
       }
 
       // Cleanup expired shields
-      for (const [userId, shield] of Object.entries(mockRoom.gameState.shields)) {
-        if (!ShieldCard.isActive(shield, mockRoom.gameState.turnCount)) {
-          delete mockRoom.gameState.shields[userId];
+      for (const [userId, shield] of Object.entries(testRoom.gameState.shields)) {
+        if (!ShieldCard.isActive(shield, testRoom.gameState.turnCount)) {
+          delete testRoom.gameState.shields[userId];
         }
       }
 
-      const finalMemory = Object.keys(mockRoom.gameState).length;
+      const finalMemory = Object.keys(testRoom.gameState).length;
       expect(finalMemory).toBeLessThanOrEqual(initialMemory + 1); // Only shields object added
     });
   });

@@ -1,5 +1,8 @@
 // Integration tests for database operations
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { createServer } from 'node:http'
+import { io as ioc } from 'socket.io-client'
+import { Server } from 'socket.io'
 import { Room, PlayerSession } from '../../models.js'
 
 // Import database utility functions from server-test-utils.js
@@ -24,8 +27,36 @@ import {
   checkGameEndConditions
 } from '../../server.js'
 
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve)
+  })
+}
+
 describe('Database Operations', () => {
+  let io, serverSocket, clientSocket
+
   beforeAll(async () => {
+    // Set up Socket.IO server
+    await new Promise((resolve) => {
+      const httpServer = createServer()
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      httpServer.listen(() => {
+        const port = httpServer.address().port
+        clientSocket = ioc(`http://localhost:${port}`)
+        io.on("connection", (socket) => {
+          serverSocket = socket
+        })
+        clientSocket.on("connect", resolve)
+      })
+    })
+
     try {
       await connectToDatabase()
     } catch (error) {
@@ -34,6 +65,10 @@ describe('Database Operations', () => {
   })
 
   afterAll(async () => {
+    // Clean up Socket.IO server
+    if (io) io.close()
+    if (clientSocket) clientSocket.disconnect()
+
     try {
       await disconnectDatabase()
     } catch (error) {

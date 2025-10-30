@@ -1,4 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
+import { createServer } from 'node:http'
+import { io as ioc } from 'socket.io-client'
+import { Server } from 'socket.io'
+
+function waitFor(socket, event) {
+  return new Promise((resolve) => {
+    socket.once(event, resolve)
+  })
+}
 
 // Mock dependencies with proper function structure
 const mockPlayerSessionFind = vi.fn()
@@ -63,7 +72,36 @@ vi.mock('next-auth/jwt', () => ({
 process.env.NODE_ENV = 'test'
 
 describe('Player Session Management and Reconnection Logic', () => {
+  let io, serverSocket, clientSocket
   let playerSessions, rooms, mockSocket
+
+  beforeAll(async () => {
+    // Set up Socket.IO server
+    await new Promise((resolve) => {
+      const httpServer = createServer()
+      io = new Server(httpServer, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      })
+
+      httpServer.listen(() => {
+        const port = httpServer.address().port
+        clientSocket = ioc(`http://localhost:${port}`)
+        io.on("connection", (socket) => {
+          serverSocket = socket
+        })
+        clientSocket.on("connect", resolve)
+      })
+    })
+  })
+
+  afterAll(() => {
+    // Clean up Socket.IO server
+    if (io) io.close()
+    if (clientSocket) clientSocket.disconnect()
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()
