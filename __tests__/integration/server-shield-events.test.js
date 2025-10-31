@@ -7,9 +7,43 @@ import {
   checkAndExpireShields
 } from '../../server.js';
 
-function waitFor(socket, event) {
-  return new Promise((resolve) => {
-    socket.once(event, resolve);
+function waitFor(socket, event, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (!socket || !socket.connected) {
+      reject(new Error(`Socket is not connected for event: ${event}`));
+      return;
+    }
+
+    let timer = null;
+    let resolved = false;
+
+    const cleanup = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (socket && typeof socket.off === 'function' && !resolved) {
+        socket.off(event, listener);
+      }
+    };
+
+    timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        reject(new Error(`Timeout waiting for event: ${event} after ${timeout}ms`));
+      }
+    }, timeout);
+
+    const listener = (data) => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolve(data);
+      }
+    };
+
+    socket.on(event, listener);
   });
 }
 
@@ -18,8 +52,12 @@ describe('Server Shield Event Integration', () => {
   let httpServer, port;
   let testRoom, testRooms;
   let player1Id, player2Id;
+  let rooms; // Shared rooms Map for all sockets
 
   beforeAll(async () => {
+    // Initialize shared rooms map
+    rooms = new Map();
+
     return new Promise((resolve) => {
       httpServer = createServer();
       io = new Server(httpServer, {
@@ -65,7 +103,6 @@ describe('Server Shield Event Integration', () => {
 
   // Setup socket handlers for shield testing
   function setupShieldSocketHandlers(socket, io) {
-    const rooms = new Map();
 
     socket.on('join-room', async ({ roomCode }) => {
       const { userId, userName, userEmail } = socket.data;
@@ -169,7 +206,8 @@ describe('Server Shield Event Integration', () => {
           magicDeck: room.gameState.magicDeck,
           turnCount: room.gameState.turnCount,
           shields: room.gameState.shields || {},
-          playerActions: room.gameState.playerActions || {}
+          playerActions: room.gameState.playerActions || {},
+          gameStarted: room.gameState.gameStarted
         };
 
         room.players.forEach(player => {
@@ -180,7 +218,10 @@ describe('Server Shield Event Integration', () => {
           }
         });
       } else {
+        // Emit player-ready event to all players in room
         io.to(roomCode).emit('player-ready', { players: room.players });
+        // Also emit to the specific player who toggled ready
+        socket.emit('player-ready', { players: room.players });
       }
     });
 
@@ -266,16 +307,22 @@ describe('Server Shield Event Integration', () => {
   }
 
   beforeEach(async () => {
-    player1Id = 'player1';
-    player2Id = 'player2';
+    // Clear shared rooms map to ensure test isolation
+    rooms.clear();
+
+    // Generate unique player IDs for each test to avoid conflicts
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(7);
+    player1Id = `player1_${timestamp}_${random}`;
+    player2Id = `player2_${timestamp}_${random}`;
 
     // Create authenticated client sockets
     player1Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: player1Id, userName: 'Player 1', userEmail: 'player1@test.com' }
+      auth: { userId: player1Id, userName: 'Player 1', userEmail: `player1_${timestamp}@test.com` }
     });
 
     player2Socket = ioc(`http://localhost:${port}`, {
-      auth: { userId: player2Id, userName: 'Player 2', userEmail: 'player2@test.com' }
+      auth: { userId: player2Id, userName: 'Player 2', userEmail: `player2_${timestamp}@test.com` }
     });
 
     await Promise.all([
@@ -287,6 +334,13 @@ describe('Server Shield Event Integration', () => {
   });
 
   afterEach(() => {
+    // Properly disconnect sockets to avoid conflicts between tests
+    if (player1Socket && player1Socket.connected) {
+      player1Socket.disconnect();
+    }
+    if (player2Socket && player2Socket.connected) {
+      player2Socket.disconnect();
+    }
     vi.restoreAllMocks();
   });
 
@@ -312,6 +366,7 @@ describe('Server Shield Event Integration', () => {
       player2Socket.emit('player-ready', { roomCode });
       const gameStartData = await waitFor(player2Socket, 'game-start');
 
+      expect(gameStartData).toBeDefined();
       expect(gameStartData.gameStarted).toBe(true);
       expect(gameStartData.currentPlayer.userId).toBe(player1Id);
 
@@ -340,54 +395,104 @@ describe('Server Shield Event Integration', () => {
     it('should reject shield activation when not player\'s turn via Socket.IO', async () => {
       const roomCode = 'SHIELD02';
 
-      // Setup game
+      // Player 1 joins room first
       player1Socket.emit('join-room', { roomCode });
+      const joinResponse1 = await waitFor(player1Socket, 'room-joined', 5000);
+      expect(joinResponse1.players).toHaveLength(1);
+
+      // Player 2 joins room
       player2Socket.emit('join-room', { roomCode });
-      await waitFor(player1Socket, 'room-joined');
-      await waitFor(player2Socket, 'room-joined');
+      const joinResponse2 = await waitFor(player2Socket, 'room-joined', 5000);
+      expect(joinResponse2.players).toHaveLength(2);
 
+      // Both players ready up - Player 1 first
       player1Socket.emit('player-ready', { roomCode });
-      player2Socket.emit('player-ready', { roomCode });
-      await waitFor(player1Socket, 'game-start');
+      await waitFor(player1Socket, 'player-ready', 5000);
 
-      // Player 2 tries to use shield when it's Player 1's turn
+      // Player 2 ready - this should start the game
+      player2Socket.emit('player-ready', { roomCode });
+
+      // Wait for game-start event with proper timeout and error handling
+      let gameStartData;
+      try {
+        gameStartData = await waitFor(player2Socket, 'game-start', 8000);
+      } catch (error) {
+        // If game-start doesn't fire, try player-ready as fallback
+        try {
+          await waitFor(player2Socket, 'player-ready', 3000);
+          // Try game-start again after player-ready
+          gameStartData = await waitFor(player2Socket, 'game-start', 5000);
+        } catch (retryError) {
+          throw new Error(`Game failed to start: ${error.message}`);
+        }
+      }
+
+      expect(gameStartData.gameStarted).toBe(true);
+      expect(gameStartData.currentPlayer.userId).toBe(player1Id);
+
+      // Player 2 tries to use wind card when it's Player 1's turn
       player2Socket.emit('use-magic-card', {
         roomCode,
         cardId: 'wind1', // This card exists in Player 2's hand
         targetTileId: 'self'
       });
 
-      const errorResponse = await waitFor(player2Socket, 'room-error');
+      const errorResponse = await waitFor(player2Socket, 'room-error', 5000);
       expect(errorResponse).toBe('Not your turn');
     });
 
     it('should handle shield reinforcement event correctly via Socket.IO', async () => {
       const roomCode = 'SHIELD03';
 
-      // Setup game with modified hands for reinforcement test
+      // Player 1 joins room first
       player1Socket.emit('join-room', { roomCode });
+      const joinResponse1 = await waitFor(player1Socket, 'room-joined', 5000);
+      expect(joinResponse1.players).toHaveLength(1);
+
+      // Player 2 joins room
       player2Socket.emit('join-room', { roomCode });
-      await waitFor(player1Socket, 'room-joined');
-      await waitFor(player2Socket, 'room-joined');
+      const joinResponse2 = await waitFor(player2Socket, 'room-joined', 5000);
+      expect(joinResponse2.players).toHaveLength(2);
 
+      // Both players ready up
       player1Socket.emit('player-ready', { roomCode });
-      player2Socket.emit('player-ready', { roomCode });
-      const gameStartData = await waitFor(player1Socket, 'game-start');
+      await waitFor(player1Socket, 'player-ready', 5000);
 
-      // Player 1 uses first shield
+      player2Socket.emit('player-ready', { roomCode });
+
+      // Wait for game-start event with proper timeout and error handling
+      let gameStartData;
+      try {
+        gameStartData = await waitFor(player2Socket, 'game-start', 8000);
+      } catch (error) {
+        // If game-start doesn't fire, try player-ready as fallback
+        try {
+          await waitFor(player2Socket, 'player-ready', 3000);
+          // Try game-start again after player-ready
+          gameStartData = await waitFor(player2Socket, 'game-start', 5000);
+        } catch (retryError) {
+          throw new Error(`Game failed to start: ${error.message}`);
+        }
+      }
+
+      expect(gameStartData.gameStarted).toBe(true);
+
+      // Player 1 uses shield card
       player1Socket.emit('use-magic-card', {
         roomCode,
         cardId: 'shield1',
         targetTileId: 'self'
       });
 
-      const firstShieldResult = await waitFor(player1Socket, 'magic-card-used');
+      const firstShieldResult = await waitFor(player1Socket, 'magic-card-used', 5000);
       expect(firstShieldResult.actionResult.type).toBe('shield');
       expect(firstShieldResult.actionResult.remainingTurns).toBe(2);
+      expect(firstShieldResult.usedBy).toBe(player1Id);
 
-      // For this test, we'd need to modify the game state to add another shield
-      // This demonstrates the socket event pattern - actual reinforcement logic
-      // would need game state modification or additional test setup
+      // Verify Player 2 also receives the shield activation event
+      const shieldEventForPlayer2 = await waitFor(player2Socket, 'magic-card-used', 5000);
+      expect(shieldEventForPlayer2.actionResult.type).toBe('shield');
+      expect(shieldEventForPlayer2.actionResult.activatedFor).toBe(player1Id);
     });
   });
 
@@ -541,13 +646,41 @@ describe('Server Shield Event Integration', () => {
 
   describe('Shield Error Handling Events', () => {
     it('should handle invalid shield card usage events', async () => {
+      // Create test room for this specific test
+      const testRoomError = {
+        code: 'SHIELD_ERROR_TEST',
+        players: [
+          { userId: player1Id, name: 'Player 1', isReady: true, score: 0 },
+          { userId: player2Id, name: 'Player 2', isReady: true, score: 0 }
+        ],
+        gameState: {
+          tiles: [
+            { id: 1, color: 'red', emoji: '🟥', placedHeart: null },
+            { id: 2, color: 'yellow', emoji: '🟨', placedHeart: null }
+          ],
+          gameStarted: true,
+          currentPlayer: { userId: player1Id },
+          turnCount: 1,
+          deck: { emoji: '💌', cards: 10, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+          playerHands: {
+            [player1Id]: [
+              { id: 'shield1', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
+            ]
+          },
+          shields: {},
+          playerActions: {}
+        }
+      };
+
       const eventData = {
-        roomCode: testRoom.roomCode,
+        roomCode: testRoomError.roomCode,
         cardId: 'invalid-shield-id',
         targetTileId: 'self'
       };
 
-      const playerHand = testRoom.gameState.playerHands[player1Id];
+      const playerHand = testRoomError.gameState.playerHands[player1Id];
+      expect(playerHand).toBeDefined();
       const cardIndex = playerHand.findIndex(card => card.id === eventData.cardId);
 
       expect(cardIndex).toBe(-1);
@@ -560,21 +693,46 @@ describe('Server Shield Event Integration', () => {
     it('should handle shield activation when opponent has active shield', async () => {
       const { ShieldCard } = await import('../../src/lib/cards.js');
 
+      // Create test room for this specific test
+      const testRoomShield = {
+        code: 'SHIELD_CONFLICT_TEST',
+        players: [
+          { userId: player1Id, name: 'Player 1', isReady: true, score: 0 },
+          { userId: player2Id, name: 'Player 2', isReady: true, score: 0 }
+        ],
+        gameState: {
+          tiles: [
+            { id: 1, color: 'red', emoji: '🟥', placedHeart: null },
+            { id: 2, color: 'yellow', emoji: '🟨', placedHeart: null }
+          ],
+          gameStarted: true,
+          currentPlayer: { userId: player1Id },
+          turnCount: 1,
+          deck: { emoji: '💌', cards: 10, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+          playerHands: {
+            [player1Id]: [
+              { id: 'shield1', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
+            ],
+            [player2Id]: [
+              { id: 'shield2', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
+            ]
+          },
+          shields: {},
+          playerActions: {}
+        }
+      };
+
       // Player1 activates shield
       const player1Shield = new ShieldCard('shield1');
-      player1Shield.executeEffect(testRoom.gameState, player1Id);
-
-      // Give Player2 a shield card
-      testRoom.gameState.playerHands[player2Id].push(
-        { id: 'shield2', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
-      );
+      player1Shield.executeEffect(testRoomShield.gameState, player1Id);
 
       // Player2 tries to activate shield
       const player2Shield = new ShieldCard('shield2');
 
       // Player2 should not be able to activate shield while player1 has shield
       expect(() => {
-        player2Shield.executeEffect(testRoom.gameState, player2Id);
+        player2Shield.executeEffect(testRoomShield.gameState, player2Id);
       }).toThrow("Cannot activate Shield while opponent has active Shield");
     });
 
@@ -656,6 +814,9 @@ describe('Server Shield Event Integration', () => {
     it('should broadcast complete shield state for visual indicators', async () => {
       const { ShieldCard } = await import('../../src/lib/cards.js');
 
+      // Clear any existing shields before activating new one
+      testRoom.gameState.shields = {};
+
       // Activate shield
       const shield = new ShieldCard('shield-visual-test');
       const actionResult = shield.executeEffect(testRoom.gameState, player1Id);
@@ -681,6 +842,9 @@ describe('Server Shield Event Integration', () => {
 
     it('should synchronize shield visual state during turn changes', async () => {
       const { ShieldCard } = await import('../../src/lib/cards.js');
+
+      // Clear any existing shields before activating new one
+      testRoom.gameState.shields = {};
 
       // Activate shield
       const shield = new ShieldCard('shield-sync-test');
@@ -711,14 +875,55 @@ describe('Server Shield Event Integration', () => {
     it('should handle opponent shield visual state correctly', async () => {
       const { ShieldCard } = await import('../../src/lib/cards.js');
 
+      // Create test room for this specific test
+      const testRoomVisual = {
+        code: 'SHIELD_VISUAL_TEST',
+        players: [
+          { userId: player1Id, name: 'Player 1', isReady: true, score: 0 },
+          { userId: player2Id, name: 'Player 2', isReady: true, score: 0 }
+        ],
+        gameState: {
+          tiles: [
+            {
+              id: 1,
+              color: 'red',
+              emoji: '🟥',
+              placedHeart: {
+                color: 'red',
+                value: 2,
+                emoji: '❤️',
+                placedBy: player1Id,
+                originalTileColor: 'red'
+              }
+            },
+            { id: 2, color: 'yellow', emoji: '🟨', placedHeart: null }
+          ],
+          gameStarted: true,
+          currentPlayer: { userId: player1Id },
+          turnCount: 1,
+          deck: { emoji: '💌', cards: 10, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+          playerHands: {
+            [player1Id]: [
+              { id: 'shield1', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
+            ]
+          },
+          shields: {},
+          playerActions: {}
+        }
+      };
+
+      // Clear any existing shields before activating new one
+      testRoomVisual.gameState.shields = {};
+
       // Player 1 activates shield
       const player1Shield = new ShieldCard('player1-shield');
-      player1Shield.executeEffect(testRoom.gameState, player1Id);
+      player1Shield.executeEffect(testRoomVisual.gameState, player1Id);
 
       // Player 2 should receive visual state indicating Player 1 has shield
       const opponentVisualData = {
-        shields: testRoom.gameState.shields,
-        tiles: testRoom.gameState.tiles
+        shields: testRoomVisual.gameState.shields,
+        tiles: testRoomVisual.gameState.tiles
       };
 
       // Verify opponent can see Player 1's shield state
@@ -726,7 +931,7 @@ describe('Server Shield Event Integration', () => {
       expect(opponentVisualData.shields[player1Id].remainingTurns).toBe(2);
 
       // Verify tiles with Player 1's hearts should show shield indicators
-      const protectedTiles = testRoom.gameState.tiles.filter(tile =>
+      const protectedTiles = testRoomVisual.gameState.tiles.filter(tile =>
         tile.placedHeart && tile.placedHeart.placedBy === player1Id
       );
 
@@ -737,11 +942,14 @@ describe('Server Shield Event Integration', () => {
     it('should handle visual state updates during shield reinforcement', async () => {
       const { ShieldCard } = await import('../../src/lib/cards.js');
 
+      // Clear any existing shields before activating new one
+      testRoom.gameState.shields = {};
+
       // Activate initial shield
       const shield1 = new ShieldCard('reinforce-visual-1');
       shield1.executeEffect(testRoom.gameState, player1Id);
 
-      // Reinforce shield
+      // Reinforce shield (advance turn to allow reinforcement)
       testRoom.gameState.turnCount = 2;
       const shield2 = new ShieldCard('reinforce-visual-2');
       const reinforceResult = shield2.executeEffect(testRoom.gameState, player1Id);
