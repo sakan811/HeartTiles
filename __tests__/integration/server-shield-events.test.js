@@ -788,25 +788,52 @@ describe('Server Shield Event Integration', () => {
     it('should handle shield state during player migration', async () => {
       const { ShieldCard } = await import('../../src/lib/cards.js');
 
+      // Create test room for this specific test
+      const testRoomMigration = {
+        code: 'SHIELD_MIGRATION_TEST',
+        players: [
+          { userId: player1Id, name: 'Player 1', isReady: true, score: 0 },
+          { userId: player2Id, name: 'Player 2', isReady: true, score: 0 }
+        ],
+        gameState: {
+          tiles: [
+            { id: 1, color: 'red', emoji: '🟥', placedHeart: null },
+            { id: 2, color: 'yellow', emoji: '🟨', placedHeart: null }
+          ],
+          gameStarted: true,
+          currentPlayer: { userId: player1Id },
+          turnCount: 1,
+          deck: { emoji: '💌', cards: 10, type: 'hearts' },
+          magicDeck: { emoji: '🔮', cards: 10, type: 'magic' },
+          playerHands: {
+            [player1Id]: [
+              { id: 'shield1', type: 'shield', emoji: '🛡️', name: 'Shield Card' }
+            ]
+          },
+          shields: {},
+          playerActions: {}
+        }
+      };
+
       // Activate shield for player1
       const shield = new ShieldCard('shield1');
-      shield.executeEffect(testRoom.gameState, player1Id);
+      shield.executeEffect(testRoomMigration.gameState, player1Id);
 
       // Simulate player reconnection with new user ID
       const newUserId = 'player1_reconnected';
 
       // Migrate shield state (as done in server.js)
-      if (testRoom.gameState.shields[player1Id]) {
-        testRoom.gameState.shields[newUserId] = testRoom.gameState.shields[player1Id];
-        delete testRoom.gameState.shields[player1Id];
-        testRoom.gameState.shields[newUserId].protectedPlayerId = newUserId;
-        testRoom.gameState.shields[newUserId].activatedBy = newUserId;
+      if (testRoomMigration.gameState.shields[player1Id]) {
+        testRoomMigration.gameState.shields[newUserId] = testRoomMigration.gameState.shields[player1Id];
+        delete testRoomMigration.gameState.shields[player1Id];
+        testRoomMigration.gameState.shields[newUserId].protectedPlayerId = newUserId;
+        testRoomMigration.gameState.shields[newUserId].activatedBy = newUserId;
       }
 
       // Verify shield is still active
-      expect(testRoom.gameState.shields[newUserId]).toBeDefined();
-      expect(ShieldCard.isPlayerProtected(testRoom.gameState, newUserId, 1)).toBe(true);
-      expect(testRoom.gameState.shields[player1Id]).toBeUndefined();
+      expect(testRoomMigration.gameState.shields[newUserId]).toBeDefined();
+      expect(ShieldCard.isPlayerProtected(testRoomMigration.gameState, newUserId, 1)).toBe(true);
+      expect(testRoomMigration.gameState.shields[player1Id]).toBeUndefined();
     });
   });
 
