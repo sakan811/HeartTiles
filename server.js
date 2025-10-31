@@ -806,7 +806,7 @@ async function updatePlayerSocket(userId, socketId, userSessionId, userName, use
   return session;
 }
 
-/* v8 ignore start */
+/* v8 ignore next -- @preserve */
 app.prepare().then(async () => {
     await connectToDatabase();
 
@@ -1808,7 +1808,6 @@ app.prepare().then(async () => {
         console.log(`> Ready on http://${hostname}:${port}`);
       });
   });
-/* v8 ignore stop */
 
 // Export functions for testing (they are accessible within the same scope)
 export {
