@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
 import mongoose from 'mongoose';
+import crypto from "crypto";
 import { PlayerSession, Room, User } from './models.js';
 import { getToken } from 'next-auth/jwt';
 import {
@@ -170,7 +171,8 @@ async function savePlayerSession(sessionData) {
 
     // Generate userSessionId if not provided
     if (!sessionData.userSessionId) {
-      sessionData.userSessionId = `session_${sessionData.userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const randomStr = crypto.randomBytes(9).toString('hex');
+      sessionData.userSessionId = `session_${sessionData.userId}_${Date.now()}_${randomStr}`;
     }
 
     const savedSession = await PlayerSession.findOneAndUpdate(
