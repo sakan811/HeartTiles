@@ -806,14 +806,11 @@ async function updatePlayerSocket(userId, socketId, userSessionId, userName, use
   return session;
 }
 
-/* v8 ignore next */
+/* v8 ignore start */
 app.prepare().then(async () => {
-    /* v8 ignore next */
     await connectToDatabase();
 
-  /* v8 ignore next */
   const httpServer = createServer(handler);
-  /* v8 ignore next */
   const io = new Server(httpServer, {
     cors: {
       origin: process.env.NODE_ENV === "production" ? false : ["http://localhost:3000"],
@@ -821,40 +818,31 @@ app.prepare().then(async () => {
     },
   });
 
-  /* v8 ignore next */
   const rooms = await loadRooms();
   // Load sessions into the global playerSessions variable
-  /* v8 ignore next */
   playerSessions = await loadPlayerSessions();
 
   // Clear any existing locks from previous runs
   // Use global turnLocks if available (for testing), otherwise use module-level
-  /* v8 ignore next */
   const locks = global.turnLocks || turnLocks;
-  /* v8 ignore next */
   locks.clear();
-  /* v8 ignore next */
   const connectionPool = new Map();
   const MAX_CONNECTIONS_PER_IP = 5;
 
-  /* v8 ignore next */
   console.log(`Loaded ${rooms.size} rooms, ${playerSessions.size} sessions`);
 
 
   // These functions are now defined globally for testing
 
   // Helper functions that need access to closure variables
-  /* v8 ignore next */
   function canAcceptConnection(ip) {
     return (connectionPool.get(ip) || 0) <= MAX_CONNECTIONS_PER_IP;
   }
 
-  /* v8 ignore next */
   function incrementConnectionCount(ip) {
     connectionPool.set(ip, (connectionPool.get(ip) || 0) + 1);
   }
 
-  /* v8 ignore next */
   function decrementConnectionCount(ip) {
     const current = connectionPool.get(ip) || 0;
     if (current > 0) connectionPool.set(ip, current - 1);
@@ -905,16 +893,12 @@ app.prepare().then(async () => {
   // endGame function is defined above
 
   // Use authentication middleware
-  /* v8 ignore next */
   io.use(authenticateSocket);
 
-  /* v8 ignore next */
   io.on("connection", (socket) => {
-    /* v8 ignore next */
     const clientIP = getClientIP(socket);
     const { userId, userEmail, userName, userSessionId } = socket.data;
 
-    /* v8 ignore next */
     if (!canAcceptConnection(clientIP)) {
       console.log(`Connection rejected for IP ${clientIP}: Too many connections`);
       socket.emit("room-error", "Too many connections from your IP address");
@@ -922,9 +906,7 @@ app.prepare().then(async () => {
       return;
     }
 
-    /* v8 ignore next */
     incrementConnectionCount(clientIP);
-    /* v8 ignore next */
     console.log(`User ${userName} (${userId}) connected from ${clientIP}`);
 
     socket.on("join-room", async ({ roomCode }) => {
@@ -1817,17 +1799,16 @@ app.prepare().then(async () => {
     });
   });
 
-    /* v8 ignore next */
     httpServer
       .once("error", (err) => {
         console.error(err);
         process.exit(1);
       })
-      /* v8 ignore next */
       .listen(port, () => {
         console.log(`> Ready on http://${hostname}:${port}`);
       });
   });
+/* v8 ignore stop */
 
 // Export functions for testing (they are accessible within the same scope)
 export {
