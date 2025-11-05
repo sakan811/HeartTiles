@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.10",
-    "bcryptjs": "^3.0.2",
+    "bcryptjs": "^3.0.3",
     "mongoose": "^8.19.3",
     "next": "16.0.1",
     "next-auth": "5.0.0-beta.30",
