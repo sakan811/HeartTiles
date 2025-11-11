@@ -430,20 +430,15 @@ function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
     return { shouldEnd: true, reason: "All tiles are filled" };
   }
 
-  // Condition 2: Any deck is empty
+  // Condition 2: Both decks are empty (as per documented game rules)
   const heartDeckEmpty = room.gameState.deck?.cards <= 0;
   const magicDeckEmpty = room.gameState.magicDeck?.cards <= 0;
-  const anyDeckEmpty = heartDeckEmpty || magicDeckEmpty;
+  const bothDecksEmpty = heartDeckEmpty && magicDeckEmpty;
 
-  // If grace period is allowed, don't end game immediately when deck becomes empty
+  // If grace period is allowed, don't end game immediately when both decks become empty
   // This allows the current player to finish their turn
-  if (anyDeckEmpty && !allowDeckEmptyGracePeriod) {
-    if (heartDeckEmpty && magicDeckEmpty) {
-      return { shouldEnd: true, reason: "Both decks are empty" };
-    } else {
-      const emptyDeck = heartDeckEmpty ? "Heart" : "Magic";
-      return { shouldEnd: true, reason: `${emptyDeck} deck is empty` };
-    }
+  if (bothDecksEmpty && !allowDeckEmptyGracePeriod) {
+    return { shouldEnd: true, reason: "Both decks are empty" };
   }
 
   return { shouldEnd: false, reason: null };

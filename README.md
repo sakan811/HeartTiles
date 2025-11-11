@@ -1,6 +1,6 @@
 # Heart Tiles
 
-A strategic tile-based card game where players place colored hearts on tiles to score points. Built with Next.js 16, React 19, Socket.IO, and MongoDB for real-time multiplayer gameplay.
+A strategic tile-based multiplayer card game where players place colored hearts on tiles to score points. Built with Next.js 16, React 19, Socket.IO, and MongoDB for real-time gameplay.
 
 Inspired by Kitty Card Game from Love and Deepspace
 
@@ -47,7 +47,7 @@ Please refer to the [Game Rules](docs/GAME_RULES.md) document for detailed rules
 - **Frontend**: Next.js 16.0.1, React 19.2.0, TypeScript 5.9.3, Tailwind CSS v4.1.16
 - **Backend**: Node.js, Socket.IO 4.8.1, MongoDB, Mongoose 8.19.2
 - **Auth**: NextAuth 5.0.0-beta.30 with MongoDB user storage and bcryptjs
-- **Testing**: Vitest 4.0.5 with comprehensive test suite
+- **Testing**: Vitest 4.0.5 with multi-project test setup
 - **Docker**: MongoDB with Mongo Express admin UI
 
 ### Commands
@@ -58,12 +58,14 @@ pnpm dev          # Development server
 pnpm build        # Production build with Turbopack
 pnpm start        # Production server
 pnpm lint         # Lint and auto-fix code
+pnpm typecheck    # TypeScript type checking
+pnpm format       # Code formatting with Prettier
 
 # Testing
+pnpm test         # Run tests in watch mode
 pnpm test:run     # Run tests once
 pnpm test:coverage # Coverage report
 pnpm test:ui      # Test UI
-pnpm test         # Alias for test:run
 
 # Docker
 pnpm docker:start # Start MongoDB and Mongo Express
@@ -71,7 +73,7 @@ pnpm docker:stop  # Stop services
 pnpm docker:logs  # View logs
 ```
 
-### Architecture
+## Architecture
 
 - **Server-first**: All game state lives on server (single source of truth)
 - **Real-time**: Socket.IO for multiplayer synchronization
