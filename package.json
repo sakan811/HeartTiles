@@ -6,7 +6,7 @@
     "dev": "node server.js",
     "build": "next build --turbopack",
     "start": "NODE_ENV=production node server.js",
-    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --fix",
+    "lint": "pnpm exec eslint . --fix",
     "typecheck": "tsc --noEmit",
     "format": "pnpm exec prettier . --write",
     "check-qa": "pnpm lint && pnpm typecheck && pnpm format && pnpm build",
