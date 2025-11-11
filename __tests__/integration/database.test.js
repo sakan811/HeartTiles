@@ -1,9 +1,9 @@
 // Integration tests for database operations
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import { createServer } from 'node:http'
 import { io as ioc } from 'socket.io-client'
 import { Server } from 'socket.io'
-import { Room, PlayerSession } from '../../models.js'
+import { Room, PlayerSession, User } from '../../models.js'
 
 // Import database utility functions from server-test-utils.js
 import {
@@ -285,6 +285,72 @@ describe('Database Operations Integration', () => {
     })
   })
 
+  describe('deleteRoom Function Error Handling', () => {
+    it('should handle deleteRoom function errors properly', async () => {
+      try {
+        await Room.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const testTimestamp = Date.now()
+      const roomData = {
+        code: `ERRTEST${testTimestamp}`,
+        players: [
+          { userId: `user-1-${testTimestamp}`, name: 'Player 1', email: `p1-${testTimestamp}@test.com`, isReady: true, score: 5 }
+        ],
+        maxPlayers: 2,
+        gameState: {
+          tiles: [],
+          gameStarted: false,
+          currentPlayer: null,
+          deck: { emoji: '💌', cards: 16, },
+          magicDeck: { emoji: '🔮', cards: 16, },
+          playerHands: {},
+          turnCount: 0,
+          playerActions: {}
+        }
+      }
+
+      // Save the room first
+      await saveRoom(roomData)
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Mock console.error to capture error logging
+      const originalConsoleError = console.error
+      let consoleErrorCalled = false
+      let loggedError = null
+
+      console.error = (...args) => {
+        consoleErrorCalled = true
+        loggedError = args[0]
+        originalConsoleError(...args)
+      }
+
+      // Import and test the actual deleteRoom function directly with mocked Room.deleteOne
+      const { deleteRoom } = await import('../../models.js')
+
+      // Mock Room.deleteOne to throw an error to test error handling
+      const originalDeleteOne = Room.deleteOne
+      Room.deleteOne = vi.fn().mockRejectedValue(new Error('Database connection failed'))
+
+      // The deleteRoom function should throw the error after logging it
+      await expect(deleteRoom(`ERRTEST${testTimestamp}`)).rejects.toThrow('Database connection failed')
+
+      // Verify console.error was called (this covers lines 219-223)
+      expect(consoleErrorCalled).toBe(true)
+      expect(loggedError).toBe('Failed to delete room:')
+
+      // Restore original function and console.error
+      Room.deleteOne = originalDeleteOne
+      console.error = originalConsoleError
+
+      // Clean up - actually delete the room
+      await originalDeleteOne.call(Room, { code: `ERRTEST${testTimestamp}` })
+    })
+  })
+
   describe('Complex Game State Persistence', () => {
     it('should save and load complex game state with shields and actions', async () => {
       try {
@@ -463,6 +529,145 @@ describe('Database Operations Integration', () => {
       const cleanInput = sanitizeInput('<script>alert("test")</script>')
       expect(cleanInput).not.toContain('<script>')
       expect(cleanInput).not.toContain('</script>')
+    })
+  })
+
+  describe('User Authentication Integration', () => {
+    it('should hash password before saving user', async () => {
+      try {
+        await User.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const testTimestamp = Date.now()
+      const plainPassword = 'testPassword123'
+      const userEmail = `test-user-${testTimestamp}@example.com`
+
+      // Create user with plain password
+      const userData = {
+        name: 'Test User',
+        email: userEmail,
+        password: plainPassword
+      }
+
+      // Save user - this should trigger the pre-save middleware
+      const savedUser = new User(userData)
+      await savedUser.save()
+
+      // Verify user was saved
+      expect(savedUser._id).toBeDefined()
+      expect(savedUser.name).toBe('Test User')
+      expect(savedUser.email).toBe(userEmail)
+
+      // Assert that the password is hashed (not equal to plain password)
+      expect(savedUser.password).not.toBe(plainPassword)
+      expect(savedUser.password).toHaveLength(60) // bcrypt hash length
+
+      // Assert that the password starts with $2b$12$ (bcrypt format with salt rounds 12)
+      expect(savedUser.password).toMatch(/^\$2b\$12\$/)
+
+      // Test that the comparePassword method works correctly
+      const isMatch = await savedUser.comparePassword(plainPassword)
+      expect(isMatch).toBe(true)
+
+      // Test that wrong password doesn't match
+      const isWrongMatch = await savedUser.comparePassword('wrongPassword')
+      expect(isWrongMatch).toBe(false)
+
+      // Retrieve user from database to verify persistence
+      const retrievedUser = await User.findOne({ email: userEmail })
+      expect(retrievedUser).toBeDefined()
+      expect(retrievedUser.password).not.toBe(plainPassword)
+      expect(retrievedUser.password).toMatch(/^\$2b\$12\$/)
+
+      // Verify the retrieved user's comparePassword method also works
+      const retrievedUserMatch = await retrievedUser.comparePassword(plainPassword)
+      expect(retrievedUserMatch).toBe(true)
+    })
+
+    it('should not hash password if password is not modified', async () => {
+      try {
+        await User.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const testTimestamp = Date.now()
+      const plainPassword = 'testPassword456'
+      const userEmail = `test-user-modified-${testTimestamp}@example.com`
+
+      // Create user with plain password
+      const userData = {
+        name: 'Test User Modified',
+        email: userEmail,
+        password: plainPassword
+      }
+
+      // Save user - this should trigger the pre-save middleware
+      const savedUser = new User(userData)
+      await savedUser.save()
+
+      // Get the initial hashed password
+      const initialHashedPassword = savedUser.password
+
+      // Update only the name field (not password)
+      savedUser.name = 'Updated Test User'
+      await savedUser.save()
+
+      // Assert that the password hash remains unchanged
+      expect(savedUser.password).toBe(initialHashedPassword)
+      expect(savedUser.name).toBe('Updated Test User')
+
+      // Verify password comparison still works
+      const isMatch = await savedUser.comparePassword(plainPassword)
+      expect(isMatch).toBe(true)
+    })
+
+    it('should rehash password when password field is modified', async () => {
+      try {
+        await User.findOne()
+      } catch {
+        console.log('MongoDB not available, skipping test')
+        return
+      }
+
+      const testTimestamp = Date.now()
+      const initialPassword = 'initialPassword123'
+      const updatedPassword = 'updatedPassword456'
+      const userEmail = `test-user-rehash-${testTimestamp}@example.com`
+
+      // Create user with initial password
+      const userData = {
+        name: 'Test User Rehash',
+        email: userEmail,
+        password: initialPassword
+      }
+
+      // Save user - this should trigger the pre-save middleware
+      const savedUser = new User(userData)
+      await savedUser.save()
+
+      // Get the initial hashed password
+      const initialHashedPassword = savedUser.password
+
+      // Update the password field
+      savedUser.password = updatedPassword
+      await savedUser.save()
+
+      // Assert that the password hash has changed
+      expect(savedUser.password).not.toBe(initialHashedPassword)
+      expect(savedUser.password).toMatch(/^\$2b\$12\$/)
+
+      // Verify old password no longer works
+      const oldPasswordMatch = await savedUser.comparePassword(initialPassword)
+      expect(oldPasswordMatch).toBe(false)
+
+      // Verify new password works
+      const newPasswordMatch = await savedUser.comparePassword(updatedPassword)
+      expect(newPasswordMatch).toBe(true)
     })
   })
 })
