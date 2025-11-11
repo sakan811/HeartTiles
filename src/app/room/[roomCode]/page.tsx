@@ -45,7 +45,7 @@ export default function RoomPage() {
     }
 
     return playerName;
-  }, [session?.user?.name, socketId]);
+  }, [session, socketId]);
 
   useEffect(() => {
     // Redirect unauthenticated users to sign in
