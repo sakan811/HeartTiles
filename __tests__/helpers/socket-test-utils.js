@@ -1,5 +1,5 @@
 // Socket.IO testing utilities for integration tests
-import { io as ioc } from 'socket.io-client'
+import { io as ioc } from "socket.io-client";
 
 /**
  * Enhanced waitFor function with timeout and error handling
@@ -11,17 +11,19 @@ import { io as ioc } from 'socket.io-client'
 export function waitFor(socket, event, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      socket.off(event, onEvent)
-      reject(new Error(`Timeout waiting for '${event}' event after ${timeoutMs}ms`))
-    }, timeoutMs)
+      socket.off(event, onEvent);
+      reject(
+        new Error(`Timeout waiting for '${event}' event after ${timeoutMs}ms`),
+      );
+    }, timeoutMs);
 
     const onEvent = (data) => {
-      clearTimeout(timeout)
-      resolve(data)
-    }
+      clearTimeout(timeout);
+      resolve(data);
+    };
 
-    socket.once(event, onEvent)
-  })
+    socket.once(event, onEvent);
+  });
 }
 
 /**
@@ -35,13 +37,13 @@ export async function createAuthenticatedSocket(port, auth, timeoutMs = 5000) {
   const socket = ioc(`http://localhost:${port}`, {
     auth,
     timeout: timeoutMs,
-    transports: ['websocket']
-  })
+    transports: ["websocket"],
+  });
 
   // Wait for connection with timeout
-  await waitFor(socket, 'connect', timeoutMs)
+  await waitFor(socket, "connect", timeoutMs);
 
-  return socket
+  return socket;
 }
 
 /**
@@ -51,9 +53,15 @@ export async function createAuthenticatedSocket(port, auth, timeoutMs = 5000) {
  * @param {number} timeoutMs - Connection timeout in milliseconds
  * @returns {Promise<Array>} Promise that resolves to array of connected sockets
  */
-export async function createAuthenticatedSockets(port, authList, timeoutMs = 5000) {
-  const socketPromises = authList.map(auth => createAuthenticatedSocket(port, auth, timeoutMs))
-  return Promise.all(socketPromises)
+export async function createAuthenticatedSockets(
+  port,
+  authList,
+  timeoutMs = 5000,
+) {
+  const socketPromises = authList.map((auth) =>
+    createAuthenticatedSocket(port, auth, timeoutMs),
+  );
+  return Promise.all(socketPromises);
 }
 
 /**
@@ -63,10 +71,10 @@ export async function createAuthenticatedSockets(port, authList, timeoutMs = 500
 export function safeDisconnect(socket) {
   try {
     if (socket && socket.connected) {
-      socket.disconnect()
+      socket.disconnect();
     }
   } catch (error) {
-    console.warn('Error disconnecting socket:', error.message)
+    console.warn("Error disconnecting socket:", error.message);
   }
 }
 
@@ -75,7 +83,7 @@ export function safeDisconnect(socket) {
  * @param {Array} sockets - Array of Socket.IO client sockets
  */
 export function safeDisconnectAll(sockets) {
-  sockets.forEach(socket => safeDisconnect(socket))
+  sockets.forEach((socket) => safeDisconnect(socket));
 }
 
 /**
@@ -85,13 +93,16 @@ export function safeDisconnectAll(sockets) {
  */
 export async function setupTestSockets(port) {
   const authList = [
-    { userId: 'player1', userName: 'Player 1', userEmail: 'player1@test.com' },
-    { userId: 'player2', userName: 'Player 2', userEmail: 'player2@test.com' }
-  ]
+    { userId: "player1", userName: "Player 1", userEmail: "player1@test.com" },
+    { userId: "player2", userName: "Player 2", userEmail: "player2@test.com" },
+  ];
 
-  const [player1Socket, player2Socket] = await createAuthenticatedSockets(port, authList)
+  const [player1Socket, player2Socket] = await createAuthenticatedSockets(
+    port,
+    authList,
+  );
 
-  return { player1Socket, player2Socket }
+  return { player1Socket, player2Socket };
 }
 
 /**
@@ -99,6 +110,8 @@ export async function setupTestSockets(port) {
  * @param {Object} sockets - Object containing socket clients
  */
 export function cleanupTestSockets(sockets = {}) {
-  const { player1Socket, player2Socket, clientSocket } = sockets
-  safeDisconnectAll([player1Socket, player2Socket, clientSocket].filter(Boolean))
+  const { player1Socket, player2Socket, clientSocket } = sockets;
+  safeDisconnectAll(
+    [player1Socket, player2Socket, clientSocket].filter(Boolean),
+  );
 }

@@ -1,255 +1,290 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock the SocketContext with proper spies
-const mockUseSocket = vi.fn()
-const mockSocketProvider = vi.fn()
+const mockUseSocket = vi.fn();
+const mockSocketProvider = vi.fn();
 
-vi.mock('../../../src/contexts/SocketContext', () => ({
+vi.mock("../../../src/contexts/SocketContext", () => ({
   useSocket: mockUseSocket,
   SocketProvider: mockSocketProvider,
   SocketContext: { Provider: vi.fn() },
-  default: { useSocket: mockUseSocket }
-}))
+  default: { useSocket: mockUseSocket },
+}));
 
-describe('Socket Module Tests', () => {
+describe("Socket Module Tests", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+  });
 
-  describe('Legacy Export Functionality', () => {
-    it('should re-export useSocket from SocketContext', () => {
+  describe("Legacy Export Functionality", () => {
+    it("should re-export useSocket from SocketContext", () => {
       // Test that the mock is working correctly
-      expect(mockUseSocket).toBeDefined()
-      expect(typeof mockUseSocket).toBe('function')
-    })
+      expect(mockUseSocket).toBeDefined();
+      expect(typeof mockUseSocket).toBe("function");
+    });
 
-    it('should maintain useSocket as a function', () => {
+    it("should maintain useSocket as a function", () => {
       // Test the mocked useSocket function
-      expect(typeof mockUseSocket).toBe('function')
-    })
+      expect(typeof mockUseSocket).toBe("function");
+    });
 
-    it('should delegate calls to SocketContext useSocket', () => {
-      mockUseSocket.mockClear()
-      mockUseSocket.mockReturnValue('test-result')
+    it("should delegate calls to SocketContext useSocket", () => {
+      mockUseSocket.mockClear();
+      mockUseSocket.mockReturnValue("test-result");
 
       // Since we can't easily import the actual module due to TypeScript issues,
       // we'll verify the mock behavior which represents the expected behavior
-      const result = mockUseSocket('arg1', 'arg2', 'arg3')
+      const result = mockUseSocket("arg1", "arg2", "arg3");
 
-      expect(mockUseSocket).toHaveBeenCalledWith('arg1', 'arg2', 'arg3')
-      expect(result).toBe('test-result')
-    })
+      expect(mockUseSocket).toHaveBeenCalledWith("arg1", "arg2", "arg3");
+      expect(result).toBe("test-result");
+    });
 
-    it('should handle socket data correctly', () => {
-      mockUseSocket.mockClear()
+    it("should handle socket data correctly", () => {
+      mockUseSocket.mockClear();
       const mockSocketData = {
-        socket: { id: 'test-socket' },
+        socket: { id: "test-socket" },
         isConnected: true,
-        socketId: 'test-socket',
+        socketId: "test-socket",
         connectionError: null,
-        disconnect: vi.fn()
-      }
-      mockUseSocket.mockReturnValue(mockSocketData)
+        disconnect: vi.fn(),
+      };
+      mockUseSocket.mockReturnValue(mockSocketData);
 
-      const result = mockUseSocket()
+      const result = mockUseSocket();
 
-      expect(result).toEqual(mockSocketData)
-      expect(mockUseSocket).toHaveBeenCalled()
-    })
+      expect(result).toEqual(mockSocketData);
+      expect(mockUseSocket).toHaveBeenCalled();
+    });
 
-    it('should handle game mechanics socket usage patterns', () => {
-      mockUseSocket.mockClear()
+    it("should handle game mechanics socket usage patterns", () => {
+      mockUseSocket.mockClear();
       const mockSocketInstance = {
         emit: vi.fn(),
         on: vi.fn(),
         off: vi.fn(),
-        disconnect: vi.fn()
-      }
+        disconnect: vi.fn(),
+      };
 
       mockUseSocket.mockReturnValue({
         socket: mockSocketInstance,
         isConnected: true,
-        socketId: 'game-session-123',
+        socketId: "game-session-123",
         connectionError: null,
-        disconnect: vi.fn()
-      })
+        disconnect: vi.fn(),
+      });
 
-      const socketData = mockUseSocket()
+      const socketData = mockUseSocket();
 
       // Test common game events
-      expect(typeof socketData.socket.emit).toBe('function')
-      expect(typeof socketData.socket.on).toBe('function')
-      expect(typeof socketData.socket.off).toBe('function')
-      expect(typeof socketData.disconnect).toBe('function')
+      expect(typeof socketData.socket.emit).toBe("function");
+      expect(typeof socketData.socket.on).toBe("function");
+      expect(typeof socketData.socket.off).toBe("function");
+      expect(typeof socketData.disconnect).toBe("function");
 
       // Simulate game event emission
-      socketData.socket.emit('join-room', { roomCode: 'ABC123' })
-      expect(mockSocketInstance.emit).toHaveBeenCalledWith('join-room', { roomCode: 'ABC123' })
+      socketData.socket.emit("join-room", { roomCode: "ABC123" });
+      expect(mockSocketInstance.emit).toHaveBeenCalledWith("join-room", {
+        roomCode: "ABC123",
+      });
 
       // Simulate player ready event
-      socketData.socket.emit('player-ready', { ready: true })
-      expect(mockSocketInstance.emit).toHaveBeenCalledWith('player-ready', { ready: true })
+      socketData.socket.emit("player-ready", { ready: true });
+      expect(mockSocketInstance.emit).toHaveBeenCalledWith("player-ready", {
+        ready: true,
+      });
 
       // Simulate heart placement
-      socketData.socket.emit('place-heart', { tileIndex: 0, heart: { color: 'red', value: 2 } })
-      expect(mockSocketInstance.emit).toHaveBeenCalledWith('place-heart', { tileIndex: 0, heart: { color: 'red', value: 2 } })
+      socketData.socket.emit("place-heart", {
+        tileIndex: 0,
+        heart: { color: "red", value: 2 },
+      });
+      expect(mockSocketInstance.emit).toHaveBeenCalledWith("place-heart", {
+        tileIndex: 0,
+        heart: { color: "red", value: 2 },
+      });
 
       // Simulate magic card usage
-      socketData.socket.emit('play-magic-card', { cardType: 'wind', targetTile: 3 })
-      expect(mockSocketInstance.emit).toHaveBeenCalledWith('play-magic-card', { cardType: 'wind', targetTile: 3 })
+      socketData.socket.emit("play-magic-card", {
+        cardType: "wind",
+        targetTile: 3,
+      });
+      expect(mockSocketInstance.emit).toHaveBeenCalledWith("play-magic-card", {
+        cardType: "wind",
+        targetTile: 3,
+      });
 
       // Simulate turn end
-      socketData.socket.emit('end-turn', { playerId: 'player1', turnNumber: 3 })
-      expect(mockSocketInstance.emit).toHaveBeenCalledWith('end-turn', { playerId: 'player1', turnNumber: 3 })
-    })
+      socketData.socket.emit("end-turn", {
+        playerId: "player1",
+        turnNumber: 3,
+      });
+      expect(mockSocketInstance.emit).toHaveBeenCalledWith("end-turn", {
+        playerId: "player1",
+        turnNumber: 3,
+      });
+    });
 
-    it('should pass through errors appropriately', () => {
-      mockUseSocket.mockClear()
-      const testError = new Error('Socket connection failed')
+    it("should pass through errors appropriately", () => {
+      mockUseSocket.mockClear();
+      const testError = new Error("Socket connection failed");
       mockUseSocket.mockImplementation(() => {
-        throw testError
-      })
+        throw testError;
+      });
 
       expect(() => {
-        mockUseSocket()
-      }).toThrow('Socket connection failed')
-    })
+        mockUseSocket();
+      }).toThrow("Socket connection failed");
+    });
 
-    it('should maintain function identity', () => {
+    it("should maintain function identity", () => {
       // Test that the function maintains its identity
-      expect(mockUseSocket).toBe(mockUseSocket)
-      expect(typeof mockUseSocket).toBe('function')
-    })
+      expect(mockUseSocket).toBe(mockUseSocket);
+      expect(typeof mockUseSocket).toBe("function");
+    });
 
-    it('should support re-export chaining behavior', () => {
-      mockUseSocket.mockClear()
-      mockUseSocket.mockReturnValue({ test: 'chained-export' })
+    it("should support re-export chaining behavior", () => {
+      mockUseSocket.mockClear();
+      mockUseSocket.mockReturnValue({ test: "chained-export" });
 
       // Simulate re-export chaining (what the socket.ts file does)
       const reExportedModule = {
-        useSocket: mockUseSocket
-      }
+        useSocket: mockUseSocket,
+      };
 
-      const result = reExportedModule.useSocket()
+      const result = reExportedModule.useSocket();
 
-      expect(mockUseSocket).toHaveBeenCalled()
-      expect(result).toEqual({ test: 'chained-export' })
-    })
-  })
+      expect(mockUseSocket).toHaveBeenCalled();
+      expect(result).toEqual({ test: "chained-export" });
+    });
+  });
 
-  describe('Module Structure and Documentation', () => {
-    it('should direct users to use SocketContext instead', () => {
+  describe("Module Structure and Documentation", () => {
+    it("should direct users to use SocketContext instead", () => {
       // This test verifies the file structure exists
-      const fs = require('fs')
-      const path = require('path')
+      const fs = require("fs");
+      const path = require("path");
 
-      const socketFilePath = path.join(process.cwd(), 'src/socket.ts')
-      const fileExists = fs.existsSync(socketFilePath)
+      const socketFilePath = path.join(process.cwd(), "src/socket.ts");
+      const fileExists = fs.existsSync(socketFilePath);
 
-      expect(fileExists).toBe(true)
+      expect(fileExists).toBe(true);
 
       if (fileExists) {
-        const content = fs.readFileSync(socketFilePath, 'utf8')
-        expect(content).toContain('useSocket')
-        expect(content).toContain('SocketContext')
-        expect(content).toContain('Legacy export')
+        const content = fs.readFileSync(socketFilePath, "utf8");
+        expect(content).toContain("useSocket");
+        expect(content).toContain("SocketContext");
+        expect(content).toContain("Legacy export");
       }
-    })
+    });
 
-    it('should maintain backward compatibility', () => {
+    it("should maintain backward compatibility", () => {
       // Test that the legacy export pattern works
       const socketModule = {
-        useSocket: mockUseSocket
-      }
+        useSocket: mockUseSocket,
+      };
 
       // Test different import patterns
-      const { useSocket } = socketModule
-      expect(typeof useSocket).toBe('function')
-      expect(useSocket).toBe(mockUseSocket)
-    })
-  })
+      const { useSocket } = socketModule;
+      expect(typeof useSocket).toBe("function");
+      expect(useSocket).toBe(mockUseSocket);
+    });
+  });
 
-  describe('Game Integration Patterns', () => {
-    it('should support typical game component usage', () => {
-      mockUseSocket.mockClear()
+  describe("Game Integration Patterns", () => {
+    it("should support typical game component usage", () => {
+      mockUseSocket.mockClear();
       const gameSocketData = {
         socket: {
           emit: vi.fn(),
           on: vi.fn(),
-          off: vi.fn()
+          off: vi.fn(),
         },
         isConnected: true,
-        socketId: 'game-room-456',
+        socketId: "game-room-456",
         connectionError: null,
-        disconnect: vi.fn()
-      }
-      mockUseSocket.mockReturnValue(gameSocketData)
+        disconnect: vi.fn(),
+      };
+      mockUseSocket.mockReturnValue(gameSocketData);
 
       // Simulate typical React component usage
       function useGameSocket() {
-        return mockUseSocket()
+        return mockUseSocket();
       }
 
-      const socketData = useGameSocket()
+      const socketData = useGameSocket();
 
-      expect(socketData.isConnected).toBe(true)
-      expect(socketData.socketId).toBe('game-room-456')
-      expect(typeof socketData.socket.emit).toBe('function')
+      expect(socketData.isConnected).toBe(true);
+      expect(socketData.socketId).toBe("game-room-456");
+      expect(typeof socketData.socket.emit).toBe("function");
 
       // Test game event emission
-      socketData.socket.emit('create-room', { maxPlayers: 2 })
-      expect(gameSocketData.socket.emit).toHaveBeenCalledWith('create-room', { maxPlayers: 2 })
-    })
+      socketData.socket.emit("create-room", { maxPlayers: 2 });
+      expect(gameSocketData.socket.emit).toHaveBeenCalledWith("create-room", {
+        maxPlayers: 2,
+      });
+    });
 
-    it('should handle room management events', () => {
-      mockUseSocket.mockClear()
+    it("should handle room management events", () => {
+      mockUseSocket.mockClear();
       const roomSocketData = {
-        socket: { emit: vi.fn(), on: vi.fn(), off: vi.fn(), disconnect: vi.fn() },
+        socket: {
+          emit: vi.fn(),
+          on: vi.fn(),
+          off: vi.fn(),
+          disconnect: vi.fn(),
+        },
         isConnected: true,
-        socketId: 'player-socket-789',
+        socketId: "player-socket-789",
         connectionError: null,
-        disconnect: vi.fn()
-      }
-      mockUseSocket.mockReturnValue(roomSocketData)
+        disconnect: vi.fn(),
+      };
+      mockUseSocket.mockReturnValue(roomSocketData);
 
-      const { socket } = mockUseSocket()
+      const { socket } = mockUseSocket();
 
       // Test room events
-      socket.emit('join-room', { roomCode: 'GAME123' })
-      socket.emit('leave-room', { roomCode: 'GAME123' })
-      socket.emit('player-ready', { ready: true })
+      socket.emit("join-room", { roomCode: "GAME123" });
+      socket.emit("leave-room", { roomCode: "GAME123" });
+      socket.emit("player-ready", { ready: true });
 
-      expect(socket.emit).toHaveBeenCalledWith('join-room', { roomCode: 'GAME123' })
-      expect(socket.emit).toHaveBeenCalledWith('leave-room', { roomCode: 'GAME123' })
-      expect(socket.emit).toHaveBeenCalledWith('player-ready', { ready: true })
-    })
-  })
+      expect(socket.emit).toHaveBeenCalledWith("join-room", {
+        roomCode: "GAME123",
+      });
+      expect(socket.emit).toHaveBeenCalledWith("leave-room", {
+        roomCode: "GAME123",
+      });
+      expect(socket.emit).toHaveBeenCalledWith("player-ready", { ready: true });
+    });
+  });
 
-  describe('TypeScript Import Tests (Converted from .ts)', () => {
-    it('should export useSocket from SocketContext', async () => {
-      const { useSocket } = await import('../../src/socket')
+  describe("TypeScript Import Tests (Converted from .ts)", () => {
+    it("should export useSocket from SocketContext", async () => {
+      const { useSocket } = await import("../../src/socket");
 
       // Verify that useSocket is exported
-      expect(typeof useSocket).toBe('function')
-    })
+      expect(typeof useSocket).toBe("function");
+    });
 
-    it('should match SocketContext export', async () => {
-      const { useSocket: socketUseSocket } = await import('../../src/socket')
-      const { useSocket: contextUseSocket } = await import('../../src/contexts/SocketContext')
+    it("should match SocketContext export", async () => {
+      const { useSocket: socketUseSocket } = await import("../../src/socket");
+      const { useSocket: contextUseSocket } = await import(
+        "../../src/contexts/SocketContext"
+      );
 
       // Both should be the same function
-      expect(socketUseSocket).toBe(contextUseSocket)
-    })
+      expect(socketUseSocket).toBe(contextUseSocket);
+    });
 
-    it('should maintain backward compatibility', async () => {
+    it("should maintain backward compatibility", async () => {
       // Test that the legacy export works as expected
-      const { useSocket } = await import('../../src/socket')
+      const { useSocket } = await import("../../src/socket");
 
       // Should be a function (React hook)
-      expect(typeof useSocket).toBe('function')
+      expect(typeof useSocket).toBe("function");
 
       // Should have the same signature as the original hook
-      expect(useSocket.length).toBe(0) // No required parameters
-    })
-  })
-})
+      expect(useSocket.length).toBe(0); // No required parameters
+    });
+  });
+});

@@ -11,7 +11,6 @@ interface Player {
   isReady?: boolean;
 }
 
-
 export default function RoomPage() {
   const { data: session, status } = useSession();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -30,7 +29,7 @@ export default function RoomPage() {
     }
 
     // Fallback to browser session for unauthenticated users
-    const sessionKey = 'heart-tiles-player-name';
+    const sessionKey = "heart-tiles-player-name";
     let playerName = sessionStorage.getItem(sessionKey);
 
     if (!playerName) {
@@ -51,12 +50,14 @@ export default function RoomPage() {
     // Redirect unauthenticated users to sign in
     if (status === "loading") return;
     if (!session) {
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`);
+      router.push(
+        `/auth/signin?callbackUrl=${encodeURIComponent(window.location.href)}`,
+      );
       return;
     }
     if (!socket) return;
 
-    const onRoomJoined = (data: { players: Player[], playerId: string }) => {
+    const onRoomJoined = (data: { players: Player[]; playerId: string }) => {
       console.log("Room joined:", data);
       setPlayers(data.players);
       setCurrentPlayerId(data.playerId);
@@ -111,7 +112,15 @@ export default function RoomPage() {
       socket?.emit("join-room", { roomCode, playerName });
       // Don't set hasJoined here - let the room-joined event handle it
     }
-  }, [isConnected, socketId, roomCode, hasJoined, socket, session, getPlayerName]);
+  }, [
+    isConnected,
+    socketId,
+    roomCode,
+    hasJoined,
+    socket,
+    session,
+    getPlayerName,
+  ]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
@@ -133,7 +142,7 @@ export default function RoomPage() {
   };
 
   const getCurrentPlayer = () => {
-    return players.find(player => player.userId === currentPlayerId);
+    return players.find((player) => player.userId === currentPlayerId);
   };
 
   return (
@@ -186,12 +195,14 @@ export default function RoomPage() {
           )}
 
           <div>
-            <h2 className="text-2xl font-semibold text-white mb-4">Players in Room</h2>
+            <h2 className="text-2xl font-semibold text-white mb-4">
+              Players in Room
+            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {players.map((player, index) => (
                 <div
                   key={player.userId || `player-${index}`}
-                  className={`bg-white/10 rounded-lg p-4 text-center ${player.isReady ? 'ring-2 ring-green-500' : ''}`}
+                  className={`bg-white/10 rounded-lg p-4 text-center ${player.isReady ? "ring-2 ring-green-500" : ""}`}
                 >
                   <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">
                     {player.name.charAt(0).toUpperCase()}
@@ -201,7 +212,9 @@ export default function RoomPage() {
                     <span className="text-blue-400 text-xs">You</span>
                   )}
                   {player.isReady && (
-                    <span className="text-green-400 text-sm block">✓ Ready</span>
+                    <span className="text-green-400 text-sm block">
+                      ✓ Ready
+                    </span>
                   )}
                 </div>
               ))}
@@ -215,13 +228,17 @@ export default function RoomPage() {
             <p>Share the room code with a friend to join the game!</p>
             <p>Players: {players.length}/2</p>
             {players.length === 0 && (
-              <p className="text-blue-400">Waiting for another player to join...</p>
+              <p className="text-blue-400">
+                Waiting for another player to join...
+              </p>
             )}
             {players.length === 1 && (
               <p className="text-yellow-400">Need 1 more player to start!</p>
             )}
             {players.length === 2 && (
-              <p className="text-green-400">Both players joined! Ready when everyone is ready...</p>
+              <p className="text-green-400">
+                Both players joined! Ready when everyone is ready...
+              </p>
             )}
           </div>
 
@@ -230,9 +247,9 @@ export default function RoomPage() {
               <button
                 onClick={toggleReady}
                 disabled={players.length !== 2}
-                className={`${getCurrentPlayer()?.isReady ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} ${players.length !== 2 ? 'opacity-50 cursor-not-allowed' : ''} text-white font-bold py-3 px-6 rounded-lg transition-colors`}
+                className={`${getCurrentPlayer()?.isReady ? "bg-yellow-600 hover:bg-yellow-700" : "bg-green-600 hover:bg-green-700"} ${players.length !== 2 ? "opacity-50 cursor-not-allowed" : ""} text-white font-bold py-3 px-6 rounded-lg transition-colors`}
               >
-                {getCurrentPlayer()?.isReady ? 'Cancel Ready' : 'Ready'}
+                {getCurrentPlayer()?.isReady ? "Cancel Ready" : "Ready"}
               </button>
             )}
             <button

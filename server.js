@@ -1,10 +1,10 @@
 import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 import crypto from "crypto";
-import { PlayerSession, Room, User } from './models.js';
-import { getToken } from 'next-auth/jwt';
+import { PlayerSession, Room, User } from "./models.js";
+import { getToken } from "next-auth/jwt";
 import {
   HeartCard,
   WindCard,
@@ -12,8 +12,8 @@ import {
   ShieldCard,
   generateRandomMagicCard,
   isHeartCard,
-  createCardFromData
-} from './src/lib/cards.js';
+  createCardFromData,
+} from "./src/lib/cards.js";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
@@ -21,7 +21,9 @@ const port = 3000;
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@localhost:27017/heart-tiles?authSource=admin';
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  "mongodb://root:example@localhost:27017/heart-tiles?authSource=admin";
 
 function _hasKey(container, key) {
   if (container instanceof Map) return container.has(key);
@@ -42,32 +44,32 @@ async function connectToDatabase() {
   try {
     // Check if already connected
     if (mongoose.connection.readyState === 1) {
-      console.log('Already connected to MongoDB');
+      console.log("Already connected to MongoDB");
       return mongoose.connection;
     }
 
     // Check if connecting
     if (mongoose.connection.readyState === 2) {
-      console.log('Already connecting to MongoDB...');
+      console.log("Already connecting to MongoDB...");
       // Wait for connection to complete
       return new Promise((resolve, reject) => {
-        mongoose.connection.once('connected', () => {
-          console.log('Connected to MongoDB');
+        mongoose.connection.once("connected", () => {
+          console.log("Connected to MongoDB");
           resolve(mongoose.connection);
         });
-        mongoose.connection.once('error', reject);
+        mongoose.connection.once("error", reject);
       });
     }
 
     // New connection
     await mongoose.connect(MONGODB_URI);
-    console.log('Connected to MongoDB');
+    console.log("Connected to MongoDB");
     return mongoose.connection;
   } catch (err) {
-    console.error('MongoDB connection failed:', err);
+    console.error("MongoDB connection failed:", err);
     // In test environment, throw instead of calling process.exit
-    if (process.env.NODE_ENV === 'test') {
-      throw new Error('process.exit called');
+    if (process.env.NODE_ENV === "test") {
+      throw new Error("process.exit called");
     } else {
       process.exit(1);
     }
@@ -81,17 +83,29 @@ function convertRoomStateToMaps(roomObj) {
   const gameState = roomObj.gameState;
 
   // Convert playerHands to Map if it's a plain object
-  if (gameState.playerHands && typeof gameState.playerHands === 'object' && !(gameState.playerHands instanceof Map)) {
+  if (
+    gameState.playerHands &&
+    typeof gameState.playerHands === "object" &&
+    !(gameState.playerHands instanceof Map)
+  ) {
     gameState.playerHands = new Map(Object.entries(gameState.playerHands));
   }
 
   // Convert shields to Map if it's a plain object
-  if (gameState.shields && typeof gameState.shields === 'object' && !(gameState.shields instanceof Map)) {
+  if (
+    gameState.shields &&
+    typeof gameState.shields === "object" &&
+    !(gameState.shields instanceof Map)
+  ) {
     gameState.shields = new Map(Object.entries(gameState.shields));
   }
 
   // Convert playerActions to Map if it's a plain object
-  if (gameState.playerActions && typeof gameState.playerActions === 'object' && !(gameState.playerActions instanceof Map)) {
+  if (
+    gameState.playerActions &&
+    typeof gameState.playerActions === "object" &&
+    !(gameState.playerActions instanceof Map)
+  ) {
     gameState.playerActions = new Map(Object.entries(gameState.playerActions));
   }
 
@@ -102,14 +116,14 @@ async function loadRooms() {
   try {
     const rooms = await Room.find({});
     const roomsMap = new Map();
-    rooms.forEach(room => {
+    rooms.forEach((room) => {
       const roomObj = room.toObject();
       const roomWithMaps = convertRoomStateToMaps(roomObj);
       roomsMap.set(room.code, roomWithMaps);
     });
     return roomsMap;
   } catch (err) {
-    console.error('Failed to load rooms:', err);
+    console.error("Failed to load rooms:", err);
     return new Map();
   }
 }
@@ -118,24 +132,23 @@ async function saveRoom(roomData) {
   try {
     // Validate required fields
     if (!roomData || !roomData.code) {
-      throw new Error('Room data and code are required');
+      throw new Error("Room data and code are required");
     }
 
     if (!roomData.players) {
-      throw new Error('Room data must include a valid players array');
+      throw new Error("Room data must include a valid players array");
     }
 
     if (!roomData.gameState) {
-      throw new Error('Room data must include gameState');
+      throw new Error("Room data must include gameState");
     }
 
-    await Room.findOneAndUpdate(
-      { code: roomData.code },
-      roomData,
-      { upsert: true, new: true }
-    );
+    await Room.findOneAndUpdate({ code: roomData.code }, roomData, {
+      upsert: true,
+      new: true,
+    });
   } catch (err) {
-    console.error('Failed to save room:', err);
+    console.error("Failed to save room:", err);
     throw err; // Re-throw error to let tests handle it
   }
 }
@@ -152,13 +165,13 @@ async function loadPlayerSessions() {
   try {
     const sessions = await PlayerSession.find({ isActive: true });
     const sessionsMap = new Map();
-    sessions.forEach(session => {
+    sessions.forEach((session) => {
       const sessionObj = session.toObject();
       sessionsMap.set(sessionObj.userId, sessionObj);
     });
     return sessionsMap;
   } catch (err) {
-    console.error('Failed to load sessions:', err);
+    console.error("Failed to load sessions:", err);
     return new Map();
   }
 }
@@ -166,41 +179,45 @@ async function loadPlayerSessions() {
 async function savePlayerSession(sessionData) {
   try {
     if (!sessionData || !sessionData.userId) {
-      throw new Error('Session data and userId are required');
+      throw new Error("Session data and userId are required");
     }
 
     // Generate userSessionId if not provided
     if (!sessionData.userSessionId) {
-      const randomStr = crypto.randomBytes(9).toString('hex');
+      const randomStr = crypto.randomBytes(9).toString("hex");
       sessionData.userSessionId = `session_${sessionData.userId}_${Date.now()}_${randomStr}`;
     }
 
     const savedSession = await PlayerSession.findOneAndUpdate(
       { userId: sessionData.userId },
       sessionData,
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
 
     return savedSession;
   } catch (err) {
-    console.error('Failed to save player session:', err);
+    console.error("Failed to save player session:", err);
     throw err;
   }
 }
 
 // Exportable utility functions
 function validateRoomCode(roomCode) {
-  if (!roomCode || typeof roomCode !== 'string') return false;
+  if (!roomCode || typeof roomCode !== "string") return false;
   const trimmedCode = roomCode.trim();
   // Room codes must be exactly 6 characters
   if (trimmedCode.length !== 6) return false;
   // Room codes can contain letters and numbers, but not mixed case letters
   // Allow: all uppercase, all lowercase, all numbers, or letters+numbers of same case
-  return /^[A-Z0-9]+$/.test(trimmedCode) || /^[a-z0-9]+$/.test(trimmedCode) || /^[0-9]+$/.test(trimmedCode);
+  return (
+    /^[A-Z0-9]+$/.test(trimmedCode) ||
+    /^[a-z0-9]+$/.test(trimmedCode) ||
+    /^[0-9]+$/.test(trimmedCode)
+  );
 }
 
 function validatePlayerName(playerName) {
-  if (!playerName || typeof playerName !== 'string') return false;
+  if (!playerName || typeof playerName !== "string") return false;
   const trimmedName = playerName.trim();
   // Check for empty names after trimming
   if (trimmedName.length === 0) return false;
@@ -217,42 +234,52 @@ function validatePlayerName(playerName) {
 }
 
 function sanitizeInput(input) {
-  if (typeof input !== 'string') return input;
+  if (typeof input !== "string") return input;
 
-  return input.trim()
-    .replace(/</g, '') // Remove all opening angle brackets
-    .replace(/>/g, '') // Remove all closing angle brackets
-    .replace(/drop\s+table\s+/gi, 'TABLE ') // Replace DROP TABLE with TABLE
-    .replace(/drop\s+/gi, ''); // Remove any remaining DROP commands
+  return input
+    .trim()
+    .replace(/</g, "") // Remove all opening angle brackets
+    .replace(/>/g, "") // Remove all closing angle brackets
+    .replace(/drop\s+table\s+/gi, "TABLE ") // Replace DROP TABLE with TABLE
+    .replace(/drop\s+/gi, ""); // Remove any remaining DROP commands
 }
 
 function findPlayerByUserId(room, userId) {
   if (!room || !room.players || !Array.isArray(room.players)) {
     return undefined;
   }
-  return room.players.find(p => p && p.userId === userId);
+  return room.players.find((p) => p && p.userId === userId);
 }
 
 function findPlayerByName(room, playerName) {
   if (!room || !room.players || !Array.isArray(room.players) || !playerName) {
     return undefined;
   }
-  return room.players.find(p => p && p.name && typeof p.name === 'string' && p.name.toLowerCase() === playerName.toLowerCase());
+  return room.players.find(
+    (p) =>
+      p &&
+      p.name &&
+      typeof p.name === "string" &&
+      p.name.toLowerCase() === playerName.toLowerCase(),
+  );
 }
 
 function validateRoomState(room) {
-  if (!room || typeof room !== 'object') return { valid: false, error: "Room not found" };
+  if (!room || typeof room !== "object")
+    return { valid: false, error: "Room not found" };
 
   // Check for null/undefined players array or invalid players array
-  if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
+  if (!room.players || !Array.isArray(room.players))
+    return { valid: false, error: "Invalid players state" };
 
   // Check for null/undefined in players array
-  if (room.players.some(player => player === null || player === undefined)) {
+  if (room.players.some((player) => player === null || player === undefined)) {
     return { valid: false, error: "Corrupted player data detected" };
   }
 
   // Check for null/undefined gameState
-  if (!room.gameState || typeof room.gameState !== 'object') return { valid: false, error: "Invalid game state" };
+  if (!room.gameState || typeof room.gameState !== "object")
+    return { valid: false, error: "Invalid game state" };
 
   // If game is started, there must be a current player
   if (room.gameState.gameStarted === true && !room.gameState.currentPlayer) {
@@ -265,7 +292,7 @@ function validateRoomState(room) {
   }
 
   // If gameStarted property is missing entirely (not explicitly undefined), require players
-  if (!('gameStarted' in room.gameState) && room.players.length === 0) {
+  if (!("gameStarted" in room.gameState) && room.players.length === 0) {
     return { valid: false, error: "Invalid players state" };
   }
 
@@ -274,26 +301,33 @@ function validateRoomState(room) {
 }
 
 function validatePlayerInRoom(room, userId) {
-  if (!room || typeof room !== 'object') return { valid: false, error: "Room not found" };
-  if (!room.players || !Array.isArray(room.players)) return { valid: false, error: "Invalid players state" };
-  const playerInRoom = room.players.find(p => p.userId === userId);
-  return playerInRoom ? { valid: true } : { valid: false, error: "Player not in room" };
+  if (!room || typeof room !== "object")
+    return { valid: false, error: "Room not found" };
+  if (!room.players || !Array.isArray(room.players))
+    return { valid: false, error: "Invalid players state" };
+  const playerInRoom = room.players.find((p) => p.userId === userId);
+  return playerInRoom
+    ? { valid: true }
+    : { valid: false, error: "Player not in room" };
 }
 
 function validateDeckState(room) {
-  if (!room?.gameState?.deck) return { valid: false, error: "Invalid deck state" };
+  if (!room?.gameState?.deck)
+    return { valid: false, error: "Invalid deck state" };
   const deck = room.gameState.deck;
 
   // Check that cards count exists and is valid
-  if (typeof deck.cards !== 'number' ||
-      isNaN(deck.cards) ||
-      !isFinite(deck.cards) ||
-      deck.cards < 0) {
+  if (
+    typeof deck.cards !== "number" ||
+    isNaN(deck.cards) ||
+    !isFinite(deck.cards) ||
+    deck.cards < 0
+  ) {
     return { valid: false, error: "Invalid deck count" };
   }
 
   // Check that type exists and is valid
-  if (!deck.type || typeof deck.type !== 'string') {
+  if (!deck.type || typeof deck.type !== "string") {
     return { valid: false, error: "Invalid deck type" };
   }
 
@@ -301,8 +335,12 @@ function validateDeckState(room) {
 }
 
 function validateTurn(room, userId) {
-  if (!room?.gameState?.gameStarted) return { valid: false, error: "Game not started" };
-  if (!room.gameState.currentPlayer || room.gameState.currentPlayer.userId !== userId) {
+  if (!room?.gameState?.gameStarted)
+    return { valid: false, error: "Game not started" };
+  if (
+    !room.gameState.currentPlayer ||
+    room.gameState.currentPlayer.userId !== userId
+  ) {
     return { valid: false, error: "Not your turn" };
   }
   return { valid: true };
@@ -318,7 +356,7 @@ function validateCardDrawLimit(room, userId) {
       drawnHeart: false,
       drawnMagic: false,
       heartsPlaced: 0,
-      magicCardsUsed: 0
+      magicCardsUsed: 0,
     };
   }
 
@@ -335,7 +373,7 @@ function recordCardDraw(room, userId, cardType) {
       drawnHeart: false,
       drawnMagic: false,
       heartsPlaced: 0,
-      magicCardsUsed: 0
+      magicCardsUsed: 0,
     };
   }
 
@@ -346,15 +384,15 @@ function recordCardDraw(room, userId, cardType) {
   if (userActions.heartsPlaced === undefined) userActions.heartsPlaced = 0;
   if (userActions.magicCardsUsed === undefined) userActions.magicCardsUsed = 0;
 
-  if (cardType === 'heart') {
+  if (cardType === "heart") {
     userActions.drawnHeart = true;
-  } else if (cardType === 'magic') {
+  } else if (cardType === "magic") {
     userActions.drawnMagic = true;
   }
 
   // Mark the nested object as modified for Mongoose (only if it's a Mongoose document)
-  if (typeof room.markModified === 'function') {
-    room.markModified('gameState.playerActions');
+  if (typeof room.markModified === "function") {
+    room.markModified("gameState.playerActions");
   }
 }
 
@@ -366,12 +404,12 @@ function resetPlayerActions(room, userId) {
     drawnHeart: false,
     drawnMagic: false,
     heartsPlaced: 0,
-    magicCardsUsed: 0
+    magicCardsUsed: 0,
   };
 
   // Mark the nested object as modified for Mongoose (only if it's a Mongoose document)
-  if (typeof room.markModified === 'function') {
-    room.markModified('gameState.playerActions');
+  if (typeof room.markModified === "function") {
+    room.markModified("gameState.playerActions");
   }
 }
 
@@ -380,11 +418,12 @@ function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
 
   // Condition 1: All tiles are filled (have hearts)
   // A tile is considered filled when it has a placedHeart (regardless of value, as long as it's >= 0)
-  const allTilesFilled = room.gameState.tiles.every(tile =>
-    tile.placedHeart &&
-    typeof tile.placedHeart === 'object' &&
-    typeof tile.placedHeart.value === 'number' &&
-    tile.placedHeart.value >= 0
+  const allTilesFilled = room.gameState.tiles.every(
+    (tile) =>
+      tile.placedHeart &&
+      typeof tile.placedHeart === "object" &&
+      typeof tile.placedHeart.value === "number" &&
+      tile.placedHeart.value >= 0,
   );
 
   if (allTilesFilled) {
@@ -411,15 +450,22 @@ function checkGameEndConditions(room, allowDeckEmptyGracePeriod = true) {
 }
 
 function checkAndExpireShields(room) {
-  if (!room?.gameState?.shields || typeof room.gameState.shields !== 'object') return;
+  if (!room?.gameState?.shields || typeof room.gameState.shields !== "object")
+    return;
 
   // Process all shields to handle expiration and cleanup
   for (const [userId, shield] of Object.entries(room.gameState.shields)) {
-    if (shield && typeof shield === 'object' && typeof shield.remainingTurns === 'number') {
+    if (
+      shield &&
+      typeof shield === "object" &&
+      typeof shield.remainingTurns === "number"
+    ) {
       // Only decrement and process shields that are still active (remainingTurns > 0)
       if (shield.remainingTurns > 0) {
         shield.remainingTurns--;
-        console.log(`Shield for ${userId}: ${shield.remainingTurns} turns remaining`);
+        console.log(
+          `Shield for ${userId}: ${shield.remainingTurns} turns remaining`,
+        );
 
         // Remove shield if it has expired
         if (shield.remainingTurns <= 0) {
@@ -439,13 +485,13 @@ function checkAndExpireShields(room) {
   }
 
   // Mark the nested object as modified for Mongoose (only if it's a Mongoose document)
-  if (typeof room.markModified === 'function') {
-    room.markModified('gameState.shields');
+  if (typeof room.markModified === "function") {
+    room.markModified("gameState.shields");
   }
 }
 
 function getClientIP(socket) {
-  return socket.handshake.address || socket.conn.remoteAddress || 'unknown';
+  return socket.handshake.address || socket.conn.remoteAddress || "unknown";
 }
 
 // Counter to ensure variety in tile generation
@@ -462,27 +508,32 @@ function generateTiles() {
   for (let i = 0; i < 8; i++) {
     // Ensure Math.random returns a valid number (handle mocking edge cases)
     let randomValue;
-    if (typeof Math.random === 'function') {
+    if (typeof Math.random === "function") {
       randomValue = Math.random();
       // Handle case where mocked Math.random returns undefined
       if (randomValue === undefined || randomValue === null) {
         // Use tile index, counter, and timestamp as additional seed for variety
-        randomValue = ((i * 7 + tileGenerationCounter * 13 + Date.now()) % 100) / 100;
+        randomValue =
+          ((i * 7 + tileGenerationCounter * 13 + Date.now()) % 100) / 100;
       }
     } else {
       // Use tile index, counter, and timestamp as additional seed for variety
-      randomValue = ((i * 7 + tileGenerationCounter * 13 + Date.now()) % 100) / 100;
+      randomValue =
+        ((i * 7 + tileGenerationCounter * 13 + Date.now()) % 100) / 100;
     }
 
     if (randomValue < 0.3) {
       tiles.push({ id: i, color: "white", emoji: "⬜" });
     } else {
       // Ensure we get a valid index even with mocked Math.random
-      const randomIndex = Math.max(0, Math.min(colors.length - 1, Math.floor(randomValue * colors.length)));
+      const randomIndex = Math.max(
+        0,
+        Math.min(colors.length - 1, Math.floor(randomValue * colors.length)),
+      );
       tiles.push({
         id: i,
         color: colors[randomIndex],
-        emoji: emojis[randomIndex]
+        emoji: emojis[randomIndex],
       });
     }
   }
@@ -491,7 +542,7 @@ function generateTiles() {
 
 function calculateScore(heart, tile) {
   // Check if heart has the calculateScore method (indicating it's a HeartCard instance)
-  if (typeof heart.calculateScore === 'function') {
+  if (typeof heart.calculateScore === "function") {
     return heart.calculateScore(tile);
   }
   // Fallback for old format (plain objects)
@@ -554,11 +605,12 @@ function recordHeartPlacement(room, userId) {
       drawnHeart: false,
       drawnMagic: false,
       heartsPlaced: 0,
-      magicCardsUsed: 0
+      magicCardsUsed: 0,
     };
   }
 
-  room.gameState.playerActions[userId].heartsPlaced = (room.gameState.playerActions[userId].heartsPlaced || 0) + 1;
+  room.gameState.playerActions[userId].heartsPlaced =
+    (room.gameState.playerActions[userId].heartsPlaced || 0) + 1;
 }
 
 function recordMagicCardUsage(room, userId) {
@@ -571,18 +623,21 @@ function recordMagicCardUsage(room, userId) {
       drawnHeart: false,
       drawnMagic: false,
       heartsPlaced: 0,
-      magicCardsUsed: 0
+      magicCardsUsed: 0,
     };
   }
 
-  room.gameState.playerActions[userId].magicCardsUsed = (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1;
+  room.gameState.playerActions[userId].magicCardsUsed =
+    (room.gameState.playerActions[userId].magicCardsUsed || 0) + 1;
 }
 
 function canPlaceMoreHearts(room, userId) {
   if (!room?.gameState?.playerActions) {
     return true; // No player actions tracking yet, allow placement
   }
-  const playerActions = room.gameState.playerActions[userId] || { heartsPlaced: 0 };
+  const playerActions = room.gameState.playerActions[userId] || {
+    heartsPlaced: 0,
+  };
   return (playerActions.heartsPlaced || 0) < 2;
 }
 
@@ -590,13 +645,15 @@ function canUseMoreMagicCards(room, userId) {
   if (!room?.gameState?.playerActions) {
     return true; // No player actions tracking yet, allow usage
   }
-  const playerActions = room.gameState.playerActions[userId] || { magicCardsUsed: 0 };
+  const playerActions = room.gameState.playerActions[userId] || {
+    magicCardsUsed: 0,
+  };
   return (playerActions.magicCardsUsed || 0) < 1;
 }
 
 function validateHeartPlacement(room, userId, heartId, tileId) {
   const playerHand = room.gameState.playerHands[userId] || [];
-  const heart = playerHand.find(card => card.id === heartId);
+  const heart = playerHand.find((card) => card.id === heartId);
   if (!heart) return { valid: false, error: "Card not in player's hand" };
 
   // Use the new card validation helpers
@@ -607,10 +664,10 @@ function validateHeartPlacement(room, userId, heartId, tileId) {
   // Convert to HeartCard instance if it's a plain object for validation
   let heartCard = heart;
   // Check if the heart already has canTargetTile method (handles context issues)
-  if (heart && typeof heart.canTargetTile === 'function') {
+  if (heart && typeof heart.canTargetTile === "function") {
     // Already has the method we need, use as-is
     heartCard = heart;
-  } else if (typeof HeartCard === 'function' && heart instanceof HeartCard) {
+  } else if (typeof HeartCard === "function" && heart instanceof HeartCard) {
     // Already a HeartCard instance
     heartCard = heart;
   } else {
@@ -618,7 +675,7 @@ function validateHeartPlacement(room, userId, heartId, tileId) {
     heartCard = createCardFromData(heart);
   }
 
-  const tile = room.gameState.tiles.find(tile => tile.id == tileId);
+  const tile = room.gameState.tiles.find((tile) => tile.id == tileId);
   if (!tile) return { valid: false, error: "Tile not found" };
 
   // Check if tile is already occupied by a heart
@@ -629,9 +686,12 @@ function validateHeartPlacement(room, userId, heartId, tileId) {
 
   // Use HeartCard's canTargetTile method for additional validation
   // Check if canTargetTile method exists (for testing environments)
-  if (heartCard && typeof heartCard.canTargetTile === 'function') {
+  if (heartCard && typeof heartCard.canTargetTile === "function") {
     if (!heartCard.canTargetTile(tile)) {
-      return { valid: false, error: "This heart cannot be placed on this tile" };
+      return {
+        valid: false,
+        error: "This heart cannot be placed on this tile",
+      };
     }
   }
 
@@ -656,18 +716,18 @@ async function authenticateSocket(socket, next) {
   try {
     const token = await getToken({
       req: socket.handshake,
-      secret: process.env.AUTH_SECRET
+      secret: process.env.AUTH_SECRET,
     });
 
-    if (!token?.id) return next(new Error('Authentication required'));
+    if (!token?.id) return next(new Error("Authentication required"));
 
     // Validate that token.id is a valid ObjectId format
     if (!mongoose.Types.ObjectId.isValid(token.id)) {
-      return next(new Error('Invalid user ID format'));
+      return next(new Error("Invalid user ID format"));
     }
 
     const user = await User.findById(token.id);
-    if (!user) return next(new Error('User not found'));
+    if (!user) return next(new Error("User not found"));
 
     socket.data.userId = token.id;
     socket.data.userEmail = user.email;
@@ -676,13 +736,19 @@ async function authenticateSocket(socket, next) {
 
     next();
   } catch (error) {
-    console.error('Socket authentication error:', error);
-    next(new Error('Authentication failed'));
+    console.error("Socket authentication error:", error);
+    next(new Error("Authentication failed"));
   }
 }
 
-async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail) {
-  const playerIndex = room.players.findIndex(p => p.userId === oldUserId);
+async function migratePlayerData(
+  room,
+  oldUserId,
+  newUserId,
+  userName,
+  userEmail,
+) {
+  const playerIndex = room.players.findIndex((p) => p.userId === oldUserId);
   let isReadyStatus = false;
 
   if (playerIndex !== -1) {
@@ -693,7 +759,7 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
       name: userName,
       email: userEmail,
       score: room.players[playerIndex].score || 0,
-      isReady: isReadyStatus
+      isReady: isReadyStatus,
     };
   } else {
     room.players.push({
@@ -702,7 +768,7 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
       email: userEmail,
       isReady: false,
       score: 0,
-      joinedAt: new Date()
+      joinedAt: new Date(),
     });
   }
 
@@ -715,16 +781,17 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
 
   // Migrate playerHands
   if (_hasKey(room.gameState.playerHands, oldUserId)) {
-    const hand = room.gameState.playerHands instanceof Map
-      ? room.gameState.playerHands.get(oldUserId)
-      : room.gameState.playerHands[oldUserId];
+    const hand =
+      room.gameState.playerHands instanceof Map
+        ? room.gameState.playerHands.get(oldUserId)
+        : room.gameState.playerHands[oldUserId];
 
     _setKey(room.gameState.playerHands, newUserId, hand);
     _deleteKey(room.gameState.playerHands, oldUserId);
 
-    if (typeof room.markModified === 'function') {
+    if (typeof room.markModified === "function") {
       // tell mongoose the nested path changed
-      room.markModified('gameState.playerHands');
+      room.markModified("gameState.playerHands");
     } else {
       // fallback: reassign the whole object so plain objects are noticed
       room.gameState.playerHands = { ...room.gameState.playerHands };
@@ -733,34 +800,39 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
 
   // Migrate shields
   if (_hasKey(room.gameState.shields, oldUserId)) {
-    const shield = room.gameState.shields instanceof Map
-      ? room.gameState.shields.get(oldUserId)
-      : room.gameState.shields[oldUserId];
+    const shield =
+      room.gameState.shields instanceof Map
+        ? room.gameState.shields.get(oldUserId)
+        : room.gameState.shields[oldUserId];
 
     _setKey(room.gameState.shields, newUserId, shield);
     _deleteKey(room.gameState.shields, oldUserId);
 
-    if (typeof room.markModified === 'function') {
-      room.markModified('gameState.shields');
+    if (typeof room.markModified === "function") {
+      room.markModified("gameState.shields");
     } else {
       room.gameState.shields = { ...room.gameState.shields };
     }
   }
 
   // Update currentPlayer if needed
-  if (room.gameState.currentPlayer && room.gameState.currentPlayer.userId === oldUserId) {
+  if (
+    room.gameState.currentPlayer &&
+    room.gameState.currentPlayer.userId === oldUserId
+  ) {
     room.gameState.currentPlayer = {
       userId: newUserId,
       name: userName,
       email: userEmail,
-      isReady: isReadyStatus
+      isReady: isReadyStatus,
     };
-    if (typeof room.markModified === 'function') room.markModified('gameState.currentPlayer');
+    if (typeof room.markModified === "function")
+      room.markModified("gameState.currentPlayer");
   }
 
   // Delete any turnLocks that reference the old user
   const locks = global.turnLocks || turnLocks;
-  if (locks && typeof locks.keys === 'function') {
+  if (locks && typeof locks.keys === "function") {
     for (const lockKey of Array.from(locks.keys())) {
       if (lockKey.includes(oldUserId)) locks.delete(lockKey);
     }
@@ -774,15 +846,27 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
 let playerSessions = new Map();
 
 // Session management functions - real implementation for both server and tests
-async function getPlayerSession(userId, userSessionId, userName, userEmail, clientIP = null) {
+async function getPlayerSession(
+  userId,
+  userSessionId,
+  userName,
+  userEmail,
+  clientIP = null,
+) {
   // Use global playerSessions for test compatibility, otherwise fall back to module-level
   const sessions = global.playerSessions || playerSessions;
   let session = sessions.get(userId);
 
   if (!session) {
     const newSession = {
-      userId, userSessionId, name: userName, email: userEmail,
-      currentSocketId: null, lastSeen: new Date(), isActive: true, clientIP
+      userId,
+      userSessionId,
+      name: userName,
+      email: userEmail,
+      currentSocketId: null,
+      lastSeen: new Date(),
+      isActive: true,
+      clientIP,
     };
     sessions.set(userId, newSession);
     await savePlayerSession(newSession);
@@ -800,8 +884,21 @@ async function getPlayerSession(userId, userSessionId, userName, userEmail, clie
   return session;
 }
 
-async function updatePlayerSocket(userId, socketId, userSessionId, userName, userEmail, clientIP = null) {
-  const session = await getPlayerSession(userId, userSessionId, userName, userEmail, clientIP);
+async function updatePlayerSocket(
+  userId,
+  socketId,
+  userSessionId,
+  userName,
+  userEmail,
+  clientIP = null,
+) {
+  const session = await getPlayerSession(
+    userId,
+    userSessionId,
+    userName,
+    userEmail,
+    clientIP,
+  );
   session.currentSocketId = socketId;
   session.lastSeen = new Date();
   session.isActive = true;
@@ -815,12 +912,15 @@ async function updatePlayerSocket(userId, socketId, userSessionId, userName, use
 
 /* v8 ignore next -- @preserve */
 app.prepare().then(async () => {
-    await connectToDatabase();
+  await connectToDatabase();
 
   const httpServer = createServer(handler);
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === "production" ? false : ["http://localhost:3000"],
+      origin:
+        process.env.NODE_ENV === "production"
+          ? false
+          : ["http://localhost:3000"],
       methods: ["GET", "POST"],
     },
   });
@@ -837,7 +937,6 @@ app.prepare().then(async () => {
   const MAX_CONNECTIONS_PER_IP = 5;
 
   console.log(`Loaded ${rooms.size} rooms, ${playerSessions.size} sessions`);
-
 
   // These functions are now defined globally for testing
 
@@ -858,29 +957,36 @@ app.prepare().then(async () => {
   // generateSingleHeart, generateSingleMagicCard, and selectRandomStartingPlayer are now defined globally
 
   async function endGame(room, roomCode, io, allowDeckEmptyGracePeriod = true) {
-    const gameEndResult = checkGameEndConditions(room, allowDeckEmptyGracePeriod);
+    const gameEndResult = checkGameEndConditions(
+      room,
+      allowDeckEmptyGracePeriod,
+    );
     if (!gameEndResult.shouldEnd) return false;
 
     console.log(`Game ending in room ${roomCode}: ${gameEndResult.reason}`);
 
     // Determine winner based on scores
-    const sortedPlayers = [...room.players].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const sortedPlayers = [...room.players].sort(
+      (a, b) => (b.score || 0) - (a.score || 0),
+    );
     const winner = sortedPlayers[0];
-    const isTie = sortedPlayers.length > 1 && sortedPlayers[0].score === sortedPlayers[1].score;
+    const isTie =
+      sortedPlayers.length > 1 &&
+      sortedPlayers[0].score === sortedPlayers[1].score;
 
     const gameEndData = {
       reason: gameEndResult.reason,
-      players: room.players.map(player => ({
+      players: room.players.map((player) => ({
         ...player,
-        hand: room.gameState.playerHands[player.userId] || []
+        hand: room.gameState.playerHands[player.userId] || [],
       })),
       winner: isTie ? null : winner,
       isTie: isTie,
-      finalScores: room.players.map(player => ({
+      finalScores: room.players.map((player) => ({
         userId: player.userId,
         name: player.name,
-        score: player.score || 0
-      }))
+        score: player.score || 0,
+      })),
     };
 
     // Broadcast game over to all players
@@ -907,7 +1013,9 @@ app.prepare().then(async () => {
     const { userId, userEmail, userName, userSessionId } = socket.data;
 
     if (!canAcceptConnection(clientIP)) {
-      console.log(`Connection rejected for IP ${clientIP}: Too many connections`);
+      console.log(
+        `Connection rejected for IP ${clientIP}: Too many connections`,
+      );
       socket.emit("room-error", "Too many connections from your IP address");
       socket.disconnect(true);
       return;
@@ -923,7 +1031,14 @@ app.prepare().then(async () => {
       }
 
       roomCode = sanitizeInput(roomCode.toUpperCase());
-      await updatePlayerSocket(userId, socket.id, userSessionId, userName, userEmail, clientIP);
+      await updatePlayerSocket(
+        userId,
+        socket.id,
+        userSessionId,
+        userName,
+        userEmail,
+        clientIP,
+      );
 
       let room = rooms.get(roomCode);
 
@@ -933,16 +1048,28 @@ app.prepare().then(async () => {
           players: [],
           maxPlayers: 2,
           gameState: {
-            tiles: [], gameStarted: false, currentPlayer: null,
-            deck: { emoji: "💌", cards: 16, type: 'hearts' },
-            magicDeck: { emoji: "🔮", cards: 16, type: 'magic' },
-            playerHands: {}, shields: {}, turnCount: 0, playerActions: {}
-          }
+            tiles: [],
+            gameStarted: false,
+            currentPlayer: null,
+            deck: { emoji: "💌", cards: 16, type: "hearts" },
+            magicDeck: { emoji: "🔮", cards: 16, type: "magic" },
+            playerHands: {},
+            shields: {},
+            turnCount: 0,
+            playerActions: {},
+          },
         };
         rooms.set(roomCode, room);
         await saveRoom(room);
 
-        const player = { userId, name: userName, email: userEmail, isReady: false, score: 0, joinedAt: new Date() };
+        const player = {
+          userId,
+          name: userName,
+          email: userEmail,
+          isReady: false,
+          score: 0,
+          joinedAt: new Date(),
+        };
         if (!findPlayerByUserId(room, userId)) room.players.push(player);
 
         socket.join(roomCode);
@@ -950,26 +1077,38 @@ app.prepare().then(async () => {
         socket.data.userId = userId;
 
         console.log(`Room ${roomCode} created by ${userName}`);
-        io.to(socket.id).emit("room-joined", { players: room.players, playerId: userId });
+        io.to(socket.id).emit("room-joined", {
+          players: room.players,
+          playerId: userId,
+        });
       } else {
         const existingPlayerByUserId = findPlayerByUserId(room, userId);
         const actualPlayerCount = room.players.length;
 
         if (!existingPlayerByUserId && actualPlayerCount >= room.maxPlayers) {
-          const activePlayerSockets = Array.from(io.sockets.adapter.rooms.get(roomCode) || [])
-            .filter(socketId => io.sockets.sockets.has(socketId));
-          const hasInvalidGameState = room.gameState.gameStarted && !room.gameState.currentPlayer;
+          const activePlayerSockets = Array.from(
+            io.sockets.adapter.rooms.get(roomCode) || [],
+          ).filter((socketId) => io.sockets.sockets.has(socketId));
+          const hasInvalidGameState =
+            room.gameState.gameStarted && !room.gameState.currentPlayer;
 
-          if (activePlayerSockets.length < room.players.length || hasInvalidGameState) {
+          if (
+            activePlayerSockets.length < room.players.length ||
+            hasInvalidGameState
+          ) {
             if (hasInvalidGameState) {
               console.log(`Resetting invalid game state in room ${roomCode}`);
               room.gameState = {
                 ...room.gameState,
-                gameStarted: false, currentPlayer: null, tiles: [],
-                playerHands: {}, turnCount: 0, playerActions: {},
-                deck: { ...room.gameState.deck, cards: 16 }
+                gameStarted: false,
+                currentPlayer: null,
+                tiles: [],
+                playerHands: {},
+                turnCount: 0,
+                playerActions: {},
+                deck: { ...room.gameState.deck, cards: 16 },
               };
-              room.players.forEach(player => player.isReady = false);
+              room.players.forEach((player) => (player.isReady = false));
               await saveRoom(room);
             }
           } else {
@@ -981,14 +1120,19 @@ app.prepare().then(async () => {
         let isNewJoin = false;
         if (!existingPlayerByUserId) {
           room.players.push({
-            userId, name: userName, email: userEmail,
-            isReady: false, score: 0, joinedAt: new Date()
+            userId,
+            name: userName,
+            email: userEmail,
+            isReady: false,
+            score: 0,
+            joinedAt: new Date(),
           });
           isNewJoin = true;
         } else {
           existingPlayerByUserId.name = userName;
           existingPlayerByUserId.email = userEmail;
-          if (existingPlayerByUserId.score === undefined) existingPlayerByUserId.score = 0;
+          if (existingPlayerByUserId.score === undefined)
+            existingPlayerByUserId.score = 0;
         }
 
         await saveRoom(room);
@@ -996,7 +1140,10 @@ app.prepare().then(async () => {
         socket.data.roomCode = roomCode;
         socket.data.userId = userId;
 
-        io.to(socket.id).emit("room-joined", { players: room.players, playerId: userId });
+        io.to(socket.id).emit("room-joined", {
+          players: room.players,
+          playerId: userId,
+        });
 
         if (isNewJoin) {
           socket.to(roomCode).emit("player-joined", { players: room.players });
@@ -1005,10 +1152,10 @@ app.prepare().then(async () => {
         }
 
         if (room.gameState.gameStarted) {
-          const playersWithHands = room.players.map(player => ({
+          const playersWithHands = room.players.map((player) => ({
             ...player,
             hand: room.gameState.playerHands[player.userId] || [],
-            score: player.score || 0
+            score: player.score || 0,
           }));
 
           const gameStateData = {
@@ -1021,7 +1168,7 @@ app.prepare().then(async () => {
             turnCount: room.gameState.turnCount,
             playerId: userId,
             shields: room.gameState.shields || {},
-            playerActions: room.gameState.playerActions || {}
+            playerActions: room.gameState.playerActions || {},
           };
           io.to(socket.id).emit("game-start", gameStateData);
         }
@@ -1037,7 +1184,9 @@ app.prepare().then(async () => {
       roomCode = sanitizeInput(roomCode.toUpperCase());
       const room = rooms.get(roomCode);
       if (room) {
-        room.players = room.players.filter(player => player.userId !== userId);
+        room.players = room.players.filter(
+          (player) => player.userId !== userId,
+        );
         io.to(roomCode).emit("player-left", { players: room.players });
 
         if (room.players.length === 0) {
@@ -1069,7 +1218,7 @@ app.prepare().then(async () => {
         return;
       }
 
-      const player = room.players.find(p => p.userId === userId);
+      const player = room.players.find((p) => p.userId === userId);
       if (!player) {
         socket.emit("room-error", "Player not in room");
         return;
@@ -1078,7 +1227,7 @@ app.prepare().then(async () => {
       player.isReady = !player.isReady;
       io.to(roomCode).emit("player-ready", { players: room.players });
 
-      if (room.players.length === 2 && room.players.every(p => p.isReady)) {
+      if (room.players.length === 2 && room.players.every((p) => p.isReady)) {
         console.log(`Game starting in room ${roomCode}`);
 
         room.gameState.tiles = generateTiles();
@@ -1088,23 +1237,27 @@ app.prepare().then(async () => {
         room.gameState.playerActions = {};
         await saveRoom(room);
 
-        room.players.forEach(player => {
+        room.players.forEach((player) => {
           room.gameState.playerHands[player.userId] = [];
           for (let i = 0; i < 3; i++) {
-            room.gameState.playerHands[player.userId].push(generateSingleHeart());
+            room.gameState.playerHands[player.userId].push(
+              generateSingleHeart(),
+            );
           }
           for (let i = 0; i < 2; i++) {
-            room.gameState.playerHands[player.userId].push(generateSingleMagicCard());
+            room.gameState.playerHands[player.userId].push(
+              generateSingleMagicCard(),
+            );
           }
         });
 
         room.gameState.currentPlayer = selectRandomStartingPlayer(room.players);
         room.gameState.turnCount = 1;
 
-        const playersWithHands = room.players.map(player => ({
+        const playersWithHands = room.players.map((player) => ({
           ...player,
           hand: room.gameState.playerHands[player.userId] || [],
-          score: player.score || 0
+          score: player.score || 0,
         }));
 
         const gameStartData = {
@@ -1116,13 +1269,17 @@ app.prepare().then(async () => {
           magicDeck: room.gameState.magicDeck,
           turnCount: room.gameState.turnCount,
           shields: room.gameState.shields || {},
-          playerActions: room.gameState.playerActions || {}
+          playerActions: room.gameState.playerActions || {},
         };
 
-        room.players.forEach(player => {
-          const personalizedData = { ...gameStartData, playerId: player.userId };
-          const playerSocket = Array.from(io.sockets.sockets.values())
-            .find(s => s.data.userId === player.userId);
+        room.players.forEach((player) => {
+          const personalizedData = {
+            ...gameStartData,
+            playerId: player.userId,
+          };
+          const playerSocket = Array.from(io.sockets.sockets.values()).find(
+            (s) => s.data.userId === player.userId,
+          );
           if (playerSocket) {
             playerSocket.emit("game-start", personalizedData);
           }
@@ -1191,7 +1348,7 @@ app.prepare().then(async () => {
 
       try {
         if (room.gameState.gameStarted && room.gameState.deck.cards > 0) {
-          recordCardDraw(room, userId, 'heart');
+          recordCardDraw(room, userId, "heart");
           const newHeart = generateSingleHeart();
           if (!room.gameState.playerHands[userId]) {
             room.gameState.playerHands[userId] = [];
@@ -1200,16 +1357,16 @@ app.prepare().then(async () => {
           room.gameState.deck.cards--;
           await saveRoom(room);
 
-          const playersWithUpdatedHands = room.players.map(player => ({
+          const playersWithUpdatedHands = room.players.map((player) => ({
             ...player,
             hand: room.gameState.playerHands[player.userId] || [],
-            score: player.score || 0
+            score: player.score || 0,
           }));
 
           io.to(roomCode).emit("heart-drawn", {
             players: playersWithUpdatedHands,
             playerHands: room.gameState.playerHands,
-            deck: room.gameState.deck
+            deck: room.gameState.deck,
           });
 
           // Check if game should end after drawing (if deck becomes empty), but allow grace period
@@ -1222,8 +1379,11 @@ app.prepare().then(async () => {
     });
 
     socket.on("place-heart", async ({ roomCode, tileId, heartId }) => {
-      if (!validateRoomCode(roomCode) || (typeof tileId !== 'number' && typeof tileId !== 'string') ||
-          (typeof heartId !== 'string' && typeof heartId !== 'number')) {
+      if (
+        !validateRoomCode(roomCode) ||
+        (typeof tileId !== "number" && typeof tileId !== "string") ||
+        (typeof heartId !== "string" && typeof heartId !== "number")
+      ) {
         socket.emit("room-error", "Invalid input data");
         return;
       }
@@ -1243,7 +1403,12 @@ app.prepare().then(async () => {
         return;
       }
 
-      const heartValidation = validateHeartPlacement(room, userId, heartId, tileId);
+      const heartValidation = validateHeartPlacement(
+        room,
+        userId,
+        heartId,
+        tileId,
+      );
       if (!heartValidation.valid) {
         socket.emit("room-error", heartValidation.error);
         return;
@@ -1257,7 +1422,10 @@ app.prepare().then(async () => {
 
       // Check if player has reached their heart placement limit for this turn
       if (!canPlaceMoreHearts(room, userId)) {
-        socket.emit("room-error", "You can only place up to 2 heart cards per turn");
+        socket.emit(
+          "room-error",
+          "You can only place up to 2 heart cards per turn",
+        );
         return;
       }
 
@@ -1269,18 +1437,27 @@ app.prepare().then(async () => {
       try {
         if (room.gameState.gameStarted) {
           // Double-check validation inside the critical section to prevent race conditions
-          const revalidation = validateHeartPlacement(room, userId, heartId, tileId);
+          const revalidation = validateHeartPlacement(
+            room,
+            userId,
+            heartId,
+            tileId,
+          );
           if (!revalidation.valid) {
             socket.emit("room-error", revalidation.error);
             return;
           }
 
           const playerHand = room.gameState.playerHands[userId] || [];
-          const heartIndex = playerHand.findIndex(heart => heart.id === heartId);
+          const heartIndex = playerHand.findIndex(
+            (heart) => heart.id === heartId,
+          );
 
           if (heartIndex !== -1) {
             const heart = playerHand.splice(heartIndex, 1)[0];
-            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == tileId);
+            const tileIndex = room.gameState.tiles.findIndex(
+              (tile) => tile.id == tileId,
+            );
 
             if (tileIndex !== -1) {
               const tile = room.gameState.tiles[tileIndex];
@@ -1293,7 +1470,9 @@ app.prepare().then(async () => {
 
               const score = calculateScore(heart, tile);
 
-              const playerIndex = room.players.findIndex(p => p.userId === userId);
+              const playerIndex = room.players.findIndex(
+                (p) => p.userId === userId,
+              );
               if (playerIndex !== -1) {
                 room.players[playerIndex].score += score;
               }
@@ -1308,8 +1487,8 @@ app.prepare().then(async () => {
                   emoji: heart.emoji,
                   placedBy: userId,
                   score: score,
-                  originalTileColor: tile.color // Store original tile color
-                }
+                  originalTileColor: tile.color, // Store original tile color
+                },
               };
 
               // Record this heart placement for turn tracking
@@ -1317,17 +1496,17 @@ app.prepare().then(async () => {
 
               await saveRoom(room);
 
-              const playersWithUpdatedHands = room.players.map(player => ({
+              const playersWithUpdatedHands = room.players.map((player) => ({
                 ...player,
                 hand: room.gameState.playerHands[player.userId] || [],
-                score: player.score
+                score: player.score,
               }));
 
               io.to(roomCode).emit("heart-placed", {
                 tiles: room.gameState.tiles,
                 players: playersWithUpdatedHands,
                 playerHands: room.gameState.playerHands,
-                playerActions: room.gameState.playerActions || {}
+                playerActions: room.gameState.playerActions || {},
               });
 
               // Check if game should end after heart placement
@@ -1384,42 +1563,53 @@ app.prepare().then(async () => {
         const magicDeckEmpty = room.gameState.magicDeck.cards <= 0;
 
         if (!cardDrawValidation.currentActions.drawnHeart && !heartDeckEmpty) {
-          socket.emit("room-error", "You must draw a heart card before ending your turn");
+          socket.emit(
+            "room-error",
+            "You must draw a heart card before ending your turn",
+          );
           return;
         }
 
         if (!cardDrawValidation.currentActions.drawnMagic && !magicDeckEmpty) {
-          socket.emit("room-error", "You must draw a magic card before ending your turn");
+          socket.emit(
+            "room-error",
+            "You must draw a magic card before ending your turn",
+          );
           return;
         }
 
         if (room.gameState.gameStarted) {
-        // Reset actions for the current player whose turn is ending
-        resetPlayerActions(room, room.gameState.currentPlayer.userId);
+          // Reset actions for the current player whose turn is ending
+          resetPlayerActions(room, room.gameState.currentPlayer.userId);
 
-        // Check and expire shields that should expire after this turn
-        checkAndExpireShields(room);
+          // Check and expire shields that should expire after this turn
+          checkAndExpireShields(room);
 
-        // Check if game should end after player finishes their turn (no grace period for deck empty)
-        await endGame(room, roomCode, io, false);
+          // Check if game should end after player finishes their turn (no grace period for deck empty)
+          await endGame(room, roomCode, io, false);
 
-        // Only proceed with turn change if game hasn't ended
-        if (room.gameState.gameStarted) {
-          // Find the current player index
-          const currentPlayerIndex = room.players.findIndex(p => p.userId === room.gameState.currentPlayer.userId);
-          const nextPlayerIndex = (currentPlayerIndex + 1) % room.players.length;
+          // Only proceed with turn change if game hasn't ended
+          if (room.gameState.gameStarted) {
+            // Find the current player index
+            const currentPlayerIndex = room.players.findIndex(
+              (p) => p.userId === room.gameState.currentPlayer.userId,
+            );
+            const nextPlayerIndex =
+              (currentPlayerIndex + 1) % room.players.length;
 
-          // Switch to next player
-          room.gameState.currentPlayer = room.players[nextPlayerIndex];
-          room.gameState.turnCount++;
-          await saveRoom(room); // Save turn change
+            // Switch to next player
+            room.gameState.currentPlayer = room.players[nextPlayerIndex];
+            room.gameState.turnCount++;
+            await saveRoom(room); // Save turn change
 
-          console.log(`Turn ended in room ${roomCode.toUpperCase()}, new currentPlayer: ${room.gameState.currentPlayer.id}`);
+            console.log(
+              `Turn ended in room ${roomCode.toUpperCase()}, new currentPlayer: ${room.gameState.currentPlayer.id}`,
+            );
 
-          // Include player hands in the player objects for broadcasting
-            const playersWithHands = room.players.map(player => ({
+            // Include player hands in the player objects for broadcasting
+            const playersWithHands = room.players.map((player) => ({
               ...player,
-              hand: room.gameState.playerHands[player.userId] || []
+              hand: room.gameState.playerHands[player.userId] || [],
             }));
 
             // Broadcast turn change to all players
@@ -1430,12 +1620,12 @@ app.prepare().then(async () => {
               playerHands: room.gameState.playerHands,
               deck: room.gameState.deck,
               shields: room.gameState.shields || {},
-              playerActions: room.gameState.playerActions || {}
+              playerActions: room.gameState.playerActions || {},
             });
             console.log(`Turn change broadcasted to room ${roomCode}:`, {
               currentPlayer: room.gameState.currentPlayer.name,
               turnCount: room.gameState.turnCount,
-              playersCount: playersWithHands.length
+              playersCount: playersWithHands.length,
             });
           }
         }
@@ -1489,7 +1679,7 @@ app.prepare().then(async () => {
 
       try {
         if (room.gameState.gameStarted && room.gameState.magicDeck.cards > 0) {
-          recordCardDraw(room, userId, 'magic');
+          recordCardDraw(room, userId, "magic");
           // Generate a new magic card and add to player's hand
           const newMagicCard = generateSingleMagicCard();
 
@@ -1504,20 +1694,22 @@ app.prepare().then(async () => {
 
           await saveRoom(room); // Save magic card draw
 
-          console.log(`Magic card drawn by ${userId} in room ${roomCode.toUpperCase()}`);
+          console.log(
+            `Magic card drawn by ${userId} in room ${roomCode.toUpperCase()}`,
+          );
 
           // Include player hands and scores in the player objects for broadcasting
-          const playersWithUpdatedHands = room.players.map(player => ({
+          const playersWithUpdatedHands = room.players.map((player) => ({
             ...player,
             hand: room.gameState.playerHands[player.userId] || [],
-            score: player.score || 0
+            score: player.score || 0,
           }));
 
           // Broadcast the updated player hands to all players
           io.to(roomCode).emit("magic-card-drawn", {
             players: playersWithUpdatedHands,
             playerHands: room.gameState.playerHands,
-            magicDeck: room.gameState.magicDeck
+            magicDeck: room.gameState.magicDeck,
           });
 
           // Check if game should end after drawing magic card (if deck becomes empty), but allow grace period
@@ -1534,7 +1726,9 @@ app.prepare().then(async () => {
 
     // Magic card events
     socket.on("use-magic-card", async ({ roomCode, cardId, targetTileId }) => {
-      console.log(`User ${userId} attempting to use magic card ${cardId} on tile ${targetTileId} in room ${roomCode}`);
+      console.log(
+        `User ${userId} attempting to use magic card ${cardId} on tile ${targetTileId} in room ${roomCode}`,
+      );
 
       // Input validation
       if (!validateRoomCode(roomCode) || !cardId) {
@@ -1546,9 +1740,12 @@ app.prepare().then(async () => {
       // For other magic cards, targetTileId is required
       if (targetTileId === null || targetTileId === undefined) {
         // This might be a Shield card, continue and validate later
-      } else if (targetTileId === 'self') {
+      } else if (targetTileId === "self") {
         // This might be a Shield card, continue and validate later
-      } else if (typeof targetTileId !== 'number' && typeof targetTileId !== 'string') {
+      } else if (
+        typeof targetTileId !== "number" &&
+        typeof targetTileId !== "string"
+      ) {
         socket.emit("room-error", "Invalid target tile ID");
         return;
       }
@@ -1578,7 +1775,10 @@ app.prepare().then(async () => {
 
       // Check if player has reached their magic card usage limit for this turn
       if (!canUseMoreMagicCards(room, userId)) {
-        socket.emit("room-error", "You can only use up to 1 magic card per turn");
+        socket.emit(
+          "room-error",
+          "You can only use up to 1 magic card per turn",
+        );
         return;
       }
 
@@ -1591,7 +1791,7 @@ app.prepare().then(async () => {
         if (room.gameState.gameStarted) {
           // Find the magic card in the player's hand
           const playerHand = room.gameState.playerHands[userId] || [];
-          const cardIndex = playerHand.findIndex(card => card.id === cardId);
+          const cardIndex = playerHand.findIndex((card) => card.id === cardId);
 
           if (cardIndex === -1) {
             socket.emit("room-error", "Magic card not found in your hand");
@@ -1603,39 +1803,59 @@ app.prepare().then(async () => {
 
           // Convert plain object cards to MagicCard instances if needed
           let magicCard = card;
-          if (!(card instanceof WindCard || card instanceof RecycleCard || card instanceof ShieldCard)) {
+          if (
+            !(
+              card instanceof WindCard ||
+              card instanceof RecycleCard ||
+              card instanceof ShieldCard
+            )
+          ) {
             magicCard = createCardFromData(card);
           }
 
           // Validate target based on card type
-          if (magicCard.type === 'shield') {
+          if (magicCard.type === "shield") {
             // Shield cards don't need a target tile, targetTileId should be 'self' or undefined
-            if (targetTileId && targetTileId !== 'self') {
+            if (targetTileId && targetTileId !== "self") {
               socket.emit("room-error", "Shield cards don't target tiles");
               return;
             }
           } else {
             // For non-shield cards, validate that targetTileId is provided and valid
             // Note: targetTileId can be 0, so we need to check if it's explicitly null or undefined
-            if (targetTileId === null || targetTileId === undefined || targetTileId === 'self') {
-              socket.emit("room-error", "Target tile is required for this card");
+            if (
+              targetTileId === null ||
+              targetTileId === undefined ||
+              targetTileId === "self"
+            ) {
+              socket.emit(
+                "room-error",
+                "Target tile is required for this card",
+              );
               return;
             }
           }
 
           // Apply card effect based on type using the new card classes
-          if (magicCard.type === 'shield') {
+          if (magicCard.type === "shield") {
             // Shield cards don't need a target tile
             // Shield can only be activated for the current player
             if (room.gameState.currentPlayer.userId !== userId) {
-              socket.emit("room-error", "You can only use Shield cards on your own turn");
+              socket.emit(
+                "room-error",
+                "You can only use Shield cards on your own turn",
+              );
               return;
             }
 
             try {
               actionResult = magicCard.executeEffect(room.gameState, userId);
-              const actionType = actionResult.reinforced ? 'reinforced' : 'activated';
-              console.log(`Shield card ${actionType} by ${userId} - protection for ${actionResult.remainingTurns} turns`);
+              const actionType = actionResult.reinforced
+                ? "reinforced"
+                : "activated";
+              console.log(
+                `Shield card ${actionType} by ${userId} - protection for ${actionResult.remainingTurns} turns`,
+              );
             } catch (error) {
               console.log(`Shield card error for ${userId}: ${error.message}`);
               socket.emit("room-error", error.message);
@@ -1643,7 +1863,9 @@ app.prepare().then(async () => {
             }
           } else {
             // For other magic cards, validate target tile
-            const tileIndex = room.gameState.tiles.findIndex(tile => tile.id == targetTileId);
+            const tileIndex = room.gameState.tiles.findIndex(
+              (tile) => tile.id == targetTileId,
+            );
 
             if (tileIndex === -1) {
               socket.emit("room-error", "Target tile not found");
@@ -1652,21 +1874,33 @@ app.prepare().then(async () => {
 
             const tile = room.gameState.tiles[tileIndex];
 
-            if (magicCard.type === 'wind') {
+            if (magicCard.type === "wind") {
               // Use WindCard's canTargetTile method for validation
               if (!magicCard.canTargetTile(tile, userId)) {
-                socket.emit("room-error", "Invalid target for Wind card - you can only target opponent's hearts");
+                socket.emit(
+                  "room-error",
+                  "Invalid target for Wind card - you can only target opponent's hearts",
+                );
                 return;
               }
 
               // IMPORTANT: Check shield protection BEFORE subtracting score
               const opponentId = tile.placedHeart.placedBy;
               const currentTurnCount = room.gameState.turnCount || 1;
-              if (room.gameState.shields && room.gameState.shields[opponentId]) {
+              if (
+                room.gameState.shields &&
+                room.gameState.shields[opponentId]
+              ) {
                 const shield = room.gameState.shields[opponentId];
                 if (ShieldCard.isActive(shield, currentTurnCount)) {
-                  const remainingTurns = ShieldCard.getRemainingTurns(shield, currentTurnCount);
-                  socket.emit("room-error", `Opponent is protected by Shield (${remainingTurns} turns remaining)`);
+                  const remainingTurns = ShieldCard.getRemainingTurns(
+                    shield,
+                    currentTurnCount,
+                  );
+                  socket.emit(
+                    "room-error",
+                    `Opponent is protected by Shield (${remainingTurns} turns remaining)`,
+                  );
                   return;
                 }
               }
@@ -1675,25 +1909,35 @@ app.prepare().then(async () => {
               const placedHeart = tile.placedHeart;
               if (placedHeart && placedHeart.score) {
                 // Find the player who placed the heart and subtract the points
-                const playerIndex = room.players.findIndex(p => p.userId === placedHeart.placedBy);
+                const playerIndex = room.players.findIndex(
+                  (p) => p.userId === placedHeart.placedBy,
+                );
                 if (playerIndex !== -1) {
                   room.players[playerIndex].score -= placedHeart.score;
-                  console.log(`Wind card: subtracted ${placedHeart.score} points from player ${placedHeart.placedBy}`);
+                  console.log(
+                    `Wind card: subtracted ${placedHeart.score} points from player ${placedHeart.placedBy}`,
+                  );
                 }
               }
 
               // Execute the Wind card effect using the new class method
-              actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId);
+              actionResult = magicCard.executeEffect(
+                room.gameState,
+                targetTileId,
+                userId,
+              );
 
               // Apply the result to the game state
               if (actionResult) {
                 room.gameState.tiles[tileIndex] = actionResult.newTileState;
-                console.log(`Wind card used by ${userId} to remove heart from tile ${targetTileId}`);
+                console.log(
+                  `Wind card used by ${userId} to remove heart from tile ${targetTileId}`,
+                );
               } else {
                 socket.emit("room-error", "Failed to execute Wind card effect");
                 return;
               }
-            } else if (magicCard.type === 'recycle') {
+            } else if (magicCard.type === "recycle") {
               // Use RecycleCard's canTargetTile method for validation
               if (!magicCard.canTargetTile(tile)) {
                 socket.emit("room-error", "Invalid target for Recycle card");
@@ -1701,14 +1945,23 @@ app.prepare().then(async () => {
               }
 
               // Execute the Recycle card effect using the new class method
-              actionResult = magicCard.executeEffect(room.gameState, targetTileId, userId);
+              actionResult = magicCard.executeEffect(
+                room.gameState,
+                targetTileId,
+                userId,
+              );
 
               // Apply the result to the game state
               if (actionResult) {
                 room.gameState.tiles[tileIndex] = actionResult.newTileState;
-                console.log(`Recycle card used by ${userId} to change tile ${targetTileId} from ${actionResult.previousColor} to white`);
+                console.log(
+                  `Recycle card used by ${userId} to change tile ${targetTileId} from ${actionResult.previousColor} to white`,
+                );
               } else {
-                socket.emit("room-error", "Failed to execute Recycle card effect");
+                socket.emit(
+                  "room-error",
+                  "Failed to execute Recycle card effect",
+                );
                 return;
               }
             }
@@ -1723,21 +1976,24 @@ app.prepare().then(async () => {
           await saveRoom(room);
 
           // Include player hands and scores in the player objects for broadcasting
-          const playersWithUpdatedHands = room.players.map(player => ({
+          const playersWithUpdatedHands = room.players.map((player) => ({
             ...player,
             hand: room.gameState.playerHands[player.userId] || [],
-            score: player.score || 0
+            score: player.score || 0,
           }));
 
           // Broadcast the magic card usage to all players
           console.log(`=== BROADCASTING MAGIC CARD USAGE ===`);
-          console.log(`Broadcasting magic-card-used event to room ${roomCode}:`, {
-            card: card,
-            actionResult: actionResult,
-            tilesCount: room.gameState.tiles.length,
-            playersCount: playersWithUpdatedHands.length,
-            usedBy: userId
-          });
+          console.log(
+            `Broadcasting magic-card-used event to room ${roomCode}:`,
+            {
+              card: card,
+              actionResult: actionResult,
+              tilesCount: room.gameState.tiles.length,
+              playersCount: playersWithUpdatedHands.length,
+              usedBy: userId,
+            },
+          );
           io.to(roomCode).emit("magic-card-used", {
             card: card,
             actionResult: actionResult,
@@ -1746,7 +2002,7 @@ app.prepare().then(async () => {
             playerHands: room.gameState.playerHands,
             usedBy: userId,
             shields: room.gameState.shields || {},
-            playerActions: room.gameState.playerActions || {}
+            playerActions: room.gameState.playerActions || {},
           });
 
           // Check if game should end after magic card usage (wind card could potentially clear tiles)
@@ -1773,18 +2029,31 @@ app.prepare().then(async () => {
         if (room) {
           const playerName = socket.data.userName;
           const initialLength = room.players.length;
-          room.players = room.players.filter(player => player.userId !== userId);
+          room.players = room.players.filter(
+            (player) => player.userId !== userId,
+          );
 
-          if (room.players.length === initialLength && socket.data.userSessionId) {
-            room.players = room.players.filter(player => player.userId === socket.data.userSessionId);
+          if (
+            room.players.length === initialLength &&
+            socket.data.userSessionId
+          ) {
+            room.players = room.players.filter(
+              (player) => player.userId === socket.data.userSessionId,
+            );
           }
 
           if (room.players.length === initialLength && playerName) {
-            room.players = room.players.filter(player => player.name.toLowerCase() !== playerName.toLowerCase());
+            room.players = room.players.filter(
+              (player) =>
+                player.name.toLowerCase() !== playerName.toLowerCase(),
+            );
           }
 
           // Clean up player hands for disconnected players
-          if (socket.data.userId && room.gameState.playerHands[socket.data.userId]) {
+          if (
+            socket.data.userId &&
+            room.gameState.playerHands[socket.data.userId]
+          ) {
             delete room.gameState.playerHands[socket.data.userId];
           }
 
@@ -1799,22 +2068,24 @@ app.prepare().then(async () => {
           } else {
             // Save room state after player removal
             await saveRoom(room);
-            console.log(`Player removed from room ${roomCode}, ${room.players.length} players remaining`);
+            console.log(
+              `Player removed from room ${roomCode}, ${room.players.length} players remaining`,
+            );
           }
         }
       }
     });
   });
 
-    httpServer
-      .once("error", (err) => {
-        console.error(err);
-        process.exit(1);
-      })
-      .listen(port, () => {
-        console.log(`> Ready on http://${hostname}:${port}`);
-      });
-  });
+  httpServer
+    .once("error", (err) => {
+      console.error(err);
+      process.exit(1);
+    })
+    .listen(port, () => {
+      console.log(`> Ready on http://${hostname}:${port}`);
+    });
+});
 
 // Export functions for testing (they are accessible within the same scope)
 export {
@@ -1865,5 +2136,5 @@ export {
 
   // Session management stubs for testing
   getPlayerSession,
-  updatePlayerSocket
+  updatePlayerSocket,
 };

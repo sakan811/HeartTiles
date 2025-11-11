@@ -1,6 +1,6 @@
-import NextAuth from "next-auth"
-import Credentials from "next-auth/providers/credentials"
-import { User } from "../models.js"
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import { User } from "../models.js";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -8,44 +8,46 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          return null
+          return null;
         }
 
         try {
           // Connect to MongoDB
-          await connectDB()
+          await connectDB();
 
-          const user = await User.findOne({ email: credentials.email })
+          const user = await User.findOne({ email: credentials.email });
 
           if (!user) {
-            return null
+            return null;
           }
 
-          const isPasswordValid = await user.comparePassword(credentials.password as string)
+          const isPasswordValid = await user.comparePassword(
+            credentials.password as string,
+          );
 
           if (!isPasswordValid) {
-            return null
+            return null;
           }
 
           return {
             id: user._id.toString(),
             email: user.email,
             name: user.name,
-          }
+          };
         } catch (error) {
-          console.error("Auth error:", error)
-          return null
+          console.error("Auth error:", error);
+          return null;
         }
-      }
-    })
+      },
+    }),
   ],
   trustHost: true,
   session: {
-    strategy: "jwt"
+    strategy: "jwt",
   },
   pages: {
     signIn: "/auth/signin",
@@ -54,34 +56,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       // Handle null/undefined token by creating a new one
       if (!token) {
-        token = {}
+        token = {};
       }
 
       if (user) {
-        token.id = user.id
+        token.id = user.id;
       }
-      return token
+      return token;
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id as string
+        session.user.id = token.id as string;
       }
-      return session
-    }
-  }
-})
+      return session;
+    },
+  },
+});
 
 // Database connection function
 async function connectDB() {
   try {
-    const mongoose = await import('mongoose')
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/heart-tiles'
+    const mongoose = await import("mongoose");
+    const MONGODB_URI =
+      process.env.MONGODB_URI || "mongodb://localhost:27017/heart-tiles";
 
     if (mongoose.default.connection.readyState === 0) {
-      await mongoose.default.connect(MONGODB_URI)
+      await mongoose.default.connect(MONGODB_URI);
     }
   } catch (error) {
-    console.error("Database connection error:", error)
-    throw error
+    console.error("Database connection error:", error);
+    throw error;
   }
 }
