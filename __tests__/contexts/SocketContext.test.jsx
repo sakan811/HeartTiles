@@ -336,7 +336,7 @@ describe('SocketContext', () => {
   })
 
   describe('useSocket Hook', () => {
-    it('should provide socket context values', () => {
+    it('should provide socket context values', async () => {
       // Mock authenticated user for socket creation
       const mockSession = {
         user: { id: 'test-user', name: 'Test User' },
@@ -367,6 +367,11 @@ describe('SocketContext', () => {
         </TestWrapper>
       )
 
+      // Wait for the socket to be created (setTimeout with 0 delay)
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
+
       expect(screen.getByTestId('has-socket')).toHaveTextContent('true')
       expect(screen.getByTestId('connected')).toHaveTextContent('false')
       expect(screen.getByTestId('socket-id')).toHaveTextContent('null')
@@ -374,7 +379,7 @@ describe('SocketContext', () => {
       expect(screen.getByText('Disconnect')).toBeInTheDocument()
     })
 
-    it('should call disconnect function when invoked', () => {
+    it('should call disconnect function when invoked', async () => {
       // Mock authenticated user for socket creation
       const mockSession = {
         user: { id: 'test-user', name: 'Test User' },
@@ -396,6 +401,11 @@ describe('SocketContext', () => {
           <TestComponent />
         </TestWrapper>
       )
+
+      // Wait for socket to be created before clicking disconnect
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
 
       const disconnectButton = screen.getByText('Disconnect')
       act(() => {
@@ -710,7 +720,7 @@ describe('SocketContext', () => {
         status: 'authenticated'
       })
     })
-    it('should provide socket for room creation events', () => {
+    it('should provide socket for room creation events', async () => {
       let roomJoinHandler
 
       mockSocket.on.mockImplementation((event, handler) => {
@@ -739,6 +749,11 @@ describe('SocketContext', () => {
         </TestWrapper>
       )
 
+      // Wait for socket to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
+
       expect(getByTestId('socket-ready')).toHaveTextContent('ready')
 
       act(() => {
@@ -749,12 +764,6 @@ describe('SocketContext', () => {
     })
 
     it('should handle player ready state updates', async () => {
-      let playerReadyHandler
-
-      mockSocket.on.mockImplementation((event, handler) => {
-        if (event === 'player-ready') playerReadyHandler = handler
-      })
-
       const TestComponent = () => {
         const { socket } = useSocket()
         const handlePlayerReady = () => {
@@ -774,6 +783,11 @@ describe('SocketContext', () => {
         </TestWrapper>
       )
 
+      // Wait for socket to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
+
       act(() => {
         getByTestId('player-ready').click()
       })
@@ -785,12 +799,6 @@ describe('SocketContext', () => {
     })
 
     it('should handle heart placement events', async () => {
-      let heartPlaceHandler
-
-      mockSocket.on.mockImplementation((event, handler) => {
-        if (event === 'place-heart') heartPlaceHandler = handler
-      })
-
       const TestComponent = () => {
         const { socket } = useSocket()
         const handlePlaceHeart = () => {
@@ -813,6 +821,11 @@ describe('SocketContext', () => {
         </TestWrapper>
       )
 
+      // Wait for socket to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
+
       act(() => {
         getByTestId('place-heart').click()
       })
@@ -824,12 +837,6 @@ describe('SocketContext', () => {
     })
 
     it('should handle magic card usage events', async () => {
-      let magicCardHandler
-
-      mockSocket.on.mockImplementation((event, handler) => {
-        if (event === 'play-magic-card') magicCardHandler = handler
-      })
-
       const TestComponent = () => {
         const { socket } = useSocket()
         const handlePlayMagicCard = () => {
@@ -852,6 +859,11 @@ describe('SocketContext', () => {
         </TestWrapper>
       )
 
+      // Wait for socket to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
+
       act(() => {
         getByTestId('play-magic-card').click()
       })
@@ -863,12 +875,6 @@ describe('SocketContext', () => {
     })
 
     it('should handle turn end events', async () => {
-      let turnEndHandler
-
-      mockSocket.on.mockImplementation((event, handler) => {
-        if (event === 'end-turn') turnEndHandler = handler
-      })
-
       const TestComponent = () => {
         const { socket } = useSocket()
         const handleEndTurn = () => {
@@ -890,6 +896,11 @@ describe('SocketContext', () => {
           <TestComponent />
         </TestWrapper>
       )
+
+      // Wait for socket to be created
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
 
       act(() => {
         getByTestId('end-turn').click()
@@ -934,6 +945,13 @@ describe('SocketContext', () => {
         </TestWrapper>
       )
 
+      // Wait for socket to be created and game-update listener to be registered
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      })
+
+      expect(gameStateHandler).toBeDefined()
+      expect(typeof gameStateHandler).toBe('function')
       expect(getByTestId('game-state')).toHaveTextContent('no-state')
 
       const mockGameState = {
