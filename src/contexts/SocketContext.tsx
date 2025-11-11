@@ -42,11 +42,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   useEffect(() => {
     // Reset connection state when user logs out
     if (status === "unauthenticated") {
-      setIsConnected(false);
-      setSocketId(null);
-      setConnectionError(null);
-      setSocket(null);
-      return;
+      // Use a single timeout to batch all state updates
+      const resetTimer = setTimeout(() => {
+        setIsConnected(false);
+        setSocketId(null);
+        setConnectionError(null);
+        setSocket(null);
+      }, 0);
+      return () => clearTimeout(resetTimer);
     }
 
     // Only connect when user is authenticated
@@ -81,9 +84,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       setSocketId(null);
     });
 
-    setSocket(socketInstance);
+    // Defer setting socket to next tick to avoid synchronous setState
+    const timer = setTimeout(() => {
+      setSocket(socketInstance);
+    }, 0);
 
     return () => {
+      clearTimeout(timer);
       socketInstance.disconnect();
     };
   }, [status]); // Reconnect when auth status changes
