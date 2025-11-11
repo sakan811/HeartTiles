@@ -71,7 +71,9 @@ interface PlayerActions {
 export default function GameRoomPage() {
   const { data: session, status } = useSession();
   const [tiles, setTiles] = useState<Tile[]>([]);
-  const [roomCode, setRoomCode] = useState("");
+  const params = useParams();
+  const roomCodeParam = params.roomCode as string;
+  const [roomCode, setRoomCode] = useState(roomCodeParam);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [playerHands, setPlayerHands] = useState<Record<string, Tile[]>>({});
@@ -85,7 +87,6 @@ export default function GameRoomPage() {
   const [shields, setShields] = useState<Record<string, Shield>>({});
   const [playerActions, setPlayerActions] = useState<Record<string, PlayerActions>>({});
   const { socket, isConnected, socketId, disconnect } = useSocket();
-  const params = useParams();
   const router = useRouter();
 
   // Get current player data from server state
@@ -102,15 +103,13 @@ export default function GameRoomPage() {
       return;
     }
 
-    const roomCodeParam = params.roomCode as string;
-    setRoomCode(roomCodeParam);
-
     if (!socket || !socketId) return;
 
     const onRoomJoined = (data: { players: Player[], playerId: string }) => {
       console.log(`Room joined: ${data.players?.length || 0} players`);
       setPlayers(data.players || []);
       setMyPlayerId(data.playerId);
+      setCurrentRoom(roomCodeParam);
     };
 
     const onPlayerJoined = (data: { players: Player[] }) => {
@@ -340,7 +339,6 @@ export default function GameRoomPage() {
       }
 
       socket.emit("join-room", { roomCode: roomCodeParam, playerName: tempPlayerName });
-      setCurrentRoom(roomCodeParam);
     }
 
     return () => {
@@ -357,7 +355,7 @@ export default function GameRoomPage() {
       socket?.off("game-over", onGameOver);
       socket?.off("room-error", onRoomError);
     };
-  }, [params.roomCode, socket, socketId, myPlayerId, currentPlayer?.userId, session, status, router, currentRoom]);
+  }, [socket, socketId, myPlayerId, currentPlayer?.userId, session, status, router, currentRoom, roomCodeParam]);
 
   
 
