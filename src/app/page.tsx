@@ -16,7 +16,10 @@ export default function Home() {
       signIn();
       return;
     }
-    const generatedRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const generatedRoomCode = Math.random()
+      .toString(36)
+      .substring(2, 8)
+      .toUpperCase();
     router.push(`/room/${generatedRoomCode}`);
   };
 
@@ -69,11 +72,10 @@ export default function Home() {
         </div>
 
         <div>
-          <h1 className="text-6xl font-bold text-white mb-4">
-            Heart Tiles
-          </h1>
+          <h1 className="text-6xl font-bold text-white mb-4">Heart Tiles</h1>
           <p className="text-xl text-gray-300">
-            A strategic tile-based card game where players place colored hearts on tiles to score points
+            A strategic tile-based card game where players place colored hearts
+            on tiles to score points
           </p>
         </div>
 
@@ -96,8 +98,12 @@ export default function Home() {
         {showJoinDialog && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full mx-4">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">Join Room</h2>
-              <p className="text-gray-600 mb-6">Enter the room code to join an existing game</p>
+              <h2 className="text-2xl font-bold mb-4 text-gray-800">
+                Join Room
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Enter the room code to join an existing game
+              </p>
 
               <input
                 type="text"

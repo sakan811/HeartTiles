@@ -11,10 +11,10 @@
 export const createHeartCardData = (overrides = {}) => {
   const defaults = {
     id: `heart-${Date.now()}-${Math.random()}`,
-    color: 'red',
+    color: "red",
     value: 2,
-    emoji: '❤️',
-    type: 'heart'
+    emoji: "❤️",
+    type: "heart",
   };
 
   return { ...defaults, ...overrides };
@@ -26,9 +26,9 @@ export const createHeartCardData = (overrides = {}) => {
 export const createWindCardData = (overrides = {}) => {
   const defaults = {
     id: `wind-${Date.now()}-${Math.random()}`,
-    type: 'wind',
-    emoji: '💨',
-    name: 'Wind Card'
+    type: "wind",
+    emoji: "💨",
+    name: "Wind Card",
   };
 
   return { ...defaults, ...overrides };
@@ -40,9 +40,9 @@ export const createWindCardData = (overrides = {}) => {
 export const createRecycleCardData = (overrides = {}) => {
   const defaults = {
     id: `recycle-${Date.now()}-${Math.random()}`,
-    type: 'recycle',
-    emoji: '♻️',
-    name: 'Recycle Card'
+    type: "recycle",
+    emoji: "♻️",
+    name: "Recycle Card",
   };
 
   return { ...defaults, ...overrides };
@@ -54,9 +54,9 @@ export const createRecycleCardData = (overrides = {}) => {
 export const createShieldCardData = (overrides = {}) => {
   const defaults = {
     id: `shield-${Date.now()}-${Math.random()}`,
-    type: 'shield',
-    emoji: '🛡️',
-    name: 'Shield Card'
+    type: "shield",
+    emoji: "🛡️",
+    name: "Shield Card",
   };
 
   return { ...defaults, ...overrides };
@@ -68,22 +68,22 @@ export const createShieldCardData = (overrides = {}) => {
 export const createTestHeartDataSet = (playerId) => [
   createHeartCardData({
     id: `heart-${playerId}-1`,
-    color: 'red',
+    color: "red",
     value: 2,
-    emoji: '❤️'
+    emoji: "❤️",
   }),
   createHeartCardData({
     id: `heart-${playerId}-2`,
-    color: 'yellow',
+    color: "yellow",
     value: 1,
-    emoji: '💛'
+    emoji: "💛",
   }),
   createHeartCardData({
     id: `heart-${playerId}-3`,
-    color: 'green',
+    color: "green",
     value: 3,
-    emoji: '💚'
-  })
+    emoji: "💚",
+  }),
 ];
 
 /**
@@ -91,11 +91,11 @@ export const createTestHeartDataSet = (playerId) => [
  */
 export const createTestMagicDataSet = (playerId) => [
   createWindCardData({
-    id: `magic-${playerId}-1`
+    id: `magic-${playerId}-1`,
   }),
   createRecycleCardData({
-    id: `magic-${playerId}-2`
-  })
+    id: `magic-${playerId}-2`,
+  }),
 ];
 
 /**
@@ -103,22 +103,22 @@ export const createTestMagicDataSet = (playerId) => [
  */
 export const createInitialHandData = (playerId) => [
   ...createTestHeartDataSet(playerId),
-  ...createTestMagicDataSet(playerId)
+  ...createTestMagicDataSet(playerId),
 ];
 
 /**
  * Generate random heart card data with specified parameters
  */
 export const generateRandomHeartCardData = (overrides = {}) => {
-  const colors = ['red', 'yellow', 'green'];
-  const emojis = ['❤️', '💛', '💚'];
+  const colors = ["red", "yellow", "green"];
+  const emojis = ["❤️", "💛", "💚"];
   const colorIndex = Math.floor(Math.random() * 3);
 
   return createHeartCardData({
     color: colors[colorIndex],
     value: Math.floor(Math.random() * 3) + 1,
     emoji: emojis[colorIndex],
-    ...overrides
+    ...overrides,
   });
 };
 
@@ -126,11 +126,11 @@ export const generateRandomHeartCardData = (overrides = {}) => {
  * Generate random magic card data with weighted distribution
  */
 export const generateRandomMagicCardData = (overrides = {}) => {
-  const types = ['wind', 'recycle', 'shield'];
+  const types = ["wind", "recycle", "shield"];
   const weights = [6, 5, 5]; // Game rule distribution
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   let random = Math.random() * totalWeight;
-  let selectedType = 'wind';
+  let selectedType = "wind";
 
   for (let i = 0; i < types.length; i++) {
     random -= weights[i];
@@ -141,11 +141,11 @@ export const generateRandomMagicCardData = (overrides = {}) => {
   }
 
   switch (selectedType) {
-    case 'wind':
+    case "wind":
       return createWindCardData(overrides);
-    case 'recycle':
+    case "recycle":
       return createRecycleCardData(overrides);
-    case 'shield':
+    case "shield":
       return createShieldCardData(overrides);
     default:
       return createWindCardData(overrides);
@@ -155,11 +155,13 @@ export const generateRandomMagicCardData = (overrides = {}) => {
 /**
  * Helper functions to check card types from data objects
  */
-export const isHeartCardData = (card) => card?.type === 'heart' || (card?.color && card?.value !== undefined);
-export const isMagicCardData = (card) => card?.type && ['wind', 'recycle', 'shield'].includes(card.type);
-export const isWindCardData = (card) => card?.type === 'wind';
-export const isRecycleCardData = (card) => card?.type === 'recycle';
-export const isShieldCardData = (card) => card?.type === 'shield';
+export const isHeartCardData = (card) =>
+  card?.type === "heart" || (card?.color && card?.value !== undefined);
+export const isMagicCardData = (card) =>
+  card?.type && ["wind", "recycle", "shield"].includes(card.type);
+export const isWindCardData = (card) => card?.type === "wind";
+export const isRecycleCardData = (card) => card?.type === "recycle";
+export const isShieldCardData = (card) => card?.type === "shield";
 
 // Legacy exports for backward compatibility
 // TODO: Update test files to use the new naming convention

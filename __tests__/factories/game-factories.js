@@ -1,4 +1,4 @@
-import { createInitialHand } from './card-factories.js';
+import { createInitialHand } from "./card-factories.js";
 
 /**
  * Factory for creating test tiles
@@ -6,9 +6,9 @@ import { createInitialHand } from './card-factories.js';
 export const createTile = (overrides = {}) => {
   const defaults = {
     id: 0,
-    color: 'white',
-    emoji: '⬜',
-    placedHeart: null
+    color: "white",
+    emoji: "⬜",
+    placedHeart: null,
   };
 
   return { ...defaults, ...overrides };
@@ -18,12 +18,14 @@ export const createTile = (overrides = {}) => {
  * Create a complete set of 8 tiles for testing
  */
 export const createTileSet = (overrides = {}) => {
-  return Array.from({ length: 8 }, (_, i) => createTile({
-    id: i,
-    color: i % 3 === 0 ? 'white' : ['red', 'yellow', 'green'][i % 3],
-    emoji: i % 3 === 0 ? '⬜' : ['🟥', '🟨', '🟩'][i % 3],
-    ...overrides
-  }));
+  return Array.from({ length: 8 }, (_, i) =>
+    createTile({
+      id: i,
+      color: i % 3 === 0 ? "white" : ["red", "yellow", "green"][i % 3],
+      emoji: i % 3 === 0 ? "⬜" : ["🟥", "🟨", "🟩"][i % 3],
+      ...overrides,
+    }),
+  );
 };
 
 /**
@@ -31,12 +33,12 @@ export const createTileSet = (overrides = {}) => {
  */
 export const createPlayer = (overrides = {}) => {
   const defaults = {
-    userId: 'user1',
-    name: 'Test User',
-    email: 'test@example.com',
+    userId: "user1",
+    name: "Test User",
+    email: "test@example.com",
     isReady: false,
     score: 0,
-    joinedAt: new Date()
+    joinedAt: new Date(),
   };
 
   return { ...defaults, ...overrides };
@@ -45,12 +47,14 @@ export const createPlayer = (overrides = {}) => {
 /**
  * Create a set of test players for a game
  */
-export const createPlayerSet = (count = 2, baseId = 'user') => {
-  return Array.from({ length: count }, (_, i) => createPlayer({
-    userId: `${baseId}${i + 1}`,
-    name: `User ${baseId}${i + 1}`,
-    email: `${baseId}${i + 1}@example.com`
-  }));
+export const createPlayerSet = (count = 2, baseId = "user") => {
+  return Array.from({ length: count }, (_, i) =>
+    createPlayer({
+      userId: `${baseId}${i + 1}`,
+      name: `User ${baseId}${i + 1}`,
+      email: `${baseId}${i + 1}@example.com`,
+    }),
+  );
 };
 
 /**
@@ -58,20 +62,20 @@ export const createPlayerSet = (count = 2, baseId = 'user') => {
  */
 export const createRoom = (overrides = {}) => {
   const defaults = {
-    code: 'TEST01',
+    code: "TEST01",
     players: [],
     maxPlayers: 2,
     gameState: {
       tiles: createTileSet(),
       gameStarted: false,
       currentPlayer: null,
-      deck: { emoji: '💌', cards: 16, type: 'hearts' },
-      magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+      deck: { emoji: "💌", cards: 16, type: "hearts" },
+      magicDeck: { emoji: "🔮", cards: 16, type: "magic" },
       playerHands: {},
       shields: {},
       turnCount: 0,
-      playerActions: {}
-    }
+      playerActions: {},
+    },
   };
 
   return { ...defaults, ...overrides };
@@ -84,12 +88,14 @@ export const createGameReadyRoom = (overrides = {}) => {
   const players = createPlayerSet(2);
   const room = createRoom({
     ...overrides,
-    players: players.map(p => ({ ...p, isReady: true }))
+    players: players.map((p) => ({ ...p, isReady: true })),
   });
 
   // Set up initial hands for each player
-  players.forEach(player => {
-    room.gameState.playerHands[player.userId] = createInitialHand(player.userId);
+  players.forEach((player) => {
+    room.gameState.playerHands[player.userId] = createInitialHand(
+      player.userId,
+    );
   });
 
   return room;
@@ -117,18 +123,20 @@ export const createScenarioRoom = (scenario, overrides = {}) => {
   const baseRoom = createActiveGameRoom(overrides);
 
   switch (scenario) {
-    case 'hearts-placed':
+    case "hearts-placed":
       // Place some hearts on tiles
       baseRoom.gameState.tiles[0].placedHeart = {
         ...baseRoom.gameState.playerHands[baseRoom.players[0].userId][0],
         placedBy: baseRoom.players[0].userId,
-        originalTileColor: baseRoom.gameState.tiles[0].color
+        originalTileColor: baseRoom.gameState.tiles[0].color,
       };
-      baseRoom.gameState.tiles[0].emoji = baseRoom.gameState.playerHands[baseRoom.players[0].userId][0].emoji;
-      baseRoom.gameState.tiles[0].color = baseRoom.gameState.playerHands[baseRoom.players[0].userId][0].color;
+      baseRoom.gameState.tiles[0].emoji =
+        baseRoom.gameState.playerHands[baseRoom.players[0].userId][0].emoji;
+      baseRoom.gameState.tiles[0].color =
+        baseRoom.gameState.playerHands[baseRoom.players[0].userId][0].color;
       break;
 
-    case 'shield-active':
+    case "shield-active":
       // Activate shield for player 1
       baseRoom.gameState.shields = {
         [baseRoom.players[0].userId]: {
@@ -137,24 +145,24 @@ export const createScenarioRoom = (scenario, overrides = {}) => {
           activatedAt: Date.now(),
           activatedTurn: 1,
           activatedBy: baseRoom.players[0].userId,
-          protectedPlayerId: baseRoom.players[0].userId
-        }
+          protectedPlayerId: baseRoom.players[0].userId,
+        },
       };
       break;
 
-    case 'deck-empty':
+    case "deck-empty":
       // Empty both decks
       baseRoom.gameState.deck.cards = 0;
       baseRoom.gameState.magicDeck.cards = 0;
       break;
 
-    case 'turn-end-required':
+    case "turn-end-required":
       // Set up player actions tracking
       baseRoom.gameState.playerActions = {
         [baseRoom.gameState.currentPlayer.userId]: {
           drawnHeart: false,
-          drawnMagic: false
-        }
+          drawnMagic: false,
+        },
       };
       break;
 
@@ -174,10 +182,10 @@ export const createGameStateUpdate = (overrides = {}) => {
     players: [],
     currentPlayer: null,
     playerHands: {},
-    deck: { emoji: '💌', cards: 16, type: 'hearts' },
-    magicDeck: { emoji: '🔮', cards: 16, type: 'magic' },
+    deck: { emoji: "💌", cards: 16, type: "hearts" },
+    magicDeck: { emoji: "🔮", cards: 16, type: "magic" },
     turnCount: 1,
-    shields: {}
+    shields: {},
   };
 
   return { ...defaults, ...overrides };
@@ -188,8 +196,8 @@ export const createGameStateUpdate = (overrides = {}) => {
  */
 export const createHeartPlacedData = (overrides = {}) => {
   return createGameStateUpdate({
-    eventType: 'heart-placed',
-    ...overrides
+    eventType: "heart-placed",
+    ...overrides,
   });
 };
 
@@ -200,11 +208,11 @@ export const createMagicCardUsedData = (overrides = {}) => {
   const defaults = {
     card: null,
     actionResult: null,
-    usedBy: 'user1',
+    usedBy: "user1",
     tiles: createTileSet(),
     players: [],
     playerHands: {},
-    shields: {}
+    shields: {},
   };
 
   return { ...defaults, ...overrides };
@@ -215,8 +223,8 @@ export const createMagicCardUsedData = (overrides = {}) => {
  */
 export const createTurnChangedData = (overrides = {}) => {
   return createGameStateUpdate({
-    eventType: 'turn-changed',
-    ...overrides
+    eventType: "turn-changed",
+    ...overrides,
   });
 };
 
@@ -225,9 +233,9 @@ export const createTurnChangedData = (overrides = {}) => {
  */
 export const createGameStartData = (overrides = {}) => {
   return createGameStateUpdate({
-    eventType: 'game-start',
+    eventType: "game-start",
     turnCount: 1,
-    ...overrides
+    ...overrides,
   });
 };
 
@@ -235,7 +243,7 @@ export const createGameStartData = (overrides = {}) => {
  * Helper to extract room code for testing
  */
 export const generateRoomCode = (counter = 1) => {
-  const code = counter.toString().padStart(2, '0');
+  const code = counter.toString().padStart(2, "0");
   return `${code}TEST`;
 };
 
@@ -245,7 +253,7 @@ export const generateRoomCode = (counter = 1) => {
 export const createErrorData = (message, overrides = {}) => {
   return {
     error: message,
-    eventType: 'room-error',
-    ...overrides
+    eventType: "room-error",
+    ...overrides,
   };
 };

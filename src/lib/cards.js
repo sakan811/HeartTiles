@@ -20,14 +20,20 @@ export class BaseCard {
 
   // Method to execute card effect
   executeEffect() {
-    throw new Error('executeEffect must be implemented by subclass');
+    throw new Error("executeEffect must be implemented by subclass");
   }
 }
 
 // Heart card class
 export class HeartCard extends BaseCard {
   constructor(id, color, value, emoji) {
-    super(id, 'heart', emoji, `${color} heart`, `A ${color} heart card worth ${value} points`);
+    super(
+      id,
+      "heart",
+      emoji,
+      `${color} heart`,
+      `A ${color} heart card worth ${value} points`,
+    );
     this.color = color;
     this.value = value;
   }
@@ -39,7 +45,7 @@ export class HeartCard extends BaseCard {
   }
 
   calculateScore(tile) {
-    if (tile.color === 'white') return this.value;
+    if (tile.color === "white") return this.value;
     return this.color === tile.color ? this.value * 2 : 0;
   }
 
@@ -63,13 +69,14 @@ export class HeartCard extends BaseCard {
     // Use high-precision timestamp + random to ensure unique IDs
     const timestamp = Date.now();
     const randomSuffix = Math.random().toString(36).substr(2, 9);
-    const cardId = timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
+    const cardId =
+      timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
 
     return new HeartCard(
       cardId,
       colors[randomIndex],
       randomValue,
-      emojis[randomIndex]
+      emojis[randomIndex],
     );
   }
 }
@@ -89,19 +96,23 @@ export class MagicCard extends BaseCard {
 // Wind magic card class
 export class WindCard extends MagicCard {
   constructor(id) {
-    super(id, 'wind', '💨', 'Wind Card', 'Remove opponent heart from a tile');
+    super(id, "wind", "💨", "Wind Card", "Remove opponent heart from a tile");
   }
 
   canTargetTile(tile, playerId) {
     // Wind can only target tiles with opponent hearts
     // Due to Mongoose schema defaults, check if placedHeart.value > 0
-    return Boolean(tile.placedHeart && tile.placedHeart.value > 0 && tile.placedHeart.placedBy !== playerId);
+    return Boolean(
+      tile.placedHeart &&
+        tile.placedHeart.value > 0 &&
+        tile.placedHeart.placedBy !== playerId,
+    );
   }
 
   executeEffect(gameState, targetTileId, playerId) {
-    const tile = gameState.tiles.find(t => t.id == targetTileId);
+    const tile = gameState.tiles.find((t) => t.id == targetTileId);
     if (!tile || !this.canTargetTile(tile, playerId)) {
-      throw new Error('Invalid target for Wind card');
+      throw new Error("Invalid target for Wind card");
     }
 
     // Check shield protection using the new ShieldCard protection logic
@@ -109,28 +120,35 @@ export class WindCard extends MagicCard {
     const currentTurnCount = gameState.turnCount || 1;
 
     if (ShieldCard.isPlayerProtected(gameState, opponentId, currentTurnCount)) {
-      const remainingTurns = ShieldCard.getRemainingTurns(gameState.shields[opponentId]);
-      throw new Error(`Opponent is protected by Shield (${remainingTurns} turns remaining)`);
+      const remainingTurns = ShieldCard.getRemainingTurns(
+        gameState.shields[opponentId],
+      );
+      throw new Error(
+        `Opponent is protected by Shield (${remainingTurns} turns remaining)`,
+      );
     }
 
     // CRITICAL RULE: Tile color preservation - restore to original tile color before heart was placed
     const originalTileColor = tile.placedHeart.originalTileColor || tile.color;
     const colorEmojis = {
-      'red': '🟥', 'yellow': '🟨', 'green': '🟩', 'white': '⬜'
+      red: "🟥",
+      yellow: "🟨",
+      green: "🟩",
+      white: "⬜",
     };
 
     // Return the action result for broadcasting
     return {
-      type: 'wind',
+      type: "wind",
       removedHeart: tile.placedHeart,
       targetedPlayerId: opponentId,
       tileId: tile.id,
       newTileState: {
         id: tile.id,
         color: originalTileColor, // Restore to original tile color
-        emoji: colorEmojis[originalTileColor] || '⬜',
-        placedHeart: undefined
-      }
+        emoji: colorEmojis[originalTileColor] || "⬜",
+        placedHeart: undefined,
+      },
     };
   }
 }
@@ -138,19 +156,22 @@ export class WindCard extends MagicCard {
 // Recycle magic card class
 export class RecycleCard extends MagicCard {
   constructor(id) {
-    super(id, 'recycle', '♻️', 'Recycle Card', 'Change tile color to white');
+    super(id, "recycle", "♻️", "Recycle Card", "Change tile color to white");
   }
 
   canTargetTile(tile) {
     // Recycle can only target empty, non-white tiles
     // Due to Mongoose schema defaults, check if placedHeart.value === 0
-    return Boolean((!tile.placedHeart || tile.placedHeart.value === 0) && tile.color !== 'white');
+    return Boolean(
+      (!tile.placedHeart || tile.placedHeart.value === 0) &&
+        tile.color !== "white",
+    );
   }
 
   executeEffect(gameState, targetTileId, currentPlayerId) {
-    const tile = gameState.tiles.find(t => t.id == targetTileId);
+    const tile = gameState.tiles.find((t) => t.id == targetTileId);
     if (!tile || !this.canTargetTile(tile)) {
-      throw new Error('Invalid target for Recycle card');
+      throw new Error("Invalid target for Recycle card");
     }
 
     // Check shield protection - Recycle cards should only be blocked when targeting tiles that would affect shielded players
@@ -159,19 +180,25 @@ export class RecycleCard extends MagicCard {
       for (const [shieldUserId, shield] of Object.entries(gameState.shields)) {
         if (ShieldCard.isActive(shield, gameState.turnCount)) {
           // Check if shielded player has any hearts on the board
-          const shieldedPlayerHasHearts = gameState.tiles.some(t =>
-            t.placedHeart && t.placedHeart.placedBy === shieldUserId
+          const shieldedPlayerHasHearts = gameState.tiles.some(
+            (t) => t.placedHeart && t.placedHeart.placedBy === shieldUserId,
           );
 
           // Only block if:
           // 1. No currentPlayerId specified (assume opponent action) OR currentPlayerId is NOT the shielded player
           // 2. AND the shielded player has hearts on the board
           // 3. AND the target tile could potentially affect the shielded player's strategy
-          const isOpponentCard = !currentPlayerId || currentPlayerId !== shieldUserId;
+          const isOpponentCard =
+            !currentPlayerId || currentPlayerId !== shieldUserId;
 
           if (isOpponentCard && shieldedPlayerHasHearts) {
-            const remainingTurns = ShieldCard.getRemainingTurns(shield, gameState.turnCount);
-            throw new Error(`Tile is protected by Shield (${remainingTurns} turns remaining)`);
+            const remainingTurns = ShieldCard.getRemainingTurns(
+              shield,
+              gameState.turnCount,
+            );
+            throw new Error(
+              `Tile is protected by Shield (${remainingTurns} turns remaining)`,
+            );
           }
         }
       }
@@ -179,16 +206,16 @@ export class RecycleCard extends MagicCard {
 
     // Return the action result for broadcasting
     return {
-      type: 'recycle',
+      type: "recycle",
       previousColor: tile.color,
-      newColor: 'white',
+      newColor: "white",
       tileId: tile.id,
       newTileState: {
         id: tile.id,
-        color: 'white',
-        emoji: '⬜',
-        placedHeart: undefined
-      }
+        color: "white",
+        emoji: "⬜",
+        placedHeart: undefined,
+      },
     };
   }
 }
@@ -196,7 +223,13 @@ export class RecycleCard extends MagicCard {
 // Shield magic card class
 export class ShieldCard extends MagicCard {
   constructor(id) {
-    super(id, 'shield', '🛡️', 'Shield Card', 'Self-activating: Protect your tiles and hearts from opponent\'s magic cards for 2 turns');
+    super(
+      id,
+      "shield",
+      "🛡️",
+      "Shield Card",
+      "Self-activating: Protect your tiles and hearts from opponent's magic cards for 2 turns",
+    );
   }
 
   canTargetTile() {
@@ -218,7 +251,10 @@ export class ShieldCard extends MagicCard {
 
     // Check if player already has an active shield
     const existingShield = gameState.shields[playerId];
-    if (existingShield && ShieldCard.isActive(existingShield, gameState.turnCount)) {
+    if (
+      existingShield &&
+      ShieldCard.isActive(existingShield, gameState.turnCount)
+    ) {
       // Allow reinforcement but reset the duration
       gameState.shields[playerId] = {
         active: true,
@@ -227,16 +263,16 @@ export class ShieldCard extends MagicCard {
         activatedTurn: gameState.turnCount || 1, // Track activation turn for auto-calculation
         turnActivated: gameState.turnCount || 1, // Legacy property for test compatibility
         activatedBy: playerId,
-        protectedPlayerId: playerId
+        protectedPlayerId: playerId,
       };
 
       return {
-        type: 'shield',
+        type: "shield",
         activatedFor: playerId,
         protectedPlayerId: playerId,
         remainingTurns: 2, // Always show full duration on activation/reinforcement
         message: `Shield reinforced! Protection extended for 2 more turns.`,
-        reinforced: true
+        reinforced: true,
       };
     }
 
@@ -249,16 +285,16 @@ export class ShieldCard extends MagicCard {
       activatedTurn: gameState.turnCount || 1, // Track activation turn for auto-calculation
       turnActivated: gameState.turnCount || 1, // Legacy property for test compatibility
       activatedBy: playerId,
-      protectedPlayerId: playerId
+      protectedPlayerId: playerId,
     };
 
     return {
-      type: 'shield',
+      type: "shield",
       activatedFor: playerId,
       protectedPlayerId: playerId,
       remainingTurns: 2, // Always show full duration on activation
       message: `Shield activated! Your tiles and hearts are protected for 2 turns.`,
-      reinforced: false
+      reinforced: false,
     };
   }
 
@@ -369,10 +405,13 @@ export class ShieldCard extends MagicCard {
     // Check if any opponent has an active shield (prevents activation)
     if (gameState.shields) {
       for (const [otherPlayerId, shield] of Object.entries(gameState.shields)) {
-        if (otherPlayerId !== playerId && this.isActive(shield, gameState.turnCount)) {
+        if (
+          otherPlayerId !== playerId &&
+          this.isActive(shield, gameState.turnCount)
+        ) {
           return {
             canActivate: false,
-            reason: `Cannot activate Shield while opponent has active Shield (${this.getRemainingTurns(shield, gameState.turnCount)} turns remaining)`
+            reason: `Cannot activate Shield while opponent has active Shield (${this.getRemainingTurns(shield, gameState.turnCount)} turns remaining)`,
           };
         }
       }
@@ -389,11 +428,11 @@ export function createHeartCard(id, color, value, emoji) {
 
 export function createMagicCard(id, type) {
   switch (type) {
-    case 'wind':
+    case "wind":
       return new WindCard(id);
-    case 'recycle':
+    case "recycle":
       return new RecycleCard(id);
-    case 'shield':
+    case "shield":
       return new ShieldCard(id);
     default:
       throw new Error(`Unknown magic card type: ${type}`);
@@ -417,11 +456,11 @@ export function generateMagicDeck() {
   for (let i = 0; i < 16; i++) {
     let cardType;
     if (i < 6) {
-      cardType = 'wind'; // 6 Wind cards
+      cardType = "wind"; // 6 Wind cards
     } else if (i < 11) {
-      cardType = 'recycle'; // 5 Recycle cards
+      cardType = "recycle"; // 5 Recycle cards
     } else {
-      cardType = 'shield'; // 5 Shield cards
+      cardType = "shield"; // 5 Shield cards
     }
 
     cards.push(createMagicCard(baseTime + i + 1, cardType));
@@ -433,15 +472,15 @@ export function generateMagicDeck() {
 // Weighted random selection for drawing single magic cards
 export function generateRandomMagicCard() {
   const cardTypes = [
-    { type: 'wind', weight: 6 },
-    { type: 'recycle', weight: 5 },
-    { type: 'shield', weight: 5 }
+    { type: "wind", weight: 6 },
+    { type: "recycle", weight: 5 },
+    { type: "shield", weight: 5 },
   ];
 
   const totalWeight = cardTypes.reduce((sum, card) => sum + card.weight, 0);
   let random = Math.random() * totalWeight;
 
-  let selectedType = 'wind'; // default
+  let selectedType = "wind"; // default
   for (const cardType of cardTypes) {
     random -= cardType.weight;
     if (random <= 0) {
@@ -453,39 +492,57 @@ export function generateRandomMagicCard() {
   // Use high-precision timestamp + random to ensure unique IDs
   const timestamp = Date.now();
   const randomSuffix = Math.random().toString(36).substr(2, 9);
-  const cardId = timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
+  const cardId =
+    timestamp === 0 ? `0-${randomSuffix}` : `${timestamp}-${randomSuffix}`;
   return createMagicCard(cardId, selectedType);
 }
 
 // Helper function to create card from raw data
 export function createCardFromData(cardData) {
   if (!cardData) {
-    throw new Error('Invalid card data');
+    throw new Error("Invalid card data");
   }
 
-  if (cardData.type === 'heart' || (cardData.color && cardData.value !== undefined)) {
-    return createHeartCard(cardData.id, cardData.color, cardData.value, cardData.emoji);
-  } else if (cardData.type && ['wind', 'recycle', 'shield'].includes(cardData.type)) {
+  if (
+    cardData.type === "heart" ||
+    (cardData.color && cardData.value !== undefined)
+  ) {
+    return createHeartCard(
+      cardData.id,
+      cardData.color,
+      cardData.value,
+      cardData.emoji,
+    );
+  } else if (
+    cardData.type &&
+    ["wind", "recycle", "shield"].includes(cardData.type)
+  ) {
     return createMagicCard(cardData.id, cardData.type);
   }
-  throw new Error('Invalid card data');
+  throw new Error("Invalid card data");
 }
 
 // Card validation helpers
 export function isHeartCard(card) {
   if (!card) return false;
-  if (card.type === 'heart') return true;
+  if (card.type === "heart") return true;
   // Also accept plain objects with the required heart properties
-  return Boolean(card.color && card.value !== undefined && ['❤️', '💛', '💚'].includes(card.emoji || '❤️'));
+  return Boolean(
+    card.color &&
+      card.value !== undefined &&
+      ["❤️", "💛", "💚"].includes(card.emoji || "❤️"),
+  );
 }
 
 export function isMagicCard(card) {
   if (!card) return false;
-  return Boolean(card.type && ['wind', 'recycle', 'shield'].includes(card.type));
+  return Boolean(
+    card.type && ["wind", "recycle", "shield"].includes(card.type),
+  );
 }
 
 export function getCardType(card) {
-  if (isHeartCard(card)) return 'heart';
-  if (isMagicCard(card)) return 'magic';
-  return 'unknown';
+  if (isHeartCard(card)) return "heart";
+  if (isMagicCard(card)) return "magic";
+  return "unknown";
 }
