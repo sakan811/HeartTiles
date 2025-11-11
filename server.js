@@ -206,8 +206,13 @@ function validatePlayerName(playerName) {
   if (trimmedName.length === 0) return false;
   // Check length constraints - allow up to 25 characters for tests
   if (trimmedName.length > 25) return false;
-  // Check for control characters
-  if (/[\x00-\x1F\x7F]/.test(trimmedName)) return false;
+  // Check for control characters using character code checks
+  for (let i = 0; i < trimmedName.length; i++) {
+    const charCode = trimmedName.charCodeAt(i);
+    if ((charCode >= 0 && charCode <= 31) || charCode === 127) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -496,7 +501,7 @@ function calculateScore(heart, tile) {
 
 // Turn lock management (needs to be global for testing)
 // Use global turnLocks if available (for testing), otherwise create module-level one
-let turnLocks = new Map();
+const turnLocks = new Map();
 
 function acquireTurnLock(roomCode, socketId) {
   // Use roomCode as the lock key to ensure only one action per room at a time
@@ -722,7 +727,7 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
       room.markModified('gameState.playerHands');
     } else {
       // fallback: reassign the whole object so plain objects are noticed
-      room.gameState.playerHands = room.gameState.playerHands;
+      room.gameState.playerHands = { ...room.gameState.playerHands };
     }
   }
 
@@ -738,7 +743,7 @@ async function migratePlayerData(room, oldUserId, newUserId, userName, userEmail
     if (typeof room.markModified === 'function') {
       room.markModified('gameState.shields');
     } else {
-      room.gameState.shields = room.gameState.shields;
+      room.gameState.shields = { ...room.gameState.shields };
     }
   }
 
