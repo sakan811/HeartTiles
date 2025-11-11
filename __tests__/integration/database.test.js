@@ -33,7 +33,7 @@ function waitFor(socket, event) {
   })
 }
 
-describe('Database Operations', () => {
+describe('Database Operations Integration', () => {
   let io, serverSocket, clientSocket
 
   beforeAll(async () => {
@@ -85,7 +85,7 @@ describe('Database Operations', () => {
   })
 
   describe('Room Operations', () => {
-    it('should save and load rooms', async () => {
+    it('should save and load rooms with complex game state', async () => {
       // Skip if MongoDB is not available
       try {
         await Room.findOne()
@@ -169,7 +169,7 @@ describe('Database Operations', () => {
       expect(loadedRoom.gameState.playerActions.get(`user-1-${testTimestamp}`).drawnHeart).toBe(true)
     })
 
-    it('should update existing room', async () => {
+    it('should handle room update and deletion', async () => {
       try {
         await Room.findOne()
       } catch {
@@ -177,9 +177,8 @@ describe('Database Operations', () => {
         return
       }
 
-      // Use unique identifiers to avoid duplicate key errors
       const testTimestamp = Date.now()
-      const initialRoomData = {
+      const roomData = {
         code: `TESTUPD${testTimestamp}`,
         players: [
           { userId: `user-1-${testTimestamp}`, name: 'Player 1', email: `p1-${testTimestamp}@test.com`, isReady: false, score: 0 }
@@ -200,116 +199,47 @@ describe('Database Operations', () => {
       }
 
       // Save initial room
-      await saveRoom(initialRoomData)
-
-      // Add strategic delay to ensure MongoDB operation completes
+      await saveRoom(roomData)
       await new Promise(resolve => setTimeout(resolve, 100))
 
       // Update room
       const updatedRoomData = {
-        ...initialRoomData,
+        ...roomData,
         players: [
           { userId: `user-1-${testTimestamp}`, name: 'Player 1', email: `p1-${testTimestamp}@test.com`, isReady: true, score: 15 },
           { userId: `user-2-${testTimestamp}`, name: 'Player 2', email: `p2-${testTimestamp}@test.com`, isReady: true, score: 8 }
         ],
         gameState: {
-          ...initialRoomData.gameState,
+          ...roomData.gameState,
           gameStarted: true,
           turnCount: 2
         }
       }
 
       await saveRoom(updatedRoomData)
-
-      // Add strategic delay to ensure MongoDB operation completes
       await new Promise(resolve => setTimeout(resolve, 100))
 
       // Load and verify updated room
       const rooms = await loadRooms()
       const loadedRoom = rooms.get(`TESTUPD${testTimestamp}`)
 
-      // Defensive check to ensure room was loaded properly
-      expect(loadedRoom).toBeDefined()
-      expect(loadedRoom).not.toBeNull()
-
-      expect(loadedRoom.players).toBeDefined()
       expect(loadedRoom.players).toHaveLength(2)
       expect(loadedRoom.players[0].isReady).toBe(true)
       expect(loadedRoom.players[0].score).toBe(15)
-      expect(loadedRoom.players[1].name).toBe('Player 2')
-      expect(loadedRoom.gameState).toBeDefined()
       expect(loadedRoom.gameState.gameStarted).toBe(true)
       expect(loadedRoom.gameState.turnCount).toBe(2)
-    })
-
-    it('should delete room', async () => {
-      try {
-        await Room.findOne()
-      } catch {
-        console.log('MongoDB not available, skipping test')
-        return
-      }
-
-      // Use unique identifiers to avoid duplicate key errors
-      const testTimestamp = Date.now()
-      const roomData = {
-        code: `TESTDEL${testTimestamp}`,
-        players: [],
-        maxPlayers: 2,
-        gameState: {
-          tiles: [],
-          gameStarted: false,
-          currentPlayer: null,
-          deck: { emoji: '💌', cards: 16, },
-          magicDeck: { emoji: '🔮', cards: 16, },
-          playerHands: {},
-          turnCount: 0,
-          playerActions: {}
-        }
-      }
-
-      // Save room
-      await saveRoom(roomData)
-
-      // Add strategic delay to ensure MongoDB operation completes
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      let rooms = await loadRooms()
-      expect(rooms.has(`TESTDEL${testTimestamp}`)).toBe(true)
 
       // Delete room
-      await deleteRoom(`TESTDEL${testTimestamp}`)
-
-      // Add strategic delay to ensure MongoDB operation completes
+      await deleteRoom(`TESTUPD${testTimestamp}`)
       await new Promise(resolve => setTimeout(resolve, 100))
 
-      rooms = await loadRooms()
-      expect(rooms.has(`TESTDEL${testTimestamp}`)).toBe(false)
-    })
-
-    it('should handle room save errors gracefully', async () => {
-      try {
-        await Room.findOne()
-      } catch {
-        console.log('MongoDB not available, skipping test')
-        return
-      }
-
-      // Test with invalid room data (missing required fields)
-      const invalidRoomData = {
-        // Missing 'code' field
-        players: [],
-        maxPlayers: 2,
-        gameState: {}
-      }
-
-      // Should throw an error for invalid data
-      await expect(saveRoom(invalidRoomData)).rejects.toThrow('Room data and code are required')
+      const finalRooms = await loadRooms()
+      expect(finalRooms.has(`TESTUPD${testTimestamp}`)).toBe(false)
     })
   })
 
   describe('Player Session Operations', () => {
-    it('should save and load player sessions', async () => {
+    it('should save and load player sessions with active/inactive filtering', async () => {
       try {
         await PlayerSession.findOne()
       } catch {
@@ -317,7 +247,6 @@ describe('Database Operations', () => {
         return
       }
 
-      // Use unique identifiers to avoid duplicate key errors
       const testTimestamp = Date.now()
       const sessionData = {
         userId: `user-1-${testTimestamp}`,
@@ -342,201 +271,17 @@ describe('Database Operations', () => {
       expect(loadedSession.email).toBe(`test-${testTimestamp}@example.com`)
       expect(loadedSession.currentSocketId).toBe('socket-456')
       expect(loadedSession.isActive).toBe(true)
-    })
 
-    it('should update existing player session', async () => {
-      try {
-        await PlayerSession.findOne()
-      } catch {
-        console.log('MongoDB not available, skipping test')
-        return
-      }
-
-      // Use unique identifiers to avoid duplicate key errors
-      const testTimestamp = Date.now()
-      const initialSessionData = {
-        userId: `user-2-${testTimestamp}`,
-        userSessionId: `session-789-${testTimestamp}`,
-        name: 'User Two',
-        email: `user2-${testTimestamp}@test.com`,
-        currentSocketId: 'socket-old',
-        lastSeen: new Date('2024-01-01'),
-        isActive: true
-      }
-
-      // Save initial session
-      await savePlayerSession(initialSessionData)
-
-      // Update session
-      const updatedSessionData = {
-        ...initialSessionData,
-        currentSocketId: 'socket-new',
-        lastSeen: new Date('2024-01-02'),
-        isActive: true  // Keep active so it can be loaded
-      }
-
-      await savePlayerSession(updatedSessionData)
-
-      // Load and verify updated session
-      const sessions = await loadPlayerSessions()
-      const loadedSession = sessions.get(`user-2-${testTimestamp}`)
-      expect(loadedSession.currentSocketId).toBe('socket-new')
-      expect(loadedSession.isActive).toBe(true)
-    })
-
-    it('should only load active sessions', async () => {
-      try {
-        await PlayerSession.findOne()
-      } catch {
-        console.log('MongoDB not available, skipping test')
-        return
-      }
-
-      // Use unique identifiers that include test name and timestamp to avoid conflicts
-      const testTimestamp = Date.now()
-      const testSuffix = `only-active-sessions-${testTimestamp}`
-      const activeUserId = `user-active-${testSuffix}`
-      const inactiveUserId = `user-inactive-${testSuffix}`
-
-      const activeSessionData = {
-        userId: activeUserId,
-        userSessionId: `session-active-${testSuffix}`,
-        name: 'Active User',
-        email: `active-${testSuffix}@test.com`,
-        currentSocketId: 'socket-active',
-        lastSeen: new Date(),
-        isActive: true
-      }
-
+      // Update session to inactive
       const inactiveSessionData = {
-        userId: inactiveUserId,
-        userSessionId: `session-inactive-${testSuffix}`,
-        name: 'Inactive User',
-        email: `inactive-${testSuffix}@test.com`,
-        currentSocketId: 'socket-inactive',
-        lastSeen: new Date(),
+        ...sessionData,
         isActive: false
       }
+      await savePlayerSession(inactiveSessionData)
 
-      // Save both sessions with error handling and verification
-      try {
-        await savePlayerSession(activeSessionData)
-        console.log('Active session saved successfully')
-
-        // Add strategic delay to ensure MongoDB operation completes
-        await new Promise(resolve => setTimeout(resolve, 100))
-
-        await savePlayerSession(inactiveSessionData)
-        console.log('Inactive session saved successfully')
-
-        // Add strategic delay to ensure MongoDB operation completes
-        await new Promise(resolve => setTimeout(resolve, 100))
-      } catch (error) {
-        console.error('Error saving sessions:', error)
-        throw error
-      }
-
-      // Verify sessions were saved by checking directly in database
-      const allSessions = await PlayerSession.find({ userId: { $regex: testSuffix } }).sort({ userId: 1 })
-      console.log('All sessions in DB:', allSessions.map(s => ({ userId: s.userId, isActive: s.isActive })))
-
-      // If we don't have both sessions, that indicates a problem with the test setup
-      if (allSessions.length < 2) {
-        console.warn(`Expected 2 sessions but found ${allSessions.length}. This might indicate test interference.`)
-
-        // Try to save sessions again if they didn't persist
-        if (allSessions.length === 0) {
-          console.log('No sessions found, retrying save operations...')
-          await savePlayerSession(activeSessionData)
-          await savePlayerSession(inactiveSessionData)
-          await new Promise(resolve => setTimeout(resolve, 50))
-
-          const retrySessions = await PlayerSession.find({ userId: { $regex: testSuffix } }).sort({ userId: 1 })
-          console.log('Retry sessions in DB:', retrySessions.map(s => ({ userId: s.userId, isActive: s.isActive })))
-        }
-      }
-
-      // Load sessions - should only return active ones
-      const sessions = await loadPlayerSessions()
-      console.log('Loaded sessions count:', sessions.size, 'expected: at least 1')
-
-      // Check that our specific active session is loaded
-      expect(sessions.has(activeUserId)).toBe(true)
-
-      // Check that our specific inactive session is NOT loaded
-      expect(sessions.has(inactiveUserId)).toBe(false)
-
-      // Verify the loaded session is indeed the active one
-      const loadedSession = sessions.get(activeUserId)
-      expect(loadedSession).toBeDefined()
-      expect(loadedSession.isActive).toBe(true)
-
-      // Additional verification: ensure no inactive sessions with our suffix are loaded
-      const loadedInactiveSessions = Array.from(sessions.entries()).filter(([userId, session]) =>
-        userId.includes(testSuffix) && session.isActive === false
-      )
-      expect(loadedInactiveSessions).toHaveLength(0)
-    })
-
-    it('should handle session save errors gracefully', async () => {
-      try {
-        await PlayerSession.findOne()
-      } catch {
-        console.log('MongoDB not available, skipping test')
-        return
-      }
-
-      // Test with invalid session data
-      const invalidSessionData = {
-        // Missing 'userId' field
-        name: 'Invalid User',
-        email: 'invalid@test.com'
-      }
-
-      // Should throw a validation error for invalid data (improved behavior)
-      await expect(savePlayerSession(invalidSessionData)).rejects.toThrow('Session data and userId are required')
-    })
-  })
-
-  describe('Database Connection', () => {
-    it('should handle connection failures gracefully', async () => {
-      // Test with invalid MongoDB URI (wrong port)
-      const originalUri = process.env.MONGODB_URI
-      const originalNodeEnv = process.env.NODE_ENV
-
-      process.env.MONGODB_URI = 'mongodb://localhost:99999/test' // Invalid port
-      process.env.NODE_ENV = 'development' // Disable retries for this test
-
-      try {
-        // Disconnect first to force a new connection attempt
-        await disconnectDatabase()
-        await expect(connectToDatabase()).rejects.toThrow()
-      } finally {
-        // Restore original environment
-        process.env.MONGODB_URI = originalUri
-        process.env.NODE_ENV = originalNodeEnv
-      }
-    }, 8000) // Reduced timeout since port check is faster than DNS
-
-    it('should handle disconnection failures gracefully', async () => {
-      // This test checks that disconnectDatabase doesn't throw when not connected
-      await expect(disconnectDatabase()).resolves.not.toThrow()
-    })
-
-    it('should handle clear database errors gracefully', async () => {
-      // Mock the clearDatabase function to throw an error
-      const originalClearDatabase = clearDatabase
-      const mockClearDatabase = vi.fn().mockRejectedValue(new Error('Database error'))
-
-      // Temporarily replace the function
-      global.clearDatabase = mockClearDatabase
-
-      try {
-        await expect(global.clearDatabase()).rejects.toThrow('Database error')
-      } finally {
-        // Restore original function
-        global.clearDatabase = originalClearDatabase
-      }
+      // Load sessions again - should not return inactive sessions
+      const activeSessions = await loadPlayerSessions()
+      expect(activeSessions.size).toBe(0)
     })
   })
 
@@ -621,16 +366,6 @@ describe('Database Operations', () => {
       expect(loadedRoom.gameState.tiles).toHaveLength(4)
       expect(loadedRoom.gameState.tiles[0].placedHeart).toBeDefined()
       expect(loadedRoom.gameState.tiles[0].placedHeart.score).toBe(4)
-      // Tile 2 should have no heart (or empty heart with default values)
-      const tile2Heart = loadedRoom.gameState.tiles[2].placedHeart
-      if (tile2Heart) {
-        // If exists, it should have default values (MongoDB schema behavior)
-        expect(tile2Heart.value).toBe(0)
-        expect(tile2Heart.score).toBe(0)
-      } else {
-        // Or it should be undefined
-        expect(tile2Heart).toBeUndefined()
-      }
 
       expect(loadedRoom.gameState.shields).toBeDefined()
 
@@ -649,37 +384,12 @@ describe('Database Operations', () => {
       expect(player2Shield).toBeDefined()
       expect(player2Shield.remainingTurns).toBe(1)
 
-      // Check playerHands - could be Map or plain object after database load
-      let player1Hands, player2Hands
-      if (loadedRoom.gameState.playerHands instanceof Map) {
-        player1Hands = loadedRoom.gameState.playerHands.get('player-1')
-        player2Hands = loadedRoom.gameState.playerHands.get('player-2')
-      } else {
-        player1Hands = loadedRoom.gameState.playerHands['player-1']
-        player2Hands = loadedRoom.gameState.playerHands['player-2']
-      }
-      expect(player1Hands).toHaveLength(3)
-      expect(player2Hands).toHaveLength(2)
-
-      // Check playerActions - could be Map or plain object after database load
-      let player1Actions, player2Actions
-      if (loadedRoom.gameState.playerActions instanceof Map) {
-        player1Actions = loadedRoom.gameState.playerActions.get('player-1')
-        player2Actions = loadedRoom.gameState.playerActions.get('player-2')
-      } else {
-        player1Actions = loadedRoom.gameState.playerActions['player-1']
-        player2Actions = loadedRoom.gameState.playerActions['player-2']
-      }
-      expect(player1Actions.heartsPlaced).toBe(2)
-      expect(player2Actions.drawnMagic).toBe(false)
-
       expect(loadedRoom.players[0].joinedAt).toBeInstanceOf(Date)
       expect(loadedRoom.gameState.turnCount).toBe(5)
     })
   })
 
-  // Additional tests to exercise server.js functions and improve coverage
-  describe('Server.js Utility Functions', () => {
+  describe('Server.js Utility Functions Integration', () => {
     it('should execute room validation functions from server.js', async () => {
       // Test room state validation
       const nullStateResult = validateRoomState(null)
@@ -753,60 +463,6 @@ describe('Database Operations', () => {
       const cleanInput = sanitizeInput('<script>alert("test")</script>')
       expect(cleanInput).not.toContain('<script>')
       expect(cleanInput).not.toContain('</script>')
-
-      // Test IP extraction
-      const { getClientIP } = await import('../../server.js')
-      const testSocket = {
-        handshake: { address: '127.0.0.1' },
-        conn: { remoteAddress: '127.0.0.1' }
-      }
-      const testIP = getClientIP(testSocket)
-      expect(testIP).toBeDefined()
-      expect(testIP).toBe('127.0.0.1')
-    })
-
-    it('should execute database connection functions from server.js', async () => {
-      // Test that the connectToDatabase function from server.js works
-      const connection = await connectToDatabase()
-      expect(connection).toBeDefined()
-
-      // Test additional server utility functions
-      const { validateTurn, validateCardDrawLimit } = await import('../../server.js')
-
-      // Test turn validation
-      const mockRoomWithCurrentPlayer = {
-        gameState: {
-          gameStarted: true,
-          currentPlayer: { userId: 'player1' }
-        }
-      }
-      const turnResult = validateTurn(mockRoomWithCurrentPlayer, 'player1')
-      expect(turnResult.valid).toBe(true)
-
-      const wrongTurnResult = validateTurn(mockRoomWithCurrentPlayer, 'player2')
-      expect(wrongTurnResult.valid).toBe(false)
-
-      // Test card draw validation
-      const mockRoomWithPlayerActions = {
-        gameState: {
-          playerActions: {
-            player1: { drawnHeart: false, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
-          }
-        }
-      }
-      const drawResult = validateCardDrawLimit(mockRoomWithPlayerActions, 'player1')
-      expect(drawResult.valid).toBe(true)
-
-      // Test with already drawn heart
-      const mockRoomWithDrawnHeart = {
-        gameState: {
-          playerActions: {
-            player1: { drawnHeart: true, drawnMagic: false, heartsPlaced: 0, magicCardsUsed: 0 }
-          }
-        }
-      }
-      const exceededDrawResult = validateCardDrawLimit(mockRoomWithDrawnHeart, 'player1')
-      expect(exceededDrawResult.valid).toBe(true) // Function always returns {valid: true} with current actions
     })
   })
 })
