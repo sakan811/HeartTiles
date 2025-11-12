@@ -11,22 +11,23 @@ import {
 import {
   connectToDatabase,
   disconnectDatabase,
-  clearDatabase
+  clearDatabase,
 } from "../utils/server-test-utils.js";
 
 import { PlayerSession } from "../../models.js";
 
 // Import the actual server functions
-import {
-  getPlayerSession,
-} from "../../server.js";
+import { getPlayerSession } from "../../server.js";
 
 describe("getPlayerSession Integration Tests", () => {
   beforeAll(async () => {
     try {
       await connectToDatabase();
     } catch (error) {
-      console.warn("Database connection failed for getPlayerSession tests:", error.message);
+      console.warn(
+        "Database connection failed for getPlayerSession tests:",
+        error.message,
+      );
     }
   });
 
@@ -66,7 +67,7 @@ describe("getPlayerSession Integration Tests", () => {
         userSessionId,
         userName,
         userEmail,
-        clientIP
+        clientIP,
       );
 
       // Verify returned session object
@@ -122,7 +123,7 @@ describe("getPlayerSession Integration Tests", () => {
         userSessionId,
         userName,
         userEmail,
-        clientIP
+        clientIP,
       );
 
       // Verify session was updated
@@ -137,7 +138,9 @@ describe("getPlayerSession Integration Tests", () => {
       const dbSession = allSessions[0];
       expect(dbSession.isActive).toBe(true);
       expect(dbSession.clientIP).toBe(clientIP);
-      expect(dbSession.lastSeen.getTime()).toBeGreaterThan(initialSession.lastSeen.getTime());
+      expect(dbSession.lastSeen.getTime()).toBeGreaterThan(
+        initialSession.lastSeen.getTime(),
+      );
     });
 
     it("should update lastSeen timestamp on existing session access", async () => {
@@ -161,22 +164,26 @@ describe("getPlayerSession Integration Tests", () => {
       global.playerSessions.set(userId, initialSessionObj);
 
       // Wait a moment to ensure timestamp difference
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Access the session
       const session = await getPlayerSession(
         userId,
         "session-timestamp-123",
         "Timestamp User",
-        "timestamp@example.com"
+        "timestamp@example.com",
       );
 
       // Verify timestamp was updated
-      expect(session.lastSeen.getTime()).toBeGreaterThan(originalTime.getTime());
+      expect(session.lastSeen.getTime()).toBeGreaterThan(
+        originalTime.getTime(),
+      );
 
       // Verify database was updated
       const dbSession = await PlayerSession.findOne({ userId });
-      expect(dbSession.lastSeen.getTime()).toBeGreaterThan(originalTime.getTime());
+      expect(dbSession.lastSeen.getTime()).toBeGreaterThan(
+        originalTime.getTime(),
+      );
     });
   });
 
@@ -206,7 +213,7 @@ describe("getPlayerSession Integration Tests", () => {
         "global-session-123",
         "Global User",
         "global@example.com",
-        "127.0.0.1"
+        "127.0.0.1",
       );
 
       // Should return the existing global session and update it
@@ -227,7 +234,7 @@ describe("getPlayerSession Integration Tests", () => {
         userId,
         "module-session-123",
         "Module User",
-        "module@example.com"
+        "module@example.com",
       );
 
       expect(session.userId).toBe(userId);
@@ -247,13 +254,15 @@ describe("getPlayerSession Integration Tests", () => {
         "test-user-123",
         "session-123",
         "Test User",
-        "test@example.com"
+        "test@example.com",
         // clientIP not provided (should default to null)
       );
       expect(session1).toBeDefined();
       // Note: clientIP will be null when no existing session exists,
       // but may be inherited from existing global sessions
-      expect(session1.clientIP === null || typeof session1.clientIP === 'string').toBe(true);
+      expect(
+        session1.clientIP === null || typeof session1.clientIP === "string",
+      ).toBe(true);
     });
 
     it("should handle undefined session ID by generating new one", async () => {
@@ -263,7 +272,7 @@ describe("getPlayerSession Integration Tests", () => {
         userId,
         undefined, // This should cause new session ID generation
         "Test User",
-        "test@example.com"
+        "test@example.com",
       );
 
       expect(session).toBeDefined();
@@ -288,7 +297,7 @@ describe("getPlayerSession Integration Tests", () => {
         sessionData.userId,
         sessionData.userSessionId,
         sessionData.name,
-        sessionData.email
+        sessionData.email,
       );
 
       // Second call - should retrieve and update
@@ -296,7 +305,7 @@ describe("getPlayerSession Integration Tests", () => {
         sessionData.userId,
         sessionData.userSessionId,
         sessionData.name,
-        sessionData.email
+        sessionData.email,
       );
 
       // Should be the same session data (possibly different objects)
@@ -335,7 +344,7 @@ describe("getPlayerSession Integration Tests", () => {
         userId,
         "socket-session-123",
         "Socket User",
-        "socket@example.com"
+        "socket@example.com",
       );
 
       // Socket ID should be preserved
@@ -375,7 +384,7 @@ describe("getPlayerSession Integration Tests", () => {
           userData.userSessionId,
           userData.name,
           userData.email,
-          userData.clientIP
+          userData.clientIP,
         );
         sessions.push(session);
       }
@@ -389,7 +398,7 @@ describe("getPlayerSession Integration Tests", () => {
 
       // Verify database has all sessions
       const dbSessions = await PlayerSession.find({
-        userId: { $in: testUsers.map(u => u.userId) }
+        userId: { $in: testUsers.map((u) => u.userId) },
       });
       expect(dbSessions).toHaveLength(2);
 
@@ -399,14 +408,16 @@ describe("getPlayerSession Integration Tests", () => {
         testUsers[0].userSessionId,
         "Updated Server User 1",
         "updated1@example.com",
-        "10.0.0.1" // New IP
+        "10.0.0.1", // New IP
       );
 
       expect(reconnectedSession.userId).toBe(testUsers[0].userId);
       expect(reconnectedSession.clientIP).toBe("10.0.0.1");
 
       // Verify database was updated (not duplicated)
-      const user1Sessions = await PlayerSession.find({ userId: testUsers[0].userId });
+      const user1Sessions = await PlayerSession.find({
+        userId: testUsers[0].userId,
+      });
       expect(user1Sessions).toHaveLength(1);
       expect(user1Sessions[0].clientIP).toBe("10.0.0.1");
     });

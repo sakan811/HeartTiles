@@ -174,7 +174,7 @@ describe("recordHeartPlacement", () => {
 
     // Verify both users have independent playerActions
     expect(testRoom.gameState.playerActions[testUserId]).not.toBe(
-      testRoom.gameState.playerActions[secondUserId]
+      testRoom.gameState.playerActions[secondUserId],
     );
   });
 });

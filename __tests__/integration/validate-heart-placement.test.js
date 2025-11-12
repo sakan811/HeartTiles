@@ -1,14 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { validateHeartPlacement } from "../../server.js";
 import {
   connectToDatabase,
   disconnectDatabase,
   clearDatabase,
 } from "../utils/server-test-utils.js";
-import {
-  createMockRoom,
-  createMockUser,
-} from "./setup.js";
+import { createMockRoom, createMockUser } from "./setup.js";
 import { generateTiles } from "../utils/server-test-utils.js";
 import { Room } from "../../models.js";
 
@@ -43,11 +48,19 @@ describe("validateHeartPlacement", () => {
 
   it("should validate successful heart placement", () => {
     // Add a heart card to player's hand
-    const heartCard = { id: "heart_1", type: "heart", value: 2, color: "red", emoji: "❤️" };
+    const heartCard = {
+      id: "heart_1",
+      type: "heart",
+      value: 2,
+      color: "red",
+      emoji: "❤️",
+    };
     room.gameState.playerHands[userId] = [heartCard];
 
     // Find a valid empty tile
-    const tile = room.gameState.tiles.find(t => !t.placedHeart || t.placedHeart.value === 0);
+    const tile = room.gameState.tiles.find(
+      (t) => !t.placedHeart || t.placedHeart.value === 0,
+    );
 
     const result = validateHeartPlacement(room, userId, heartCard.id, tile.id);
 
@@ -73,7 +86,13 @@ describe("validateHeartPlacement", () => {
   });
 
   it("should reject when tile not found", () => {
-    const heartCard = { id: "heart_1", type: "heart", value: 2, color: "red", emoji: "❤️" };
+    const heartCard = {
+      id: "heart_1",
+      type: "heart",
+      value: 2,
+      color: "red",
+      emoji: "❤️",
+    };
     room.gameState.playerHands[userId] = [heartCard];
 
     const result = validateHeartPlacement(room, userId, heartCard.id, 999);
@@ -83,7 +102,13 @@ describe("validateHeartPlacement", () => {
   });
 
   it("should reject when tile is already occupied", () => {
-    const heartCard = { id: "heart_1", type: "heart", value: 2, color: "red", emoji: "❤️" };
+    const heartCard = {
+      id: "heart_1",
+      type: "heart",
+      value: 2,
+      color: "red",
+      emoji: "❤️",
+    };
     room.gameState.playerHands[userId] = [heartCard];
 
     // Find a tile and mark it as occupied

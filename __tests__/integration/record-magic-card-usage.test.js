@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Server } from "socket.io";
 import { createServer } from "node:http";
-import {
-  recordMagicCardUsage,
-  canUseMoreMagicCards,
-} from "../../server.js";
+import { recordMagicCardUsage, canUseMoreMagicCards } from "../../server.js";
 
 describe("recordMagicCardUsage", () => {
   let httpServer;
@@ -165,11 +162,13 @@ describe("recordMagicCardUsage", () => {
     recordMagicCardUsage(testRoom, testUserId);
 
     expect(testRoom.gameState.playerActions[testUserId].magicCardsUsed).toBe(2);
-    expect(testRoom.gameState.playerActions[secondUserId].magicCardsUsed).toBe(1);
+    expect(testRoom.gameState.playerActions[secondUserId].magicCardsUsed).toBe(
+      1,
+    );
 
     // Verify both users have independent playerActions
     expect(testRoom.gameState.playerActions[testUserId]).not.toBe(
-      testRoom.gameState.playerActions[secondUserId]
+      testRoom.gameState.playerActions[secondUserId],
     );
   });
 
@@ -203,6 +202,8 @@ describe("recordMagicCardUsage", () => {
     recordMagicCardUsage(roomWithGameStateOnly, "test-user");
 
     expect(roomWithGameStateOnly.gameState.playerActions).toBeDefined();
-    expect(roomWithGameStateOnly.gameState.playerActions["test-user"].magicCardsUsed).toBe(1);
+    expect(
+      roomWithGameStateOnly.gameState.playerActions["test-user"].magicCardsUsed,
+    ).toBe(1);
   });
 });

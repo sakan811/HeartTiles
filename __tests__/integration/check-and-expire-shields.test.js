@@ -1,10 +1,5 @@
 // Integration tests for checkAndExpireShields function
-import {
-  describe,
-  it,
-  expect,
-  vi,
-} from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Import database utility functions from server-test-utils.js
 import {
