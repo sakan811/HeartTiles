@@ -16,10 +16,7 @@ import serverModule, { authenticateSocket } from "../../server.js";
 import { User } from "../../models.js";
 
 // Import test utilities
-import {
-  createMockSocket,
-  createMockUser,
-} from "./setup.js";
+import { createMockSocket, createMockUser } from "./setup.js";
 import {
   connectToDatabase,
   clearDatabase,
@@ -123,7 +120,7 @@ describe("authenticateSocket Integration Tests", () => {
       await authenticateSocket(mockSocket, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication required")
+        new Error("Authentication required"),
       );
     });
 
@@ -135,7 +132,7 @@ describe("authenticateSocket Integration Tests", () => {
       await authenticateSocket(mockSocket, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication required")
+        new Error("Authentication required"),
       );
     });
 
@@ -151,7 +148,7 @@ describe("authenticateSocket Integration Tests", () => {
       await authenticateSocket(mockSocket, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication required")
+        new Error("Authentication required"),
       );
     });
 
@@ -167,7 +164,7 @@ describe("authenticateSocket Integration Tests", () => {
       await authenticateSocket(mockSocket, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication required")
+        new Error("Authentication required"),
       );
     });
   });
@@ -185,7 +182,7 @@ describe("authenticateSocket Integration Tests", () => {
       await authenticateSocket(mockSocket, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(
-        new Error("Invalid user ID format")
+        new Error("Invalid user ID format"),
       );
     });
 
@@ -202,9 +199,7 @@ describe("authenticateSocket Integration Tests", () => {
 
       // When non-string ID reaches database lookup, it throws a CastError
       // which is caught and converted to "Authentication failed"
-      expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication failed")
-      );
+      expect(mockNext).toHaveBeenCalledWith(new Error("Authentication failed"));
     });
 
     it("should reject authentication with null user ID", async () => {
@@ -219,7 +214,7 @@ describe("authenticateSocket Integration Tests", () => {
       await authenticateSocket(mockSocket, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication required")
+        new Error("Authentication required"),
       );
     });
 
@@ -235,7 +230,7 @@ describe("authenticateSocket Integration Tests", () => {
       await authenticateSocket(mockSocket, mockNext);
 
       expect(mockNext).toHaveBeenCalledWith(
-        new Error("Invalid user ID format")
+        new Error("Invalid user ID format"),
       );
     });
   });
@@ -254,9 +249,7 @@ describe("authenticateSocket Integration Tests", () => {
 
       await authenticateSocket(mockSocket, mockNext);
 
-      expect(mockNext).toHaveBeenCalledWith(
-        new Error("User not found")
-      );
+      expect(mockNext).toHaveBeenCalledWith(new Error("User not found"));
     });
 
     it("should reject authentication when user was deleted", async () => {
@@ -273,33 +266,29 @@ describe("authenticateSocket Integration Tests", () => {
 
       await authenticateSocket(mockSocket, mockNext);
 
-      expect(mockNext).toHaveBeenCalledWith(
-        new Error("User not found")
-      );
+      expect(mockNext).toHaveBeenCalledWith(new Error("User not found"));
     });
   });
 
   describe("Error Handling Scenarios", () => {
     it("should handle getToken function throwing an error", async () => {
       vi.mocked(getToken).mockRejectedValue(
-        new Error("Token verification failed")
+        new Error("Token verification failed"),
       );
 
       const mockSocket = createMockSocket();
 
       await authenticateSocket(mockSocket, mockNext);
 
-      expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication failed")
-      );
+      expect(mockNext).toHaveBeenCalledWith(new Error("Authentication failed"));
     });
 
     it("should handle database connection errors", async () => {
       // Mock User.findById to throw a database error
       const originalFindById = User.findById;
-      User.findById = vi.fn().mockRejectedValue(
-        new Error("Database connection failed")
-      );
+      User.findById = vi
+        .fn()
+        .mockRejectedValue(new Error("Database connection failed"));
 
       vi.mocked(getToken).mockResolvedValue({
         id: validObjectId,
@@ -311,9 +300,7 @@ describe("authenticateSocket Integration Tests", () => {
 
       await authenticateSocket(mockSocket, mockNext);
 
-      expect(mockNext).toHaveBeenCalledWith(
-        new Error("Authentication failed")
-      );
+      expect(mockNext).toHaveBeenCalledWith(new Error("Authentication failed"));
 
       // Restore original method
       User.findById = originalFindById;

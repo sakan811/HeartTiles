@@ -114,7 +114,7 @@ describe("acquireTurnLock Integration Tests", () => {
       const originalLock = global.turnLocks.get(roomCode);
 
       // Manually set lock timestamp to be older than 30 seconds
-      const thirtyOneSecondsAgo = Date.now() - (31 * 1000);
+      const thirtyOneSecondsAgo = Date.now() - 31 * 1000;
       originalLock.timestamp = thirtyOneSecondsAgo;
       global.turnLocks.set(roomCode, originalLock);
 
@@ -143,7 +143,7 @@ describe("acquireTurnLock Integration Tests", () => {
       const originalLock = global.turnLocks.get(roomCode);
 
       // Set lock timestamp to be 29 seconds ago (should not expire)
-      const twentyNineSecondsAgo = Date.now() - (29 * 1000);
+      const twentyNineSecondsAgo = Date.now() - 29 * 1000;
       originalLock.timestamp = twentyNineSecondsAgo;
       global.turnLocks.set(roomCode, originalLock);
 
@@ -170,7 +170,7 @@ describe("acquireTurnLock Integration Tests", () => {
       const originalLock = global.turnLocks.get(roomCode);
 
       // Set lock timestamp to be exactly 30 seconds ago
-      const thirtySecondsAgo = Date.now() - (30 * 1000);
+      const thirtySecondsAgo = Date.now() - 30 * 1000;
       originalLock.timestamp = thirtySecondsAgo;
       global.turnLocks.set(roomCode, originalLock);
 
@@ -323,19 +323,20 @@ describe("acquireTurnLock Integration Tests", () => {
       const socketIds = Array.from({ length: 10 }, (_, i) => `socket-${i}`);
 
       // Simulate concurrent lock requests
-      const promises = socketIds.map(socketId =>
-        new Promise(resolve => {
-          setTimeout(() => {
-            const result = acquireTurnLock(roomCode, socketId);
-            resolve({ socketId, result });
-          }, Math.random() * 10); // Random delay up to 10ms
-        })
+      const promises = socketIds.map(
+        (socketId) =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              const result = acquireTurnLock(roomCode, socketId);
+              resolve({ socketId, result });
+            }, Math.random() * 10); // Random delay up to 10ms
+          }),
       );
 
       const results = await Promise.all(promises);
 
       // Only one should succeed
-      const successfulResults = results.filter(r => r.result);
+      const successfulResults = results.filter((r) => r.result);
       expect(successfulResults.length).toBe(1);
 
       // The winner should have the lock
@@ -349,13 +350,14 @@ describe("acquireTurnLock Integration Tests", () => {
       const socketIds = ["socket-1", "socket-2", "socket-3"];
 
       // Simulate concurrent lock requests for different rooms
-      const promises = roomCodes.map((roomCode, index) =>
-        new Promise(resolve => {
-          setTimeout(() => {
-            const result = acquireTurnLock(roomCode, socketIds[index]);
-            resolve({ roomCode, socketId: socketIds[index], result });
-          }, Math.random() * 10);
-        })
+      const promises = roomCodes.map(
+        (roomCode, index) =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              const result = acquireTurnLock(roomCode, socketIds[index]);
+              resolve({ roomCode, socketId: socketIds[index], result });
+            }, Math.random() * 10);
+          }),
       );
 
       const results = await Promise.all(promises);

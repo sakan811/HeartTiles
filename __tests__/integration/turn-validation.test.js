@@ -1,9 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 
 // Import the validation function from server.js
 import {
@@ -14,10 +9,7 @@ import {
 } from "../../server.js";
 
 // Import test utilities from setup
-import {
-  createMockRoom,
-  createMockGameState,
-} from "./setup.js";
+import { createMockRoom, createMockGameState } from "./setup.js";
 
 describe("Turn Validation Integration Tests", () => {
   let testRoom;
@@ -218,10 +210,22 @@ describe("Turn Validation Integration Tests", () => {
           playerHands: {
             [testUserId1]: [
               { id: "h1", type: "heart", color: "red", value: 2, emoji: "❤️" },
-              { id: "h2", type: "heart", color: "yellow", value: 1, emoji: "💛" },
+              {
+                id: "h2",
+                type: "heart",
+                color: "yellow",
+                value: 1,
+                emoji: "💛",
+              },
             ],
             [testUserId2]: [
-              { id: "h3", type: "heart", color: "green", value: 3, emoji: "💚" },
+              {
+                id: "h3",
+                type: "heart",
+                color: "green",
+                value: 3,
+                emoji: "💚",
+              },
               { id: "h4", type: "heart", color: "red", value: 1, emoji: "❤️" },
             ],
           },
@@ -265,7 +269,10 @@ describe("Turn Validation Integration Tests", () => {
 
       // All validations should pass for current player
       const roomStateValidation = validateRoomState(testRoom);
-      const playerInRoomValidation = validatePlayerInRoom(testRoom, testUserId1);
+      const playerInRoomValidation = validatePlayerInRoom(
+        testRoom,
+        testUserId1,
+      );
       const turnValidation = validateTurn(testRoom, testUserId1);
 
       expect(roomStateValidation.valid).toBe(true);

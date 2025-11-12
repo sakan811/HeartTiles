@@ -2,7 +2,15 @@
  * Integration tests for resetPlayerActions function from server.js
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { Room } from "../../models.js";
 import { resetPlayerActions } from "../../server.js";
 import {
@@ -10,10 +18,7 @@ import {
   disconnectDatabase,
   clearDatabase,
 } from "../utils/server-test-utils.js";
-import {
-  createMockRoom,
-  createMockUser,
-} from "./setup.js";
+import { createMockRoom, createMockUser } from "./setup.js";
 
 let roomCode, userId1, userId2;
 
@@ -107,7 +112,7 @@ describe("resetPlayerActions Integration Tests", () => {
       let markModifiedCalled = false;
       let markModifiedPath = null;
       const originalMarkModified = room.markModified.bind(room);
-      room.markModified = function(path) {
+      room.markModified = function (path) {
         markModifiedCalled = true;
         markModifiedPath = path;
         return originalMarkModified(path);
@@ -124,9 +129,9 @@ describe("resetPlayerActions Integration Tests", () => {
         gameState: {
           gameStarted: true,
           playerActions: {
-            [userId1]: { drawnHeart: true, drawnMagic: true, heartsPlaced: 2 }
-          }
-        }
+            [userId1]: { drawnHeart: true, drawnMagic: true, heartsPlaced: 2 },
+          },
+        },
       };
 
       expect(() => resetPlayerActions(plainRoom, userId1)).not.toThrow();
@@ -193,7 +198,7 @@ describe("resetPlayerActions Integration Tests", () => {
           isReady: false,
           score: 0,
           joinedAt: new Date(),
-        }
+        },
       );
       await room.save();
 

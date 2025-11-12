@@ -89,7 +89,10 @@ describe("validateCardDrawLimit Integration Tests", () => {
     try {
       await connectToDatabase();
     } catch (error) {
-      console.warn("Database connection failed, skipping tests:", error.message);
+      console.warn(
+        "Database connection failed, skipping tests:",
+        error.message,
+      );
     }
   });
 
@@ -166,7 +169,9 @@ describe("validateCardDrawLimit Integration Tests", () => {
     expect(result.currentActions).toEqual(existingActions);
 
     // Verify that the function didn't modify the existing actions
-    expect(room.gameState.playerActions["test-user-1"]).toEqual(existingActions);
+    expect(room.gameState.playerActions["test-user-1"]).toEqual(
+      existingActions,
+    );
   });
 
   it("should handle empty playerActions object", () => {
@@ -219,6 +224,8 @@ describe("validateCardDrawLimit Integration Tests", () => {
     // Verify that both users have separate playerActions
     expect(room.gameState.playerActions["test-user-1"]).toBeDefined();
     expect(room.gameState.playerActions["test-user-2"]).toBeDefined();
-    expect(room.gameState.playerActions["test-user-1"]).not.toBe(room.gameState.playerActions["test-user-2"]);
+    expect(room.gameState.playerActions["test-user-1"]).not.toBe(
+      room.gameState.playerActions["test-user-2"],
+    );
   });
 });

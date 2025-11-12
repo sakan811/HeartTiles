@@ -18,7 +18,10 @@ describe("updatePlayerSocket integration", () => {
     try {
       await connectToDatabase();
     } catch (error) {
-      console.warn("Database connection failed for updatePlayerSocket tests:", error.message);
+      console.warn(
+        "Database connection failed for updatePlayerSocket tests:",
+        error.message,
+      );
     }
   });
 
@@ -154,7 +157,9 @@ describe("updatePlayerSocket integration", () => {
     );
 
     // Verify session was saved to database
-    const savedSession = await PlayerSession.findOne({ userId: testUser.userId });
+    const savedSession = await PlayerSession.findOne({
+      userId: testUser.userId,
+    });
     expect(savedSession).toBeTruthy();
     expect(savedSession.currentSocketId).toBe(socketId);
     expect(savedSession.isActive).toBe(true);
@@ -174,7 +179,7 @@ describe("updatePlayerSocket integration", () => {
           `User${i}`,
           `user${i}@example.com`,
           `127.0.0.${i}`,
-        )
+        ),
       );
     }
 
@@ -201,7 +206,11 @@ describe("updatePlayerSocket integration", () => {
     };
 
     // Create initial session
-    await updatePlayerSocket(userId, "socket-1", ...Object.values(originalData));
+    await updatePlayerSocket(
+      userId,
+      "socket-1",
+      ...Object.values(originalData),
+    );
 
     // Update only socket ID
     const updatedSession = await updatePlayerSocket(

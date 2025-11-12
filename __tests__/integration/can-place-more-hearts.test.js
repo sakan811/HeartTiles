@@ -64,7 +64,7 @@ describe("canPlaceMoreHearts Integration Tests", () => {
 
   test("should allow placement when no playerActions exist", () => {
     const room = {
-      gameState: {}
+      gameState: {},
     };
 
     expect(canPlaceMoreHearts(room, "user1")).toBe(true);
@@ -74,9 +74,9 @@ describe("canPlaceMoreHearts Integration Tests", () => {
     const room = {
       gameState: {
         playerActions: {
-          user1: { heartsPlaced: 0 }
-        }
-      }
+          user1: { heartsPlaced: 0 },
+        },
+      },
     };
 
     expect(canPlaceMoreHearts(room, "user1")).toBe(true);
@@ -86,9 +86,9 @@ describe("canPlaceMoreHearts Integration Tests", () => {
     const room = {
       gameState: {
         playerActions: {
-          user1: { heartsPlaced: 1 }
-        }
-      }
+          user1: { heartsPlaced: 1 },
+        },
+      },
     };
 
     expect(canPlaceMoreHearts(room, "user1")).toBe(true);
@@ -98,9 +98,9 @@ describe("canPlaceMoreHearts Integration Tests", () => {
     const room = {
       gameState: {
         playerActions: {
-          user1: { heartsPlaced: 2 }
-        }
-      }
+          user1: { heartsPlaced: 2 },
+        },
+      },
     };
 
     expect(canPlaceMoreHearts(room, "user1")).toBe(false);
@@ -110,9 +110,9 @@ describe("canPlaceMoreHearts Integration Tests", () => {
     const room = {
       gameState: {
         playerActions: {
-          user2: { heartsPlaced: 1 }
-        }
-      }
+          user2: { heartsPlaced: 1 },
+        },
+      },
     };
 
     expect(canPlaceMoreHearts(room, "user1")).toBe(true);
@@ -122,9 +122,9 @@ describe("canPlaceMoreHearts Integration Tests", () => {
     const room = {
       gameState: {
         playerActions: {
-          user1: {}
-        }
-      }
+          user1: {},
+        },
+      },
     };
 
     expect(canPlaceMoreHearts(room, "user1")).toBe(true);
@@ -133,8 +133,8 @@ describe("canPlaceMoreHearts Integration Tests", () => {
   test("should work with recordHeartPlacement integration", () => {
     const room = {
       gameState: {
-        playerActions: {}
-      }
+        playerActions: {},
+      },
     };
 
     // Initial state - should allow
@@ -153,9 +153,9 @@ describe("canPlaceMoreHearts Integration Tests", () => {
     const room = {
       gameState: {
         playerActions: {
-          user1: { heartsPlaced: 2 }
-        }
-      }
+          user1: { heartsPlaced: 2 },
+        },
+      },
     };
 
     // Should deny at 2 hearts
@@ -177,9 +177,9 @@ describe("canPlaceMoreHearts Integration Tests", () => {
       gameState: {
         playerActions: {
           user1: { heartsPlaced: 2 }, // Maxed out
-          user2: { heartsPlaced: 1 }  // Can still place
-        }
-      }
+          user2: { heartsPlaced: 1 }, // Can still place
+        },
+      },
     };
 
     expect(canPlaceMoreHearts(room, "user1")).toBe(false);
