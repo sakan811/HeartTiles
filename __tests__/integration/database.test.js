@@ -29,6 +29,7 @@ import {
 import {
   validateRoomState,
   validatePlayerInRoom,
+  validateDeckState,
   generateTiles,
   calculateScore,
   sanitizeInput,
@@ -675,6 +676,217 @@ describe("Database Operations Integration", () => {
       const cleanInput = sanitizeInput('<script>alert("test")</script>');
       expect(cleanInput).not.toContain("<script>");
       expect(cleanInput).not.toContain("</script>");
+    });
+
+    it("should validate deck state correctly from server.js", () => {
+      // Test valid deck state
+      const roomWithValidDeck = {
+        gameState: {
+          deck: { emoji: "💌", cards: 16, type: "hearts" },
+        },
+      };
+      const validResult = validateDeckState(roomWithValidDeck);
+      expect(validResult.valid).toBe(true);
+
+      // Test room with no deck
+      const roomWithNoDeck = {
+        gameState: {},
+      };
+      const noDeckResult = validateDeckState(roomWithNoDeck);
+      expect(noDeckResult.valid).toBe(false);
+      expect(noDeckResult.error).toBe("Invalid deck state");
+
+      // Test room with no gameState
+      const roomWithNoGameState = {};
+      const noGameStateResult = validateDeckState(roomWithNoGameState);
+      expect(noGameStateResult.valid).toBe(false);
+      expect(noGameStateResult.error).toBe("Invalid deck state");
+
+      // Test null room
+      const nullRoomResult = validateDeckState(null);
+      expect(nullRoomResult.valid).toBe(false);
+      expect(nullRoomResult.error).toBe("Invalid deck state");
+    });
+
+    it("should validate deck cards count properly", () => {
+      // Test valid cards count
+      const roomWithValidCount = {
+        gameState: {
+          deck: { emoji: "💌", cards: 16, type: "hearts" },
+        },
+      };
+      const validCountResult = validateDeckState(roomWithValidCount);
+      expect(validCountResult.valid).toBe(true);
+
+      // Test invalid cards count (negative)
+      const roomWithNegativeCount = {
+        gameState: {
+          deck: { emoji: "💌", cards: -1, type: "hearts" },
+        },
+      };
+      const negativeCountResult = validateDeckState(roomWithNegativeCount);
+      expect(negativeCountResult.valid).toBe(false);
+      expect(negativeCountResult.error).toBe("Invalid deck count");
+
+      // Test invalid cards count (string)
+      const roomWithStringCount = {
+        gameState: {
+          deck: { emoji: "💌", cards: "16", type: "hearts" },
+        },
+      };
+      const stringCountResult = validateDeckState(roomWithStringCount);
+      expect(stringCountResult.valid).toBe(false);
+      expect(stringCountResult.error).toBe("Invalid deck count");
+
+      // Test invalid cards count (NaN)
+      const roomWithNaNCount = {
+        gameState: {
+          deck: { emoji: "💌", cards: NaN, type: "hearts" },
+        },
+      };
+      const NaNCountResult = validateDeckState(roomWithNaNCount);
+      expect(NaNCountResult.valid).toBe(false);
+      expect(NaNCountResult.error).toBe("Invalid deck count");
+
+      // Test invalid cards count (Infinity)
+      const roomWithInfinityCount = {
+        gameState: {
+          deck: { emoji: "💌", cards: Infinity, type: "hearts" },
+        },
+      };
+      const infinityCountResult = validateDeckState(roomWithInfinityCount);
+      expect(infinityCountResult.valid).toBe(false);
+      expect(infinityCountResult.error).toBe("Invalid deck count");
+
+      // Test invalid cards count (undefined)
+      const roomWithUndefinedCount = {
+        gameState: {
+          deck: { emoji: "💌", type: "hearts" },
+        },
+      };
+      const undefinedCountResult = validateDeckState(roomWithUndefinedCount);
+      expect(undefinedCountResult.valid).toBe(false);
+      expect(undefinedCountResult.error).toBe("Invalid deck count");
+
+      // Test zero cards count (valid)
+      const roomWithZeroCount = {
+        gameState: {
+          deck: { emoji: "💌", cards: 0, type: "hearts" },
+        },
+      };
+      const zeroCountResult = validateDeckState(roomWithZeroCount);
+      expect(zeroCountResult.valid).toBe(true);
+    });
+
+    it("should validate deck type properly", () => {
+      // Test valid deck type
+      const roomWithValidType = {
+        gameState: {
+          deck: { emoji: "💌", cards: 16, type: "hearts" },
+        },
+      };
+      const validTypeResult = validateDeckState(roomWithValidType);
+      expect(validTypeResult.valid).toBe(true);
+
+      // Test invalid deck type (number)
+      const roomWithNumberType = {
+        gameState: {
+          deck: { emoji: "💌", cards: 16, type: 123 },
+        },
+      };
+      const numberTypeResult = validateDeckState(roomWithNumberType);
+      expect(numberTypeResult.valid).toBe(false);
+      expect(numberTypeResult.error).toBe("Invalid deck type");
+
+      // Test invalid deck type (empty string)
+      const roomWithEmptyType = {
+        gameState: {
+          deck: { emoji: "💌", cards: 16, type: "" },
+        },
+      };
+      const emptyTypeResult = validateDeckState(roomWithEmptyType);
+      expect(emptyTypeResult.valid).toBe(false);
+      expect(emptyTypeResult.error).toBe("Invalid deck type");
+
+      // Test invalid deck type (null)
+      const roomWithNullType = {
+        gameState: {
+          deck: { emoji: "💌", cards: 16, type: null },
+        },
+      };
+      const nullTypeResult = validateDeckState(roomWithNullType);
+      expect(nullTypeResult.valid).toBe(false);
+      expect(nullTypeResult.error).toBe("Invalid deck type");
+
+      // Test missing deck type
+      const roomWithMissingType = {
+        gameState: {
+          deck: { emoji: "💌", cards: 16 },
+        },
+      };
+      const missingTypeResult = validateDeckState(roomWithMissingType);
+      expect(missingTypeResult.valid).toBe(false);
+      expect(missingTypeResult.error).toBe("Invalid deck type");
+    });
+
+    it("should validate deck state in actual room creation scenario", () => {
+      // Simulate creating a room as the server does
+      const roomCode = "TEST123";
+      const tiles = generateTiles(); // Import real tile generation
+
+      const newRoom = {
+        code: roomCode,
+        players: [],
+        maxPlayers: 2,
+        gameState: {
+          tiles: tiles,
+          gameStarted: false,
+          currentPlayer: null,
+          deck: { emoji: "💌", cards: 16, type: "hearts" },
+          magicDeck: { emoji: "🔮", cards: 16, type: "magic" },
+          playerHands: {},
+          turnCount: 0,
+          playerActions: {},
+        },
+      };
+
+      // Validate deck state for the newly created room
+      const deckValidation = validateDeckState(newRoom);
+      expect(deckValidation.valid).toBe(true);
+
+      // Test with realistic game scenarios
+      // Scenario 1: After some cards are drawn
+      newRoom.gameState.deck.cards = 12;
+      const afterDrawsValidation = validateDeckState(newRoom);
+      expect(afterDrawsValidation.valid).toBe(true);
+
+      // Scenario 2: Deck is empty (valid state)
+      newRoom.gameState.deck.cards = 0;
+      const emptyDeckValidation = validateDeckState(newRoom);
+      expect(emptyDeckValidation.valid).toBe(true);
+
+      // Scenario 3: Invalid negative count (shouldn't happen in real game but test validation)
+      newRoom.gameState.deck.cards = -1;
+      const negativeDeckValidation = validateDeckState(newRoom);
+      expect(negativeDeckValidation.valid).toBe(false);
+      expect(negativeDeckValidation.error).toBe("Invalid deck count");
+
+      // Scenario 4: Corrupted deck type (data corruption scenario)
+      newRoom.gameState.deck.cards = 8;
+      newRoom.gameState.deck.type = undefined;
+      const corruptedTypeValidation = validateDeckState(newRoom);
+      expect(corruptedTypeValidation.valid).toBe(false);
+      expect(corruptedTypeValidation.error).toBe("Invalid deck type");
+
+      // Scenario 5: Magic deck validation (same function should work)
+      // Test magic deck by temporarily assigning it to deck property
+      const originalDeck = newRoom.gameState.deck;
+      newRoom.gameState.deck = newRoom.gameState.magicDeck;
+      const magicDeckValidation = validateDeckState(newRoom);
+      expect(magicDeckValidation.valid).toBe(true);
+
+      // Restore original deck
+      newRoom.gameState.deck = originalDeck;
     });
   });
 
