@@ -22,7 +22,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.3",
     "mongoose": "^8.20.0",
-    "next": "16.0.2",
+    "next": "16.0.3",
     "next-auth": "5.0.0-beta.30",
     "react": "19.2.0",
     "react-dom": "19.2.0",
