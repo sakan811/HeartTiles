@@ -15,8 +15,8 @@ importers:
         specifier: ^3.0.3
         version: 3.0.3
       mongoose:
-        specifier: ^8.19.3
-        version: 8.19.3
+        specifier: ^8.20.0
+        version: 8.20.0
       next:
         specifier: 16.0.2
         version: 16.0.2(@babel/core@7.28.5)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -2234,8 +2234,8 @@ packages:
       socks:
         optional: true
 
-  mongoose@8.19.3:
-    resolution: {integrity: sha512-fTAGaIohkk8wCggMuBuqTVD4YrM1/J8cBr1ekqzFqtz65qkLjtX2dcy3NH1e+2rk2365dyrrsPAnt4YTxBhEiQ==}
+  mongoose@8.20.0:
+    resolution: {integrity: sha512-SxqNb8yx+VOjIOx2l7HqkGvYuLC/T85d+jPvqGDdUbKJFz/5PVSsVxQzypQsX7chenYvq5bd8jIr4LtunedE7g==}
     engines: {node: '>=16.20.1'}
 
   mpath@0.9.0:
@@ -2694,11 +2694,11 @@ packages:
     resolution: {integrity: sha512-PSkbLUoxOFRzJYjjxHJt9xro7D+iilgMX/C9lawzVuYiIdcihh9DXmVibBe8lmcFrRi/VzlPjBxbN7rH24q8/Q==}
     engines: {node: '>=14.0.0'}
 
-  tldts-core@7.0.17:
-    resolution: {integrity: sha512-DieYoGrP78PWKsrXr8MZwtQ7GLCUeLxihtjC1jZsW1DnvSMdKPitJSe8OSYDM2u5H6g3kWJZpePqkp43TfLh0g==}
+  tldts-core@7.0.18:
+    resolution: {integrity: sha512-jqJC13oP4FFAahv4JT/0WTDrCF9Okv7lpKtOZUGPLiAnNbACcSg8Y8T+Z9xthOmRBqi/Sob4yi0TE0miRCvF7Q==}
 
-  tldts@7.0.17:
-    resolution: {integrity: sha512-Y1KQBgDd/NUc+LfOtKS6mNsC9CCaH+m2P1RoIZy7RAPo3C3/t8X45+zgut31cRZtZ3xKPjfn3TkGTrctC2TQIQ==}
+  tldts@7.0.18:
+    resolution: {integrity: sha512-lCcgTAgMxQ1JKOWrVGo6E69Ukbnx4Gc1wiYLRf6J5NN4HRYJtCby1rPF8rkQ4a6qqoFBK5dvjJ1zJ0F7VfDSvw==}
     hasBin: true
 
   to-regex-range@5.0.1:
@@ -5162,7 +5162,7 @@ snapshots:
       bson: 6.10.4
       mongodb-connection-string-url: 3.0.2
 
-  mongoose@8.19.3:
+  mongoose@8.20.0:
     dependencies:
       bson: 6.10.4
       kareem: 2.6.3
@@ -5730,12 +5730,12 @@ snapshots:
 
   tinyrainbow@3.0.3: {}
 
-  tldts-core@7.0.17:
+  tldts-core@7.0.18:
     optional: true
 
-  tldts@7.0.17:
+  tldts@7.0.18:
     dependencies:
-      tldts-core: 7.0.17
+      tldts-core: 7.0.18
     optional: true
 
   to-regex-range@5.0.1:
@@ -5744,7 +5744,7 @@ snapshots:
 
   tough-cookie@6.0.0:
     dependencies:
-      tldts: 7.0.17
+      tldts: 7.0.18
     optional: true
 
   tr46@5.1.1:
