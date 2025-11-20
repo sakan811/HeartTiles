@@ -39,7 +39,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.0.5",
+    "@vitest/coverage-v8": "^4.0.10",
     "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.3",
@@ -49,6 +49,6 @@
     "tailwindcss": "^4.1.17",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.5"
+    "vitest": "^4.0.10"
   }
 }
