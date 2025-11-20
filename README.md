@@ -1,5 +1,9 @@
 # Heart Tiles
 
+<p align="center">
+  <img src="./public/android-chrome-512x512.png" alt="HeartTiles App Icon" width="256" height="256" style="max-width: 100%; height: auto;" />
+</p>
+
 A strategic tile-based multiplayer card game where players place colored hearts on tiles to score points. Built with Next.js 16, React 19, Socket.IO, and MongoDB for real-time gameplay.
 
 Inspired by Kitty Card Game from Love and Deepspace
