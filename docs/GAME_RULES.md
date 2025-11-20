@@ -98,7 +98,7 @@ Shield cards protect your hearts and tiles for 2 any-player turns.
 
 ## Game Elements
 
-**Tiles**: 8 tiles with random colors (white, red, yellow, green)
+**Tiles**: 8 tiles with random colors (white ⬜, red 🟥, yellow 🟨, green 🟩)
 
 **Visual Feedback**:
 
