@@ -168,6 +168,9 @@ describe("Layout Component", () => {
       expect(metadata).toEqual({
         title: "Heart Tiles",
         description: "A multiplayer card game inspired by Love and Deepspace",
+        icons: {
+          icon: "/favicon.ico",
+        },
       });
     });
   });
