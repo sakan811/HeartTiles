@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Heart Tiles",
   description: "A multiplayer card game inspired by Love and Deepspace",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
