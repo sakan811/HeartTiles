@@ -48,10 +48,10 @@ Please refer to the [Game Rules](docs/GAME_RULES.md) document for detailed rules
 
 ### Tech Stack
 
-- **Frontend**: Next.js 16.0.1, React 19.2.0, TypeScript 5.9.3, Tailwind CSS v4.1.16
-- **Backend**: Node.js, Socket.IO 4.8.1, MongoDB, Mongoose 8.19.2
+- **Frontend**: Next.js 16.0.3, React 19.2.0, TypeScript 5.9.3, Tailwind CSS v4.1.17
+- **Backend**: Node.js, Socket.IO 4.8.1, MongoDB, Mongoose 8.20.0
 - **Auth**: NextAuth 5.0.0-beta.30 with MongoDB user storage and bcryptjs
-- **Testing**: Vitest 4.0.5 with multi-project test setup
+- **Testing**: Vitest 4.0.10 with multi-project test setup
 - **Docker**: MongoDB with Mongo Express admin UI
 
 ### Commands
